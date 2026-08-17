@@ -1,378 +1,278 @@
 import base64
-import datetime
+import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from google.oauth2.credentials import Credentials
-from googleapiclient.discovery import build
 import streamlit as st
 
-# --- CATÁLOGO DE RECORRIDOS VIRTUALES ---
-VIRTUAL_TOURS = {
-    "Junior Suite Ocean View": "https://my.matterport.com/show/?m=ejemplo_jr_suite",
-    "One Bedroom Suite": "https://my.matterport.com/show/?m=ejemplo_1bed_suite",
-    "Two Bedroom Suite": "https://my.matterport.com/show/?m=ejemplo_2bed_suite",
-    "Penthouse": "https://my.matterport.com/show/?m=ejemplo_penthouse",
-}
-
-# --- FUNCIONES DE FORMATO ---
-
-
-def format_moneda(valor, moneda="USD"):
-  try:
-    val = float(valor)
-    if moneda == "MXN":
-      return f"${val:,.2f} MXN"
-    return f"${val:,.2f} USD"
-  except (ValueError, TypeError):
-    return "$0.00 USD" if moneda == "USD" else "$0.00 MXN"
-
-
-def format_fecha_ingles(fecha):
-  return fecha.strftime("%B %d, %Y") if fecha else ""
-
-
-# --- GENERADOR DE PLANTILLA HTML ---
-
-
-def generar_html_cotizacion(datos, habitaciones, moneda="USD", tipo_cambio=20.0):
-  bloques_habitaciones_html = ""
-
-  for i, hab in enumerate(habitaciones, 1):
-    # Ajuste de moneda
-    factor = tipo_cambio if moneda == "MXN" else 1.0
-    precio_noche = hab["precio_noche"] * factor
-    monto_estadia = hab["noches"] * precio_noche
-
-    # Tour Virtual
-    tour_url = VIRTUAL_TOURS.get(hab["tipo"], "")
-    tour_btn = ""
-    if tour_url:
-      tour_btn = f"""
-            <a href="{tour_url}" target="_blank" style="display: inline-block; margin-top: 10px; color: #D4AF37; font-weight: bold; text-decoration: none; font-size: 13px;">
-              &#127760; Take 360&deg; Virtual Tour &rarr;
-            </a>
-            """
-
-    # Beneficios / Valores Agregados
-    beneficios_list = ""
-    if hab.get("beneficios"):
-      items = "".join(
-          [f"<li style='margin-bottom: 4px;'>{b.strip()}</li>" for b in hab["beneficios"].split(",") if b.strip()]
-      )
-      beneficios_list = f"""
-            <div style="margin-top: 12px; padding-top: 10px; border-top: 1px dashed #CBD5E1;">
-              <strong style="color: #1E3A8A; font-size: 12px; text-transform: uppercase;">Included Plan Benefits:</strong>
-              <ul style="margin: 6px 0 0 18px; padding: 0; color: #475569; font-size: 13px;">
-                {items}
-              </ul>
-            </div>
-            """
-
-    # Link de pago específico
-    link_pago_hab = hab.get("link_pago", datos["link_pago_general"])
-    pago_btn = f"""
-        <div style="margin-top: 15px; text-align: right;">
-          <a href="{link_pago_hab}" target="_blank" style="background-color: #1E3A8A; color: #ffffff; padding: 10px 20px; text-decoration: none; border-radius: 4px; font-weight: bold; display: inline-block; font-size: 13px;">
-            Book Option {i}
-          </a>
-        </div>
-        """
-
-    bloques_habitaciones_html += f"""
-        <table width="100%" border="0" cellpadding="0" cellspacing="0" style="margin-bottom: 25px; background-color: #FFFFFF; border-radius: 8px; border: 1px solid #D4AF37; padding: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
-          <tr>
-            <td align="left" style="color: #1E3A8A; font-weight: bold; font-size: 18px; padding-bottom: 5px;">
-              Option {i}: {hab['tipo']}
-            </td>
-          </tr>
-          <tr>
-            <td align="left" style="color: #D4AF37; font-weight: bold; font-size: 14px; text-transform: uppercase; padding-bottom: 10px;">
-              Rate Plan: {hab['tarifa_tipo']}
-            </td>
-          </tr>
-          <tr>
-            <td align="left" style="font-size: 14px; color: #555; padding-bottom: 10px;">
-              <strong>Nights:</strong> {hab['noches']} | <strong>Rate per night:</strong> {format_moneda(precio_noche, moneda)} <span style="font-size: 11px; color: #888;">(Taxes incl.)</span>
-            </td>
-          </tr>
-          <tr>
-            <td align="left" style="font-size: 15px; color: #1E3A8A; padding-top: 8px; border-top: 1px solid #E2E8F0;">
-              <strong>Total Stay:</strong> <span style="font-size: 18px; font-weight: bold;">{format_moneda(monto_estadia, moneda)}</span>
-            </td>
-          </tr>
-          <tr>
-            <td align="left">
-              {tour_btn}
-            </td>
-          </tr>
-          <tr>
-            <td align="left">
-              {beneficios_list}
-            </td>
-          </tr>
-          <tr>
-            <td align="left">
-              {pago_btn}
-            </td>
-          </tr>
-        </table>
-        """
-
-  # Servicios Adicionales
-  monto_serv = datos["monto_servicio"] * (
-      tipo_cambio if moneda == "MXN" else 1.0
-  )
-  fila_servicio_html = ""
-  if monto_serv > 0:
-    fila_servicio_html = f"""
-        <table width="100%" border="0" cellpadding="0" cellspacing="0" style="margin-bottom: 20px; background-color: #F8FAFC; padding: 12px 15px; border-radius: 6px;">
-          <tr>
-            <td align="left" style="color: #555; font-size: 14px;">
-              <strong>Additional Service:</strong> {datos['texto_servicio']}
-            </td>
-            <td align="right" style="color: #1E3A8A; font-weight: bold; font-size: 14px;">
-              {format_moneda(monto_serv, moneda)}
-            </td>
-          </tr>
-        </table>"""
-
-  cuerpo_html = f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="utf-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    </head>
-    <body style="margin: 0; padding: 0; background-color: #0F172A; font-family: 'Georgia', serif;">
-      <center>
-        <table width="100%" border="0" cellpadding="0" cellspacing="0" style="background-color: #0F172A; padding: 30px 0;">
-          <tr>
-            <td align="center">
-              <table width="650" border="0" cellpadding="0" cellspacing="0" style="max-width: 650px; width: 100%; font-family: 'Helvetica Neue', Arial, sans-serif; color: #333; background-color: #F8FAFC; border-radius: 8px; overflow: hidden;">
-                <!-- Header Gold / Blue -->
-                <tr>
-                  <td align="center" style="background-color: #1E3A8A; padding: 35px 30px; border-bottom: 4px solid #D4AF37;">
-                    <h1 style="color: #FFFFFF; font-family: 'Georgia', serif; margin: 0; font-size: 26px; letter-spacing: 1px;">CASA DORADA</h1>
-                    <p style="color: #D4AF37; margin: 5px 0 0 0; font-size: 12px; text-transform: uppercase; letter-spacing: 2px;">LOS CABOS RESORT & SPA</p>
-                  </td>
-                </tr>
-                <!-- Body -->
-                <tr>
-                  <td align="left" style="padding: 35px;">
-                    <h2 style="color: #1E3A8A; margin: 0 0 10px 0; font-weight: normal; font-family: 'Georgia', serif;">Personalized Quotation</h2>
-                    <p style="font-size: 15px; color: #64748B; margin: 0 0 25px 0;">Prepared exclusively for <strong>{datos['nombre']}</strong></p>
-                    
-                    <!-- Trip Details Table -->
-                    <table width="100%" border="0" cellpadding="0" cellspacing="0" style="background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 6px; font-size: 14px; margin-bottom: 30px;">
-                      <tr>
-                        <td style="padding: 12px 15px; border-bottom: 1px solid #E2E8F0; color: #64748B; width: 33%;"><strong>CHECK-IN:</strong><br><span style="color: #1E3A8A; font-size: 15px;">{format_fecha_ingles(datos['llegada'])}</span></td>
-                        <td style="padding: 12px 15px; border-bottom: 1px solid #E2E8F0; color: #64748B; width: 33%;"><strong>CHECK-OUT:</strong><br><span style="color: #1E3A8A; font-size: 15px;">{format_fecha_ingles(datos['salida'])}</span></td>
-                        <td style="padding: 12px 15px; border-bottom: 1px solid #E2E8F0; color: #64748B;"><strong>GUESTS:</strong><br><span style="color: #1E3A8A; font-size: 15px;">{datos['huespedes']}</span></td>
-                      </tr>
-                    </table>
-
-                    <h3 style="color: #1E3A8A; font-size: 18px; margin: 0 0 20px 0; font-family: 'Georgia', serif; border-bottom: 2px solid #D4AF37; padding-bottom: 5px;">Suites & Rate Options</h3>
-                    
-                    {bloques_habitaciones_html}
-                    {fila_servicio_html}
-
-                    <p style="font-size: 12px; color: #94A3B8; text-align: center; margin-top: 25px;">
-                      * This quotation is valid until <strong>{format_fecha_ingles(datos['valido_hasta'])}</strong> and subject to availability.
-                    </p>
-                  </td>
-                </tr>
-                <!-- Policies -->
-                <tr>
-                  <td align="left" style="background-color: #F1F5F9; padding: 25px 35px; border-top: 1px solid #E2E8F0; font-size: 13px; color: #475569;">
-                    <h4 style="margin: 0 0 10px 0; color: #1E3A8A; text-transform: uppercase; font-size: 12px;">Resort Policies</h4>
-                    <p style="margin: 0 0 6px 0;"><strong>Deposit:</strong> {datos['deposito']}</p>
-                    <p style="margin: 0;"><strong>Cancellation:</strong> {datos['cancelacion']}</p>
-                  </td>
-                </tr>
-                <!-- Footer -->
-                <tr>
-                  <td align="center" style="background-color: #0F172A; padding: 25px 30px; color: #94A3B8; font-size: 11px;">
-                    <p style="color: #D4AF37; margin: 0 0 5px 0; font-weight: bold;">Casa Dorada Los Cabos Resort & Spa</p>
-                    <p style="margin: 0;">Av. del Pescador s/n, Medano Beach, Cabo San Lucas, B.C.S. | Toll-Free US: 1-866-448-0151</p>
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-        </table>
-      </center>
-    </body>
-    </html>
-    """
-  return cuerpo_html
-
-
-# --- CONFIGURACIÓN DE STREAMLIT ---
 st.set_page_config(
-    page_title="Cotizador Luxury - Casa Dorada", layout="wide"
+    page_title="Cotizador Casa Dorada Los Cabos", page_icon="🏨", layout="wide"
 )
 
-st.title("🏨 Cotizador Corporativo - Casa Dorada Los Cabos")
+# -----------------------------------------------------------------------------
+# FUNCIONES AUXILIARES & ENVÍO DE CORREO
+# -----------------------------------------------------------------------------
 
-# Configuración Multimoneda
-st.sidebar.header("⚙️ Configuración de Moneda")
-moneda_seleccionada = st.sidebar.radio("Moneda de Cotización", ["USD", "MXN"])
-tipo_cambio_val = st.sidebar.number_input(
-    "Tipo de Cambio (MXN por 1 USD)", min_value=1.0, value=20.0
+
+def enviar_correo_directo(
+    email_destino,
+    asunto,
+    cuerpo_html,
+    smtp_server,
+    smtp_port,
+    remitente,
+    password,
+    nombre_remitente,
+):
+  try:
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = asunto
+    msg["From"] = f"{nombre_remitente} - Casa Dorada <{remitente}>"
+    msg["To"] = email_destino
+
+    part_html = MIMEText(cuerpo_html, "html")
+    msg.attach(part_html)
+
+    with smtplib.SMTP_SSL(smtp_server, smtp_port) as server:
+      server.login(remitente, password)
+      server.sendmail(remitente, email_destino, msg.as_string())
+
+    return True, "Cotización enviada exitosamente."
+  except Exception as e:
+    return False, str(e)
+
+
+def formatear_precio(monto, moneda, tipo_cambio):
+  """Calcula y formatea el precio en USD o MXN según la selección."""
+  if moneda == "MXN":
+    monto_convertido = monto * tipo_cambio
+    return f"${monto_convertido:,.2f} MXN"
+  return f"${monto:,.2f} USD"
+
+
+# -----------------------------------------------------------------------------
+# BARRA LATERAL (AGENTES Y CONFIGURACIÓN)
+# -----------------------------------------------------------------------------
+st.sidebar.header("👤 Perfil de Agente")
+
+# Cargar agentes guardados en st.secrets si existen
+agentes_dict = st.secrets.get("agentes", {})
+
+if agentes_dict:
+  lista_agentes = [datos["nombre"] for datos in agentes_dict.values()]
+  agente_seleccionado = st.sidebar.selectbox(
+      "¿Quién envía la cotización?", lista_agentes
+  )
+
+  # Extraer datos del agente seleccionado
+  for clave, datos in agentes_dict.items():
+    if datos["nombre"] == agente_seleccionado:
+      remitente_nombre = datos["nombre"]
+      remitente_email = datos["email"]
+      remitente_password = datos["password"]
+      break
+else:
+  st.sidebar.warning(
+      "⚠️ No se encontraron agentes en secrets.toml. Ingresa tus datos"
+      " manualmente:"
+  )
+  remitente_nombre = st.sidebar.text_input("Tu Nombre", "Ejecutivo de Ventas")
+  remitente_email = st.sidebar.text_input(
+      "Tu Correo", "ventas@casadorada.com"
+  )
+  remitente_password = st.sidebar.text_input(
+      "Contraseña de Aplicación (16 dígitos)", type="password"
+  )
+
+st.sidebar.markdown("---")
+st.sidebar.header("⚙️ Ajustes de Cotización")
+
+# Selector de Moneda y Tipo de Cambio
+moneda_seleccionada = st.sidebar.radio(
+    "Moneda de visualización:", ["USD", "MXN"], index=0
+)
+tipo_cambio = st.sidebar.number_input(
+    "Tipo de cambio (USD a MXN):", min_value=1.0, value=20.0, step=0.1
 )
 
-col_left, col_right = st.columns([1, 1])
+# -----------------------------------------------------------------------------
+# DATOS DE LA RESERVACIÓN
+# -----------------------------------------------------------------------------
+st.title("🏨 Cotizador de Reservaciones — Casa Dorada Los Cabos")
 
-with col_left:
-  st.subheader("1. Información de la Reserva")
-  nombre = st.text_input("Nombre del Huésped", "John Smith")
-  email = st.text_input("Email del Huésped", "jsmith@example.com")
+col_datos1, col_datos2 = st.columns(2)
 
-  col_f1, col_f2 = st.columns(2)
-  with col_f1:
-    llegada = st.date_input("Check-In", datetime.date.today())
-  with col_f2:
-    salida = st.date_input(
-        "Check-Out", datetime.date.today() + datetime.timedelta(days=3)
+with col_datos1:
+  nombre_huesped = st.text_input("Nombre del Huésped", "John Doe")
+  email_huesped = st.text_input("Correo del Huésped", "huesped@email.com")
+  noches = st.number_input("Número de Noches", min_value=1, value=3)
+
+with col_datos2:
+  tarifa_ep_usd = st.number_input(
+      "Tarifa por noche - European Plan (USD)", min_value=0.0, value=320.0
+  )
+  tarifa_ai_usd = st.number_input(
+      "Tarifa por noche - All Inclusive (USD)", min_value=0.0, value=480.0
+  )
+  traslado_usd = st.number_input(
+      "Traslado Aeropuerto Roundtrip (USD)", min_value=0.0, value=150.0
+  )
+
+# Cálculos dinámicos según la moneda elegida
+total_ep_usd = tarifa_ep_usd * noches
+total_ai_usd = tarifa_ai_usd * noches
+
+# Formateo de precios para la vista previa e interfaz
+tarifa_ep_txt = formatear_precio(
+    tarifa_ep_usd, moneda_seleccionada, tipo_cambio
+)
+total_ep_txt = formatear_precio(
+    total_ep_usd, moneda_seleccionada, tipo_cambio
+)
+
+tarifa_ai_txt = formatear_precio(
+    tarifa_ai_usd, moneda_seleccionada, tipo_cambio
+)
+total_ai_txt = formatear_precio(
+    total_ai_usd, moneda_seleccionada, tipo_cambio
+)
+
+traslado_txt = formatear_precio(traslado_usd, moneda_seleccionada, tipo_cambio)
+
+# -----------------------------------------------------------------------------
+# VISTA PREVIA DE LA COTIZACIÓN (ACTUALIZACIÓN DINÁMICA)
+# -----------------------------------------------------------------------------
+st.markdown("---")
+st.subheader("👁️ Vista Previa de la Cotización")
+
+st.markdown(f"""
+**Cotización para:** {nombre_huesped} | **Moneda:** {moneda_seleccionada}
+
+---
+
+**Vista Previa — Opción 1: European Plan (Room Only)**  
+*Junior Suite Ocean View*
+
+* **Estancia:** {noches} Noches
+* **Tarifa por noche:** {tarifa_ep_txt} *(Impuestos incluidos)*
+* **Subtotal Estancia:** {total_ep_txt}
+* **Recorrido Virtual 360°:** 🌐 [Explorar Junior Suite en 360°](https://my.matterport.com/show/?m=ejemplo_jr_suite)
+
+**Valores Agregados Incluidos:**
+* Balcón privado con vista panorámica al mar.
+* Acceso ilimitado a albercas y área de playa Medano.
+* Wi-Fi de alta velocidad en suite y áreas comunes.
+
+---
+
+**Vista Previa — Opción 2: All Inclusive Plan**  
+*Junior Suite Ocean View*
+
+* **Estancia:** {noches} Noches
+* **Tarifa por noche:** {tarifa_ai_txt} *(Impuestos incluidos)*
+* **Subtotal Estancia:** {total_ai_txt}
+* **Recorrido Virtual 360°:** 🌐 [Explorar Junior Suite en 360°](https://my.matterport.com/show/?m=ejemplo_jr_suite)
+
+**Valores Agregados Incluidos:**
+* Alimentos gourmet y bebidas premium ilimitadas.
+* Servicio a la habitación 24 horas.
+* Acceso al Kids Club y servicio de meseros en albercas y playa.
+
+---
+
+**Servicios Adicionales & Políticas:**
+* **Traslado:** Roundtrip Airport Transportation — {traslado_txt}
+* **Depósito:** 1 noche de depósito requerida al momento de reservar.
+* **Cancelación:** Cancelación gratuita hasta 7 días antes de la llegada.
+""")
+
+# -----------------------------------------------------------------------------
+# PLANTILLA HTML PARA ENVÍO POR CORREO
+# -----------------------------------------------------------------------------
+html_correo = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {{ font-family: Arial, sans-serif; color: #333333; line-height: 1.6; }}
+        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px; }}
+        .header {{ background-color: #0b2545; color: #ffffff; padding: 15px; text-align: center; border-radius: 6px 6px 0 0; }}
+        .option-box {{ background-color: #f9f9f9; border-left: 4px solid #134074; padding: 15px; margin: 15px 0; }}
+        .price {{ font-size: 18px; font-weight: bold; color: #134074; }}
+        .footer {{ font-size: 12px; color: #777777; margin-top: 20px; border-top: 1px solid #eeeeee; padding-top: 10px; }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h2>Casa Dorada Los Cabos Resort & Spa</h2>
+        </div>
+        <p>Estimado/a <strong>{nombre_huesped}</strong>,</p>
+        <p>Es un placer saludarle. A continuación le presentamos la cotización personalizada para su próxima estancia:</p>
+        
+        <div class="option-box">
+            <h3>Opción 1: European Plan (Room Only)</h3>
+            <p><strong>Habitación:</strong> Junior Suite Ocean View<br>
+            <strong>Estancia:</strong> {noches} Noches<br>
+            <strong>Tarifa por noche:</strong> {tarifa_ep_txt}<br>
+            <span class="price">Total Estancia: {total_ep_txt}</span></p>
+        </div>
+
+        <div class="option-box">
+            <h3>Opción 2: All Inclusive Plan</h3>
+            <p><strong>Habitación:</strong> Junior Suite Ocean View<br>
+            <strong>Estancia:</strong> {noches} Noches<br>
+            <strong>Tarifa por noche:</strong> {tarifa_ai_txt}<br>
+            <span class="price">Total Estancia: {total_ai_txt}</span></p>
+        </div>
+
+        <p><strong>Servicios Adicionales:</strong><br>
+        • Traslado Aeropuerto (Roundtrip): {traslado_txt}</p>
+
+        <p>Quedo a su entera disposición para confirmar su reservación o resolver cualquier duda.</p>
+        
+        <div class="footer">
+            <p>Atentamente,<br>
+            <strong>{remitente_nombre}</strong><br>
+            Casa Dorada Los Cabos Resort & Spa<br>
+            {remitente_email}</p>
+        </div>
+    </div>
+</body>
+</html>
+"""
+
+# -----------------------------------------------------------------------------
+# BOTÓN DE ACCIÓN / ENVÍO
+# -----------------------------------------------------------------------------
+st.markdown("---")
+st.subheader("📤 Enviar Cotización")
+
+if st.button("🚀 Enviar Directo al Huésped", type="primary"):
+  if not remitente_email or not remitente_password:
+    st.error(
+        "⚠️ Falta configurar el correo o la contraseña de aplicación del"
+        " agente seleccionado."
     )
-
-  noches_calc = (salida - llegada).days if salida > llegada else 1
-  huespedes = st.text_input("Huéspedes", "2 Adults, 1 Child")
-  link_pago_gen = st.text_input(
-      "Link de Pago General", "https://casadorada.com/pay"
-  )
-  valido_hasta = st.date_input(
-      "Cotización Válida Hasta",
-      datetime.date.today() + datetime.timedelta(days=5),
-  )
-
-  st.subheader("2. Comparativa de Opciones de Habitación")
-
-  # Inicializar Opciones por Defecto (Room Only vs All Inclusive)
-  if "habitaciones" not in st.session_state:
-    st.session_state.habitaciones = [
-        {
-            "tipo": "Junior Suite Ocean View",
-            "tarifa_tipo": "European Plan (Room Only)",
-            "noches": noches_calc,
-            "precio_noche": 320.00,
-            "beneficios": (
-                "Ocean view private balcony, Access to pools & beach, Free"
-                " Wi-Fi"
-            ),
-            "link_pago": "https://casadorada.com/pay/opt1",
-        },
-        {
-            "tipo": "Junior Suite Ocean View",
-            "tarifa_tipo": "All Inclusive Plan",
-            "noches": noches_calc,
-            "precio_noche": 480.00,
-            "beneficios": (
-                "All gourmet meals & unlimited premium drinks, 24-hr Room"
-                " Service, Access to Kids Club, Poolside service"
-            ),
-            "link_pago": "https://casadorada.com/pay/opt2",
-        },
-    ]
-
-  if st.button("➕ Agregar Otra Opción de Cotización"):
-    st.session_state.habitaciones.append({
-        "tipo": "One Bedroom Suite",
-        "tarifa_tipo": "European Plan (Room Only)",
-        "noches": noches_calc,
-        "precio_noche": 450.00,
-        "beneficios": "Full kitchen, Living room, Private balcony",
-        "link_pago": link_pago_gen,
-    })
-
-  for idx, hab in enumerate(st.session_state.habitaciones):
-    with st.expander(f"Opción #{idx+1}: {hab['tipo']} ({hab['tarifa_tipo']})"):
-      hab["tipo"] = st.selectbox(
-          f"Habitación #{idx+1}",
-          list(VIRTUAL_TOURS.keys()),
-          index=list(VIRTUAL_TOURS.keys()).index(hab["tipo"])
-          if hab["tipo"] in VIRTUAL_TOURS
-          else 0,
-          key=f"tipo_{idx}",
+  elif not email_huesped:
+    st.error("⚠️ Por favor ingresa el correo del huésped.")
+  else:
+    with st.spinner("Enviando correo..."):
+      exito, res = enviar_correo_directo(
+          email_destino=email_huesped,
+          asunto=(
+              f"Cotización Especial | Casa Dorada Los Cabos - {nombre_huesped}"
+          ),
+          cuerpo_html=html_correo,
+          smtp_server="smtp.gmail.com",
+          smtp_port=465,
+          remitente=remitente_email,
+          password=remitente_password,
+          nombre_remitente=remitente_nombre,
       )
-
-      # Muestra el link 360 detectado automáticamente
-      tour_detectado = VIRTUAL_TOURS.get(hab["tipo"], "")
-      if tour_detectado:
-        st.caption(f"🌐 Tour 360° asignado: [{tour_detectado}]({tour_detectado})")
-
-      hab["tarifa_tipo"] = st.text_input(
-          f"Plan de Tarifa #{idx+1}", hab["tarifa_tipo"], key=f"tarifa_{idx}"
-      )
-
-      col_h1, col_h2 = st.columns(2)
-      with col_h1:
-        hab["noches"] = st.number_input(
-            f"Noches #{idx+1}",
-            min_value=1,
-            value=int(hab["noches"]),
-            key=f"noches_{idx}",
+      if exito:
+        st.success(
+            f"¡Cotización enviada exitosamente a **{email_huesped}** desde la"
+            f" cuenta de **{remitente_nombre}**!"
         )
-      with col_h2:
-        hab["precio_noche"] = st.number_input(
-            f"Precio/Noche (USD) #{idx+1}",
-            min_value=0.0,
-            value=float(hab["precio_noche"]),
-            key=f"precio_{idx}",
-        )
-
-      hab["beneficios"] = st.text_area(
-          f"Valores Agregados / Incluidos (separados por coma) #{idx+1}",
-          hab["beneficios"],
-          key=f"beneficios_{idx}",
-      )
-      hab["link_pago"] = st.text_input(
-          f"Link de Pago Opción #{idx+1}",
-          hab.get("link_pago", link_pago_gen),
-          key=f"link_{idx}",
-      )
-
-      if st.button(f"🗑️ Eliminar Opción #{idx+1}", key=f"del_{idx}"):
-        st.session_state.habitaciones.pop(idx)
-        st.rerun()
-
-  st.subheader("3. Extras y Políticas")
-  texto_servicio = st.text_input(
-      "Servicio Adicional", "Roundtrip Airport Transportation"
-  )
-  monto_servicio = st.number_input(
-      "Precio Servicio Adicional (USD)", min_value=0.0, value=150.00
-  )
-
-  deposito = st.text_area(
-      "Garantía/Depósito", "1 night deposit required at the time of booking."
-  )
-  cancelacion = st.text_area(
-      "Política de Cancelación",
-      "Free cancellation up to 7 days prior to arrival date.",
-  )
-
-datos_generales = {
-    "nombre": nombre,
-    "email": email,
-    "llegada": llegada,
-    "salida": salida,
-    "huespedes": huespedes,
-    "link_pago_general": link_pago_gen,
-    "valido_hasta": valido_hasta,
-    "texto_servicio": texto_servicio,
-    "monto_servicio": monto_servicio,
-    "deposito": deposito,
-    "cancelacion": cancelacion,
-}
-
-html_correo = generar_html_cotizacion(
-    datos_generales,
-    st.session_state.habitaciones,
-    moneda=moneda_seleccionada,
-    tipo_cambio=tipo_cambio_val,
-)
-
-with col_right:
-  st.subheader("👁️ Previsualización del Email Cotización")
-  st.components.v1.html(html_correo, height=800, scrolling=True)
+      else:
+        st.error(f"Error al enviar el correo: {res}")
