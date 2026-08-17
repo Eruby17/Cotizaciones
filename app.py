@@ -3,10 +3,12 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 import streamlit as st
 
-st.set_page_config(page_title="Cotizador Casa Dorada", layout="wide")
+st.set_page_config(
+    page_title="Cotizador Casa Dorada", layout="wide", initial_sidebar_state="expanded"
+)
 
 # -----------------------------------------------------------------------------
-# 1. BARRA LATERAL: AGENTES Y SELECCIÓN DE MONEDA
+# 1. BARRA LATERAL: AGENTES Y MONEDA
 # -----------------------------------------------------------------------------
 st.sidebar.header("👤 Agente de Ventas")
 
@@ -26,7 +28,7 @@ if agentes_dict:
       remitente_password = datos["password"]
       break
 else:
-  st.sidebar.warning("⚠️ Sin agentes en secrets.toml")
+  st.sidebar.warning("⚠️ Sin agentes configurados en secrets.toml")
   remitente_nombre = st.sidebar.text_input("Tu Nombre", "Ejecutivo de Ventas")
   remitente_email = st.sidebar.text_input(
       "Tu Correo", "ventas@casadorada.com"
@@ -44,42 +46,108 @@ tipo_cambio = st.sidebar.number_input(
 )
 
 # -----------------------------------------------------------------------------
-# 2. CÁLCULO Y FORMATEO DINÁMICO DE PRECIOS
+# 2. ENTRADA MANUAL DE DATOS (COLUMNA IZQUIERDA)
 # -----------------------------------------------------------------------------
-# Precios base en USD
-tarifa_ep_usd = 320.00
-total_ep_usd = 960.00
+col_input, col_preview = st.columns([1, 1], gap="large")
 
-tarifa_ai_usd = 480.00
-total_ai_usd = 1440.00
+with col_input:
+  st.header("📝 Datos de la Cotización")
 
-traslado_usd = 150.00
+  nombre_huesped = st.text_input("Nombre del Huésped", "John Doe")
+  email_huesped = st.text_input("Correo del Huésped", "huesped@email.com")
 
+  noches = st.number_input("Número de Noches", min_value=1, value=3, step=1)
 
-# Función para cambiar los precios en pantalla según la moneda
-def formatear(monto_usd):
-  if moneda == "MXN":
-    return f"${monto_usd * tipo_cambio:,.2f} MXN"
-  return f"${monto_usd:,.2f} USD"
+  st.subheader("Tarifas (en USD)")
+  tarifa_ep_usd = st.number_input(
+      "Tarifa por noche - European Plan (USD)", min_value=0.0, value=320.00, step=10.0
+  )
+  tarifa_ai_usd = st.number_input(
+      "Tarifa por noche - All Inclusive (USD)", min_value=0.0, value=480.00, step=10.0
+  )
+  traslado_usd = st.number_input(
+      "Traslado Roundtrip Aeropuerto (USD)", min_value=0.0, value=150.00, step=10.0
+  )
 
+  # Cálculo dinámico de totales
+  total_ep_usd = tarifa_ep_usd * noches
+  total_ai_usd = tarifa_ai_usd * noches
 
-# Strings formateados para la vista previa
-p_tarifa_ep = formatear(tarifa_ep_usd)
-p_total_ep = formatear(total_ep_usd)
+  # Función de formato para aplicar la moneda seleccionada
+  def formatear(monto_usd):
+    if moneda == "MXN":
+      return f"${monto_usd * tipo_cambio:,.2f} MXN"
+    return f"${monto_usd:,.2f} USD"
 
-p_tarifa_ai = formatear(tarifa_ai_usd)
-p_total_ai = formatear(total_ai_usd)
+  p_tarifa_ep = formatear(tarifa_ep_usd)
+  p_total_ep = formatear(total_ep_usd)
 
-p_traslado = formatear(traslado_usd)
+  p_tarifa_ai = formatear(tarifa_ai_usd)
+  p_total_ai = formatear(total_ai_usd)
+
+  p_traslado = formatear(traslado_usd)
+
+  st.markdown("---")
+  if st.button("🚀 Enviar Directo al Huésped", type="primary", use_container_width=True):
+    if not remitente_email or not remitente_password:
+      st.error(
+          "⚠️ Selecciona un agente válido o configura el correo y contraseña en"
+          " la barra lateral."
+      )
+    elif not email_huesped:
+      st.error("⚠️ Ingresa el correo del huésped.")
+    else:
+      cuerpo_html = f"""
+            <h2>Casa Dorada Los Cabos Resort & Spa</h2>
+            <p>Estimado/a <strong>{nombre_huesped}</strong>,</p>
+            <p>A continuación le presentamos la cotización personalizada:</p>
+            
+            <h3>Opción 1: European Plan (Room Only)</h3>
+            <p><strong>Estancia:</strong> {noches} Noches<br>
+            <strong>Tarifa por noche:</strong> {p_tarifa_ep}<br>
+            <strong>Subtotal Estancia:</strong> {p_total_ep}</p>
+            
+            <h3>Opción 2: All Inclusive Plan</h3>
+            <p><strong>Estancia:</strong> {noches} Noches<br>
+            <strong>Tarifa por noche:</strong> {p_tarifa_ai}<br>
+            <strong>Subtotal Estancia:</strong> {p_total_ai}</p>
+            
+            <p><strong>Traslado:</strong> {p_traslado}</p>
+            
+            <br>
+            <p>Atentamente,<br><strong>{remitente_nombre}</strong><br>Casa Dorada Los Cabos</p>
+            """
+      try:
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = (
+            f"Cotización Especial | Casa Dorada Los Cabos - {nombre_huesped}"
+        )
+        msg["From"] = f"{remitente_nombre} <{remitente_email}>"
+        msg["To"] = email_huesped
+        msg.attach(MIMEText(cuerpo_html, "html"))
+
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+          server.login(remitente_email, remitente_password)
+          server.sendmail(remitente_email, email_huesped, msg.as_string())
+
+        st.success(
+            f"¡Cotización enviada a **{email_huesped}** desde"
+            f" **{remitente_email}**!"
+        )
+      except Exception as e:
+        st.error(f"Error al enviar: {e}")
 
 # -----------------------------------------------------------------------------
-# 3. TU VISTA PREVIA ORIGINAL (TAL CUAL)
+# 3. VISTA PREVIA ORIGINAL CON REEMPLAZO DINÁMICO (COLUMNA DERECHA)
 # -----------------------------------------------------------------------------
-st.markdown(f"""
+with col_preview:
+  st.header("👁️ Vista Previa")
+
+  st.markdown(f"""
 **Vista Previa — Opción 1: European Plan (Room Only)**
 *Junior Suite Ocean View*
 
-* **Estancia:** 3 Noches
+* **Estancia:** {noches} Noches
 * **Tarifa por noche:** {p_tarifa_ep} *(Impuestos incluidos)*
 * **Subtotal Estancia:** {p_total_ep}
 * **Recorrido Virtual 360°:** 🌐 [Explorar Junior Suite en 360°](https://my.matterport.com/show/?m=ejemplo_jr_suite)
@@ -96,7 +164,7 @@ st.markdown(f"""
 **Vista Previa — Opción 2: All Inclusive Plan**
 *Junior Suite Ocean View*
 
-* **Estancia:** 3 Noches
+* **Estancia:** {noches} Noches
 * **Tarifa por noche:** {p_tarifa_ai} *(Impuestos incluidos)*
 * **Subtotal Estancia:** {p_total_ai}
 * **Recorrido Virtual 360°:** 🌐 [Explorar Junior Suite en 360°](https://my.matterport.com/show/?m=ejemplo_jr_suite)
@@ -115,38 +183,3 @@ st.markdown(f"""
 * **Depósito:** 1 noche de depósito requerida al momento de reservar.
 * **Cancelación:** Cancelación gratuita hasta 7 días antes de la llegada.
 """)
-
-# -----------------------------------------------------------------------------
-# 4. ENVÍO DE CORREO SMTP
-# -----------------------------------------------------------------------------
-st.markdown("---")
-email_huesped = st.text_input("Correo del Huésped", "huesped@email.com")
-
-if st.button("🚀 Enviar Directo al Huésped", type="primary"):
-  if not remitente_email or not remitente_password:
-    st.error("⚠️ Configura el correo y contraseña del agente en el menú lateral.")
-  else:
-    cuerpo_html = f"""
-        <h2>Casa Dorada Los Cabos Resort & Spa</h2>
-        <p>Vista Previa de Cotización:</p>
-        <p><strong>Opción 1 European Plan:</strong> Tarifa por noche: {p_tarifa_ep} | Total: {p_total_ep}</p>
-        <p><strong>Opción 2 All Inclusive:</strong> Tarifa por noche: {p_tarifa_ai} | Total: {p_total_ai}</p>
-        <p><strong>Traslado:</strong> {p_traslado}</p>
-        <p>Atentamente,<br>{remitente_nombre}</p>
-        """
-    try:
-      msg = MIMEMultipart("alternative")
-      msg["Subject"] = "Cotización Especial | Casa Dorada Los Cabos"
-      msg["From"] = f"{remitente_nombre} <{remitente_email}>"
-      msg["To"] = email_huesped
-      msg.attach(MIMEText(cuerpo_html, "html"))
-
-      with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
-        server.login(remitente_email, remitente_password)
-        server.sendmail(remitente_email, email_huesped, msg.as_string())
-
-      st.success(
-          f"¡Cotización enviada a **{email_huesped}** desde **{remitente_email}**!"
-      )
-    except Exception as e:
-      st.error(f"Error al enviar: {e}")
