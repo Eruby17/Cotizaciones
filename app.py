@@ -3,55 +3,14 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 import streamlit as st
 
-st.set_page_config(
-    page_title="Cotizador Casa Dorada Los Cabos", page_icon="🏨", layout="wide"
-)
+st.set_page_config(page_title="Cotizador Casa Dorada", layout="wide")
 
 # -----------------------------------------------------------------------------
-# FUNCIONES AUXILIARES & ENVÍO DE CORREO
+# 1. BARRA LATERAL: AGENTES Y SELECCIÓN DE MONEDA
 # -----------------------------------------------------------------------------
+st.sidebar.header("👤 Agente de Ventas")
 
-
-def enviar_correo_directo(
-    email_destino,
-    asunto,
-    cuerpo_html,
-    smtp_server,
-    smtp_port,
-    remitente,
-    password,
-    nombre_remitente,
-):
-  try:
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = asunto
-    msg["From"] = f"{nombre_remitente} - Casa Dorada <{remitente}>"
-    msg["To"] = email_destino
-
-    part_html = MIMEText(cuerpo_html, "html")
-    msg.attach(part_html)
-
-    with smtplib.SMTP_SSL(smtp_server, smtp_port) as server:
-      server.login(remitente, password)
-      server.sendmail(remitente, email_destino, msg.as_string())
-
-    return True, "Cotización enviada exitosamente."
-  except Exception as e:
-    return False, str(e)
-
-
-def formatear_precio(monto_usd, moneda, tipo_cambio):
-  if moneda == "MXN":
-    monto_convertido = monto_usd * tipo_cambio
-    return f"${monto_convertido:,.2f} MXN"
-  return f"${monto_usd:,.2f} USD"
-
-
-# -----------------------------------------------------------------------------
-# BARRA LATERAL (SELECCIÓN DE AGENTE Y CONFIGURACIÓN DE MONEDA)
-# -----------------------------------------------------------------------------
-st.sidebar.header("👤 Perfil de Agente")
-
+# Carga de agentes desde secrets.toml
 agentes_dict = st.secrets.get("agentes", {})
 
 if agentes_dict:
@@ -67,7 +26,7 @@ if agentes_dict:
       remitente_password = datos["password"]
       break
 else:
-  st.sidebar.warning("⚠️ No se encontraron agentes configurados en Secrets.")
+  st.sidebar.warning("⚠️ Sin agentes en secrets.toml")
   remitente_nombre = st.sidebar.text_input("Tu Nombre", "Ejecutivo de Ventas")
   remitente_email = st.sidebar.text_input(
       "Tu Correo", "ventas@casadorada.com"
@@ -77,54 +36,52 @@ else:
   )
 
 st.sidebar.markdown("---")
-st.sidebar.header("⚙️ Ajustes de Moneda")
+st.sidebar.header("⚙️ Configuración de Moneda")
 
-moneda_seleccionada = st.sidebar.radio(
-    "Moneda de visualización:", ["USD", "MXN"], index=0
-)
+moneda = st.sidebar.radio("Selecciona Moneda:", ["USD", "MXN"], index=0)
 tipo_cambio = st.sidebar.number_input(
-    "Tipo de cambio (USD a MXN):", min_value=1.0, value=20.0, step=0.1
+    "Tipo de Cambio (USD a MXN):", min_value=1.0, value=20.0, step=0.1
 )
 
 # -----------------------------------------------------------------------------
-# DATOS DE ENTRADA (BASE)
+# 2. CÁLCULO Y FORMATEO DINÁMICO DE PRECIOS
 # -----------------------------------------------------------------------------
-noches = 3
+# Precios base en USD
 tarifa_ep_usd = 320.00
+total_ep_usd = 960.00
+
 tarifa_ai_usd = 480.00
+total_ai_usd = 1440.00
+
 traslado_usd = 150.00
 
-# Cálculos
-subtotal_ep_usd = tarifa_ep_usd * noches
-subtotal_ai_usd = tarifa_ai_usd * noches
 
-# Formateo dinámico según la moneda seleccionada
-tarifa_ep_txt = formatear_precio(
-    tarifa_ep_usd, moneda_seleccionada, tipo_cambio
-)
-subtotal_ep_txt = formatear_precio(
-    subtotal_ep_usd, moneda_seleccionada, tipo_cambio
-)
+# Función para cambiar los precios en pantalla según la moneda
+def formatear(monto_usd):
+  if moneda == "MXN":
+    return f"${monto_usd * tipo_cambio:,.2f} MXN"
+  return f"${monto_usd:,.2f} USD"
 
-tarifa_ai_txt = formatear_precio(
-    tarifa_ai_usd, moneda_seleccionada, tipo_cambio
-)
-subtotal_ai_txt = formatear_precio(
-    subtotal_ai_usd, moneda_seleccionada, tipo_cambio
-)
 
-traslado_txt = formatear_precio(traslado_usd, moneda_seleccionada, tipo_cambio)
+# Strings formateados para la vista previa
+p_tarifa_ep = formatear(tarifa_ep_usd)
+p_total_ep = formatear(total_ep_usd)
+
+p_tarifa_ai = formatear(tarifa_ai_usd)
+p_total_ai = formatear(total_ai_usd)
+
+p_traslado = formatear(traslado_usd)
 
 # -----------------------------------------------------------------------------
-# VISTA PREVIA ORIGINAL CON PRECIOS DINÁMICOS
+# 3. TU VISTA PREVIA ORIGINAL (TAL CUAL)
 # -----------------------------------------------------------------------------
 st.markdown(f"""
-**Vista Previa — Opción 1: European Plan (Room Only)**  
+**Vista Previa — Opción 1: European Plan (Room Only)**
 *Junior Suite Ocean View*
 
-* **Estancia:** {noches} Noches
-* **Tarifa por noche:** {tarifa_ep_txt} *(Impuestos incluidos)*
-* **Subtotal Estancia:** {subtotal_ep_txt}
+* **Estancia:** 3 Noches
+* **Tarifa por noche:** {p_tarifa_ep} *(Impuestos incluidos)*
+* **Subtotal Estancia:** {p_total_ep}
 * **Recorrido Virtual 360°:** 🌐 [Explorar Junior Suite en 360°](https://my.matterport.com/show/?m=ejemplo_jr_suite)
 
 **Valores Agregados Incluidos:**
@@ -136,12 +93,12 @@ st.markdown(f"""
 
 ---
 
-**Vista Previa — Opción 2: All Inclusive Plan**  
+**Vista Previa — Opción 2: All Inclusive Plan**
 *Junior Suite Ocean View*
 
-* **Estancia:** {noches} Noches
-* **Tarifa por noche:** {tarifa_ai_txt} *(Impuestos incluidos)*
-* **Subtotal Estancia:** {subtotal_ai_txt}
+* **Estancia:** 3 Noches
+* **Tarifa por noche:** {p_tarifa_ai} *(Impuestos incluidos)*
+* **Subtotal Estancia:** {p_total_ai}
 * **Recorrido Virtual 360°:** 🌐 [Explorar Junior Suite en 360°](https://my.matterport.com/show/?m=ejemplo_jr_suite)
 
 **Valores Agregados Incluidos:**
@@ -154,50 +111,42 @@ st.markdown(f"""
 ---
 
 **Servicios Adicionales & Políticas:**
-* **Traslado:** Roundtrip Airport Transportation — {traslado_txt}
+* **Traslado:** Roundtrip Airport Transportation — {p_traslado}
 * **Depósito:** 1 noche de depósito requerida al momento de reservar.
 * **Cancelación:** Cancelación gratuita hasta 7 días antes de la llegada.
 """)
 
 # -----------------------------------------------------------------------------
-# ENVÍO DE CORREO
+# 4. ENVÍO DE CORREO SMTP
 # -----------------------------------------------------------------------------
 st.markdown("---")
 email_huesped = st.text_input("Correo del Huésped", "huesped@email.com")
 
 if st.button("🚀 Enviar Directo al Huésped", type="primary"):
   if not remitente_email or not remitente_password:
-    st.error(
-        "⚠️ Falta configurar el correo o la contraseña del agente seleccionado."
-    )
+    st.error("⚠️ Configura el correo y contraseña del agente en el menú lateral.")
   else:
     cuerpo_html = f"""
         <h2>Casa Dorada Los Cabos Resort & Spa</h2>
-        <p>A continuación le presentamos la cotización personalizada:</p>
-        
-        <h3>Opción 1: European Plan</h3>
-        <p>Tarifa por noche: {tarifa_ep_txt}<br>Subtotal Estancia: {subtotal_ep_txt}</p>
-        
-        <h3>Opción 2: All Inclusive Plan</h3>
-        <p>Tarifa por noche: {tarifa_ai_txt}<br>Subtotal Estancia: {subtotal_ai_txt}</p>
-        
-        <p><strong>Traslado:</strong> {traslado_txt}</p>
+        <p>Vista Previa de Cotización:</p>
+        <p><strong>Opción 1 European Plan:</strong> Tarifa por noche: {p_tarifa_ep} | Total: {p_total_ep}</p>
+        <p><strong>Opción 2 All Inclusive:</strong> Tarifa por noche: {p_tarifa_ai} | Total: {p_total_ai}</p>
+        <p><strong>Traslado:</strong> {p_traslado}</p>
         <p>Atentamente,<br>{remitente_nombre}</p>
         """
+    try:
+      msg = MIMEMultipart("alternative")
+      msg["Subject"] = "Cotización Especial | Casa Dorada Los Cabos"
+      msg["From"] = f"{remitente_nombre} <{remitente_email}>"
+      msg["To"] = email_huesped
+      msg.attach(MIMEText(cuerpo_html, "html"))
 
-    exito, res = enviar_correo_directo(
-        email_destino=email_huesped,
-        asunto="Cotización Especial | Casa Dorada Los Cabos",
-        cuerpo_html=cuerpo_html,
-        smtp_server="smtp.gmail.com",
-        smtp_port=465,
-        remitente=remitente_email,
-        password=remitente_password,
-        nombre_remitente=remitente_nombre,
-    )
-    if exito:
+      with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+        server.login(remitente_email, remitente_password)
+        server.sendmail(remitente_email, email_huesped, msg.as_string())
+
       st.success(
-          f"¡Cotización enviada a **{email_huesped}** desde **{remitente_nombre}**!"
+          f"¡Cotización enviada a **{email_huesped}** desde **{remitente_email}**!"
       )
-    else:
-      st.error(f"Error al enviar: {res}")
+    except Exception as e:
+      st.error(f"Error al enviar: {e}")
