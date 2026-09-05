@@ -1,12 +1,18 @@
 import streamlit as st
-import smtplib
 import traceback
 import json
 import base64
+import hashlib
+import hmac
+import secrets
 import mimetypes
 from datetime import date
 from email.message import EmailMessage
-from email.utils import formataddr
+
+
+# ============================================================
+# GOOGLE
+# ============================================================
 
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
@@ -14,7 +20,7 @@ from google.auth.transport.requests import Request
 
 
 # ============================================================
-# CONFIGURACIÓN GENERAL
+# CONFIGURACIÓN
 # ============================================================
 
 st.set_page_config(
@@ -25,8 +31,13 @@ st.set_page_config(
 )
 
 
+SCOPES = [
+    "https://www.googleapis.com/auth/gmail.compose"
+]
+
+
 # ============================================================
-# COLORES CASA DORADA
+# COLORES
 # ============================================================
 
 AZUL = "#071A2F"
@@ -61,10 +72,6 @@ st.markdown(
         color: {BLANCO};
     }}
 
-    .main {{
-        background: {FONDO};
-    }}
-
     section[data-testid="stSidebar"] {{
         background: {AZUL};
         border-right: 1px solid #1D3553;
@@ -74,7 +81,7 @@ st.markdown(
         color: {BLANCO};
     }}
 
-    h1, h2, h3 {{
+    h1, h2, h3, h4 {{
         color: {BLANCO} !important;
     }}
 
@@ -98,12 +105,12 @@ st.markdown(
         color: {BLANCO};
         font-size: 34px;
         font-weight: 800;
-        margin-bottom: 5px;
     }}
 
     .hero-subtitle {{
         color: {GRIS};
         font-size: 16px;
+        margin-top: 5px;
     }}
 
     .card {{
@@ -126,13 +133,15 @@ st.markdown(
         border: 1px solid #29496C;
         border-radius: 14px;
         padding: 20px;
+        margin-top: 10px;
         margin-bottom: 15px;
     }}
 
     .price {{
         color: {DORADO_CLARO};
-        font-size: 28px;
+        font-size: 27px;
         font-weight: 800;
+        margin-top: 8px;
     }}
 
     .connected {{
@@ -190,22 +199,6 @@ st.markdown(
         border-color: #29496C !important;
     }}
 
-    .stSelectbox label,
-    .stNumberInput label,
-    .stTextInput label,
-    .stDateInput label,
-    .stTextArea label {{
-        color: {GRIS} !important;
-    }}
-
-    .stTabs [data-baseweb="tab"] {{
-        color: {GRIS};
-    }}
-
-    .stTabs [aria-selected="true"] {{
-        color: {DORADO_CLARO} !important;
-    }}
-
     </style>
     """,
     unsafe_allow_html=True
@@ -213,21 +206,30 @@ st.markdown(
 
 
 # ============================================================
-# GOOGLE OAUTH
+# GOOGLE CONFIG
 # ============================================================
-
-SCOPES = [
-    "https://www.googleapis.com/auth/gmail.compose"
-]
-
 
 def get_google_client_config():
 
     try:
 
-        client_id = st.secrets["google_oauth"]["client_id"]
-        client_secret = st.secrets["google_oauth"]["client_secret"]
-        redirect_uri = st.secrets["google_oauth"]["redirect_uri"]
+        client_id = st.secrets[
+            "google_oauth"
+        ][
+            "client_id"
+        ]
+
+        client_secret = st.secrets[
+            "google_oauth"
+        ][
+            "client_secret"
+        ]
+
+        redirect_uri = st.secrets[
+            "google_oauth"
+        ][
+            "redirect_uri"
+        ]
 
         return {
             "web": {
@@ -248,47 +250,9 @@ def get_google_client_config():
 
     except Exception as e:
 
-        st.error("❌ ERROR LEYENDO GOOGLE OAUTH")
-
-        st.exception(e)
-
-        st.code(
-            traceback.format_exc(),
-            language="text"
+        st.error(
+            "❌ ERROR LEYENDO GOOGLE OAUTH"
         )
-
-        return None
-
-
-def create_oauth_flow():
-
-    try:
-
-        config = get_google_client_config()
-
-        if config is None:
-            return None
-
-        redirect_uri = st.secrets[
-            "google_oauth"
-        ][
-            "redirect_uri"
-        ]
-
-        flow = Flow.from_client_config(
-            config,
-            scopes=SCOPES,
-            redirect_uri=redirect_uri
-        )
-
-        # PKCE activado explícitamente
-        flow.autogenerate_code_verifier = True
-
-        return flow
-
-    except Exception as e:
-
-        st.error("❌ ERROR CREANDO OAUTH FLOW")
 
         st.exception(e)
 
@@ -301,55 +265,283 @@ def create_oauth_flow():
 
 
 # ============================================================
-# INICIAR GOOGLE LOGIN
+# DATOS GOOGLE
+# ============================================================
+
+def get_google_secrets():
+
+    return {
+        "client_id": st.secrets[
+            "google_oauth"
+        ][
+            "client_id"
+        ],
+
+        "client_secret": st.secrets[
+            "google_oauth"
+        ][
+            "client_secret"
+        ],
+
+        "redirect_uri": st.secrets[
+            "google_oauth"
+        ][
+            "redirect_uri"
+        ]
+    }
+
+
+# ============================================================
+# BASE64 URL SAFE
+# ============================================================
+
+def b64encode_text(text):
+
+    return base64.urlsafe_b64encode(
+        text.encode("utf-8")
+    ).decode("utf-8").rstrip("=")
+
+
+def b64decode_text(text):
+
+    padding = "=" * (
+        4 - len(text) % 4
+    )
+
+    return base64.urlsafe_b64decode(
+        (text + padding).encode("utf-8")
+    ).decode("utf-8")
+
+
+# ============================================================
+# CREAR STATE FIRMADO
+# ============================================================
+
+def crear_oauth_state(code_verifier):
+
+    secrets_google = get_google_secrets()
+
+    client_secret = secrets_google[
+        "client_secret"
+    ]
+
+    nonce = secrets.token_urlsafe(
+        24
+    )
+
+    payload = {
+        "nonce": nonce,
+        "code_verifier": code_verifier
+    }
+
+    payload_json = json.dumps(
+        payload,
+        separators=(",", ":")
+    )
+
+    payload_encoded = b64encode_text(
+        payload_json
+    )
+
+    signature = hmac.new(
+        client_secret.encode("utf-8"),
+        payload_encoded.encode("utf-8"),
+        hashlib.sha256
+    ).hexdigest()
+
+    return (
+        payload_encoded
+        + "."
+        + signature
+    )
+
+
+# ============================================================
+# LEER STATE FIRMADO
+# ============================================================
+
+def leer_oauth_state(state):
+
+    secrets_google = get_google_secrets()
+
+    client_secret = secrets_google[
+        "client_secret"
+    ]
+
+    try:
+
+        partes = state.split(".")
+
+        if len(partes) != 2:
+
+            raise ValueError(
+                "Formato de state inválido."
+            )
+
+        payload_encoded = partes[0]
+        signature_recibida = partes[1]
+
+        signature_esperada = hmac.new(
+            client_secret.encode("utf-8"),
+            payload_encoded.encode("utf-8"),
+            hashlib.sha256
+        ).hexdigest()
+
+        if not hmac.compare_digest(
+            signature_recibida,
+            signature_esperada
+        ):
+
+            raise ValueError(
+                "La firma del state no coincide."
+            )
+
+        payload_json = b64decode_text(
+            payload_encoded
+        )
+
+        payload = json.loads(
+            payload_json
+        )
+
+        if "code_verifier" not in payload:
+
+            raise ValueError(
+                "No existe code_verifier en state."
+            )
+
+        return payload
+
+    except Exception as e:
+
+        raise ValueError(
+            f"No se pudo validar el state: {e}"
+        )
+
+
+# ============================================================
+# CREAR CODE VERIFIER
+# ============================================================
+
+def crear_code_verifier():
+
+    return secrets.token_urlsafe(
+        64
+    )
+
+
+# ============================================================
+# CREAR CODE CHALLENGE
+# ============================================================
+
+def crear_code_challenge(
+    code_verifier
+):
+
+    digest = hashlib.sha256(
+        code_verifier.encode("utf-8")
+    ).digest()
+
+    return base64.urlsafe_b64encode(
+        digest
+    ).decode("utf-8").rstrip("=")
+
+
+# ============================================================
+# CREAR FLOW
+# ============================================================
+
+def crear_flow():
+
+    config = get_google_client_config()
+
+    if config is None:
+
+        return None
+
+    redirect_uri = st.secrets[
+        "google_oauth"
+    ][
+        "redirect_uri"
+    ]
+
+    flow = Flow.from_client_config(
+        config,
+        scopes=SCOPES,
+        redirect_uri=redirect_uri
+    )
+
+    return flow
+
+
+# ============================================================
+# INICIAR LOGIN GOOGLE
 # ============================================================
 
 def iniciar_google_login():
 
     try:
 
-        flow = create_oauth_flow()
+        flow = crear_flow()
 
         if flow is None:
+
             return None
 
-        authorization_url, state = flow.authorization_url(
+        # ----------------------------------------------------
+        # Generar PKCE
+        # ----------------------------------------------------
 
-            access_type="offline",
-
-            include_granted_scopes="true",
-
-            prompt="consent"
+        code_verifier = (
+            crear_code_verifier()
         )
 
-        # Guardamos el Flow completo
-        st.session_state["oauth_flow"] = flow
+        code_challenge = (
+            crear_code_challenge(
+                code_verifier
+            )
+        )
 
-        # Guardamos state
-        st.session_state["oauth_state"] = state
+        # ----------------------------------------------------
+        # Crear state firmado
+        # ----------------------------------------------------
 
-        # Guardamos URL
-        st.session_state["oauth_url"] = authorization_url
+        state = crear_oauth_state(
+            code_verifier
+        )
 
-        # Información para diagnóstico
-        st.session_state["oauth_debug"] = {
+        # ----------------------------------------------------
+        # Construir URL
+        # ----------------------------------------------------
 
-            "state": state,
+        authorization_url, _ = (
+            flow.authorization_url(
 
-            "code_verifier_exists":
-                flow.code_verifier is not None,
+                access_type="offline",
 
-            "code_verifier_length":
-                len(flow.code_verifier)
-                if flow.code_verifier
-                else 0,
+                include_granted_scopes="true",
 
-            "redirect_uri":
-                st.secrets["google_oauth"]["redirect_uri"],
+                prompt="consent",
 
-            "scopes":
-                SCOPES
-        }
+                state=state,
+
+                code_challenge=
+                    code_challenge,
+
+                code_challenge_method=
+                    "S256"
+            )
+        )
+
+        # Guardamos URL únicamente para
+        # mostrarla en esta sesión.
+        #
+        # IMPORTANTE:
+        # El OAuth ya NO depende de guardar
+        # el Flow en session_state.
+        st.session_state[
+            "oauth_url"
+        ] = authorization_url
 
         return authorization_url
 
@@ -370,41 +562,59 @@ def iniciar_google_login():
 
 
 # ============================================================
-# PROCESAR CALLBACK GOOGLE
+# PROCESAR CALLBACK
 # ============================================================
 
 def procesar_callback_google():
 
-    # --------------------------------------------------------
-    # Mostrar todos los parámetros recibidos
-    # --------------------------------------------------------
-
     try:
 
-        query_params = dict(st.query_params)
+        query_params = dict(
+            st.query_params
+        )
 
     except Exception:
 
         query_params = {}
 
-    if query_params:
+    # --------------------------------------------------------
+    # Mostrar diagnóstico
+    # --------------------------------------------------------
 
-        with st.expander(
-            "🔎 DEBUG: Parámetros recibidos desde Google",
-            expanded=True
-        ):
+    with st.expander(
+        "🔎 Diagnóstico de Google",
+        expanded=True
+    ):
 
-            st.code(
-                json.dumps(
-                    query_params,
-                    indent=2,
-                    ensure_ascii=False
-                ),
-                language="json"
-            )
+        debug_params = {}
+
+        for key, value in query_params.items():
+
+            # NO mostrar tokens sensibles
+            if key in [
+                "access_token",
+                "refresh_token"
+            ]:
+
+                debug_params[key] = (
+                    "[OCULTO]"
+                )
+
+            else:
+
+                debug_params[key] = value
+
+        st.code(
+            json.dumps(
+                debug_params,
+                indent=2,
+                ensure_ascii=False
+            ),
+            language="json"
+        )
 
     # --------------------------------------------------------
-    # ¿Google mandó error?
+    # ERROR DE GOOGLE
     # --------------------------------------------------------
 
     google_error = st.query_params.get(
@@ -414,27 +624,20 @@ def procesar_callback_google():
     if google_error:
 
         st.error(
-            f"❌ GOOGLE DEVOLVIÓ UN ERROR: {google_error}"
+            f"❌ GOOGLE DEVOLVIÓ UN ERROR: "
+            f"{google_error}"
         )
 
-        description = st.query_params.get(
-            "error_description"
+        description = (
+            st.query_params.get(
+                "error_description"
+            )
         )
 
         if description:
 
             st.error(
                 f"Descripción: {description}"
-            )
-
-        error_uri = st.query_params.get(
-            "error_uri"
-        )
-
-        if error_uri:
-
-            st.info(
-                f"Error URI: {error_uri}"
             )
 
         return None
@@ -452,172 +655,126 @@ def procesar_callback_google():
         return None
 
     # --------------------------------------------------------
-    # RECUPERAR FLOW
+    # STATE
     # --------------------------------------------------------
 
-    flow = st.session_state.get(
-        "oauth_flow"
+    state = st.query_params.get(
+        "state"
     )
 
-    if flow is None:
+    if not state:
 
         st.error(
-            "❌ ERROR: SE PERDIÓ LA SESIÓN OAUTH"
-        )
-
-        st.warning(
-            "Google regresó correctamente a la aplicación, "
-            "pero Streamlit no encontró el OAuth Flow original."
-        )
-
-        st.markdown(
-            "### Diagnóstico"
-        )
-
-        debug_data = {
-
-            "oauth_flow_exists":
-                False,
-
-            "oauth_state_exists":
-                "oauth_state"
-                in st.session_state,
-
-            "oauth_url_exists":
-                "oauth_url"
-                in st.session_state,
-
-            "session_keys":
-                list(
-                    st.session_state.keys()
-                ),
-
-            "query_params":
-                dict(st.query_params)
-        }
-
-        st.code(
-            json.dumps(
-                debug_data,
-                indent=2,
-                ensure_ascii=False
-            ),
-            language="json"
+            "❌ Google no devolvió el parámetro state."
         )
 
         return None
 
     # --------------------------------------------------------
-    # ESTADOS
+    # RECUPERAR CODE VERIFIER DESDE STATE
     # --------------------------------------------------------
 
-    estado_google = st.query_params.get(
-        "state"
-    )
+    try:
 
-    estado_guardado = st.session_state.get(
-        "oauth_state"
-    )
-
-    # --------------------------------------------------------
-    # DEBUG FLOW
-    # --------------------------------------------------------
-
-    with st.expander(
-        "🔎 DEBUG: OAuth Flow",
-        expanded=True
-    ):
-
-        debug_flow = {
-
-            "flow_exists":
-                True,
-
-            "code_received":
-                bool(code),
-
-            "code_verifier_exists":
-                flow.code_verifier is not None,
-
-            "code_verifier_length":
-                len(flow.code_verifier)
-                if flow.code_verifier
-                else 0,
-
-            "state_received":
-                estado_google,
-
-            "state_saved":
-                estado_guardado,
-
-            "state_matches":
-                estado_google == estado_guardado,
-
-            "redirect_uri":
-                st.secrets[
-                    "google_oauth"
-                ][
-                    "redirect_uri"
-                ],
-
-            "scopes":
-                SCOPES
-        }
-
-        st.code(
-            json.dumps(
-                debug_flow,
-                indent=2,
-                ensure_ascii=False
-            ),
-            language="json"
+        payload = leer_oauth_state(
+            state
         )
 
-    # --------------------------------------------------------
-    # VERIFICAR STATE
-    # --------------------------------------------------------
+        code_verifier = payload[
+            "code_verifier"
+        ]
 
-    if estado_google != estado_guardado:
+    except Exception as e:
 
         st.error(
-            "❌ ERROR: EL STATE NO COINCIDE"
+            "❌ NO SE PUDO VALIDAR EL STATE"
         )
 
+        st.exception(e)
+
         st.code(
-            f"""
-STATE RECIBIDO DESDE GOOGLE:
-
-{estado_google}
-
-
-STATE GUARDADO EN STREAMLIT:
-
-{estado_guardado}
-""",
+            traceback.format_exc(),
             language="text"
         )
 
         return None
 
     # --------------------------------------------------------
-    # OBTENER TOKEN
+    # DEBUG PKCE
+    # --------------------------------------------------------
+
+    with st.expander(
+        "🔎 Diagnóstico PKCE",
+        expanded=True
+    ):
+
+        st.code(
+            json.dumps(
+                {
+                    "code_received": True,
+
+                    "state_received": True,
+
+                    "code_verifier_recovered":
+                        bool(
+                            code_verifier
+                        ),
+
+                    "code_verifier_length":
+                        len(
+                            code_verifier
+                        ),
+
+                    "redirect_uri":
+                        st.secrets[
+                            "google_oauth"
+                        ][
+                            "redirect_uri"
+                        ],
+
+                    "scope":
+                        st.query_params.get(
+                            "scope"
+                        )
+                },
+                indent=2,
+                ensure_ascii=False
+            ),
+            language="json"
+        )
+
+    # --------------------------------------------------------
+    # CREAR NUEVO FLOW
     # --------------------------------------------------------
 
     try:
 
+        flow = crear_flow()
+
+        if flow is None:
+
+            return None
+
+        # ----------------------------------------------------
+        # INTERCAMBIO DEL CODE
+        # ----------------------------------------------------
+
         st.info(
             "🔄 Google autorizó la aplicación. "
-            "Intentando obtener el token..."
+            "Obteniendo credenciales..."
         )
 
         flow.fetch_token(
-            code=code
+            code=code,
+            code_verifier=code_verifier
         )
 
-        credentials = flow.credentials
+        credentials = (
+            flow.credentials
+        )
 
         # ----------------------------------------------------
-        # CREDENTIALS
+        # VALIDAR
         # ----------------------------------------------------
 
         credential_debug = {
@@ -629,7 +786,9 @@ STATE GUARDADO EN STREAMLIT:
                 credentials.expired,
 
             "has_token":
-                bool(credentials.token),
+                bool(
+                    credentials.token
+                ),
 
             "has_refresh_token":
                 bool(
@@ -641,7 +800,7 @@ STATE GUARDADO EN STREAMLIT:
         }
 
         with st.expander(
-            "🔎 DEBUG: Credentials",
+            "🔎 Diagnóstico Credentials",
             expanded=True
         ):
 
@@ -655,30 +814,22 @@ STATE GUARDADO EN STREAMLIT:
             )
 
         # ----------------------------------------------------
-        # GUARDAR
+        # GUARDAR CREDENTIALS
         # ----------------------------------------------------
 
         st.session_state[
             "google_credentials"
         ] = credentials
 
-        # Limpiar datos temporales
-        st.session_state.pop(
-            "oauth_flow",
-            None
-        )
-
-        st.session_state.pop(
-            "oauth_state",
-            None
-        )
-
         st.session_state.pop(
             "oauth_url",
             None
         )
 
-        # Limpiar query parameters
+        # ----------------------------------------------------
+        # LIMPIAR URL
+        # ----------------------------------------------------
+
         try:
 
             st.query_params.clear()
@@ -690,6 +841,10 @@ STATE GUARDADO EN STREAMLIT:
         st.success(
             "✅ Google conectado correctamente."
         )
+
+        # ----------------------------------------------------
+        # RECARGAR
+        # ----------------------------------------------------
 
         st.rerun()
 
@@ -703,10 +858,6 @@ STATE GUARDADO EN STREAMLIT:
 
         st.exception(e)
 
-        # ----------------------------------------------------
-        # TRACEBACK
-        # ----------------------------------------------------
-
         st.markdown(
             "### Traceback completo"
         )
@@ -716,69 +867,53 @@ STATE GUARDADO EN STREAMLIT:
             language="text"
         )
 
-        # ----------------------------------------------------
-        # DIAGNÓSTICO
-        # ----------------------------------------------------
-
         st.markdown(
-            "### Datos del diagnóstico"
+            "### Diagnóstico del intercambio"
         )
 
         try:
 
-            debug_error = {
-
-                "code_received":
-                    bool(code),
-
-                "state_received":
-                    estado_google,
-
-                "state_saved":
-                    estado_guardado,
-
-                "state_matches":
-                    estado_google ==
-                    estado_guardado,
-
-                "code_verifier_exists":
-                    flow.code_verifier
-                    is not None,
-
-                "code_verifier_length":
-                    len(flow.code_verifier)
-                    if flow.code_verifier
-                    else 0,
-
-                "redirect_uri":
-                    st.secrets[
-                        "google_oauth"
-                    ][
-                        "redirect_uri"
-                    ],
-
-                "scopes":
-                    SCOPES
-            }
-
             st.code(
                 json.dumps(
-                    debug_error,
+                    {
+                        "code_received":
+                            bool(code),
+
+                        "state_received":
+                            bool(state),
+
+                        "code_verifier_recovered":
+                            bool(
+                                code_verifier
+                            ),
+
+                        "code_verifier_length":
+                            len(
+                                code_verifier
+                            ),
+
+                        "redirect_uri":
+                            st.secrets[
+                                "google_oauth"
+                            ][
+                                "redirect_uri"
+                            ],
+
+                        "scope":
+                            st.query_params.get(
+                                "scope"
+                            )
+                    },
                     indent=2,
                     ensure_ascii=False
                 ),
                 language="json"
             )
 
-        except Exception as debug_exception:
-
-            st.error(
-                "También ocurrió un error "
-                "mostrando el diagnóstico."
-            )
+        except Exception as debug_error:
 
             st.exception(
-                debug_exception
+                debug_error
             )
 
         return None
@@ -792,13 +927,15 @@ def get_credentials():
 
     try:
 
-        credentials = st.session_state.get(
-            "google_credentials"
-        )
+        # ----------------------------------------------------
+        # Credentials existentes
+        # ----------------------------------------------------
 
-        # --------------------------------------------
-        # Ya existe una sesión
-        # --------------------------------------------
+        credentials = (
+            st.session_state.get(
+                "google_credentials"
+            )
+        )
 
         if credentials:
 
@@ -806,32 +943,49 @@ def get_credentials():
 
                 return credentials
 
-            # ----------------------------------------
-            # Intentar refresh
-            # ----------------------------------------
+            # ------------------------------------------------
+            # REFRESH
+            # ------------------------------------------------
 
             if (
                 credentials.expired
                 and credentials.refresh_token
             ):
 
-                st.info(
-                    "🔄 Actualizando sesión de Google..."
-                )
+                try:
 
-                credentials.refresh(
-                    Request()
-                )
+                    credentials.refresh(
+                        Request()
+                    )
 
-                st.session_state[
-                    "google_credentials"
-                ] = credentials
+                    st.session_state[
+                        "google_credentials"
+                    ] = credentials
 
-                return credentials
+                    return credentials
 
-        # --------------------------------------------
-        # Callback
-        # --------------------------------------------
+                except Exception as e:
+
+                    st.error(
+                        "❌ No se pudo renovar "
+                        "la sesión de Google."
+                    )
+
+                    st.exception(e)
+
+                    st.code(
+                        traceback.format_exc(),
+                        language="text"
+                    )
+
+                    st.session_state.pop(
+                        "google_credentials",
+                        None
+                    )
+
+        # ----------------------------------------------------
+        # CALLBACK
+        # ----------------------------------------------------
 
         if st.query_params.get(
             "code"
@@ -844,7 +998,7 @@ def get_credentials():
     except Exception as e:
 
         st.error(
-            "❌ ERROR OBTENIENDO CREDENCIALES"
+            "❌ ERROR OBTENIENDO CREDENTIALS"
         )
 
         st.exception(e)
@@ -865,7 +1019,9 @@ def get_gmail_service():
 
     try:
 
-        credentials = get_credentials()
+        credentials = (
+            get_credentials()
+        )
 
         if not credentials:
 
@@ -901,17 +1057,21 @@ def get_gmail_service():
 
 def mostrar_login_google():
 
-    credentials = get_credentials()
+    credentials = (
+        get_credentials()
+    )
 
     # --------------------------------------------------------
-    # YA CONECTADO
+    # CONECTADO
     # --------------------------------------------------------
 
     if credentials:
 
         try:
 
-            service = get_gmail_service()
+            service = (
+                get_gmail_service()
+            )
 
             if service:
 
@@ -924,9 +1084,11 @@ def mostrar_login_google():
                     .execute()
                 )
 
-                email_google = profile.get(
-                    "emailAddress",
-                    "Correo desconocido"
+                email_google = (
+                    profile.get(
+                        "emailAddress",
+                        "Correo desconocido"
+                    )
                 )
 
                 st.markdown(
@@ -945,7 +1107,7 @@ def mostrar_login_google():
 
             st.error(
                 "❌ Google está conectado, "
-                "pero Gmail no respondió."
+                "pero no se pudo acceder a Gmail."
             )
 
             st.exception(e)
@@ -965,24 +1127,29 @@ def mostrar_login_google():
         """
         <div class="disconnected">
             🔴 <b>Google no está conectado</b><br>
-            Conecta tu cuenta para guardar borradores
-            y enviar cotizaciones desde tu Gmail.
+            Conecta tu cuenta para guardar
+            borradores y enviar cotizaciones
+            desde tu Gmail.
         </div>
         """,
         unsafe_allow_html=True
     )
 
     # --------------------------------------------------------
-    # CREAR URL
+    # URL
     # --------------------------------------------------------
 
-    auth_url = st.session_state.get(
-        "oauth_url"
+    auth_url = (
+        st.session_state.get(
+            "oauth_url"
+        )
     )
 
     if not auth_url:
 
-        auth_url = iniciar_google_login()
+        auth_url = (
+            iniciar_google_login()
+        )
 
     if auth_url:
 
@@ -1028,7 +1195,7 @@ def crear_email(
     message["Subject"] = asunto
 
     message.set_content(
-        "Por favor visualice este correo en HTML."
+        "Please view this email in HTML format."
     )
 
     message.add_alternative(
@@ -1042,10 +1209,16 @@ def crear_email(
 
             try:
 
-                archivo_bytes = archivo.read()
+                archivo.seek(0)
 
-                mime_type, _ = mimetypes.guess_type(
-                    archivo.name
+                archivo_bytes = (
+                    archivo.read()
+                )
+
+                mime_type, _ = (
+                    mimetypes.guess_type(
+                        archivo.name
+                    )
                 )
 
                 if mime_type:
@@ -1080,16 +1253,14 @@ def crear_email(
 
 
 # ============================================================
-# GMAIL RAW MESSAGE
+# RAW EMAIL
 # ============================================================
 
 def email_to_raw(message):
 
-    raw_message = base64.urlsafe_b64encode(
+    return base64.urlsafe_b64encode(
         message.as_bytes()
     ).decode()
-
-    return raw_message
 
 
 # ============================================================
@@ -1105,7 +1276,9 @@ def guardar_borrador_gmail(
 
     try:
 
-        service = get_gmail_service()
+        service = (
+            get_gmail_service()
+        )
 
         if not service:
 
@@ -1115,7 +1288,6 @@ def guardar_borrador_gmail(
 
             return False
 
-        # Obtener cuenta
         profile = (
             service
             .users()
@@ -1125,8 +1297,10 @@ def guardar_borrador_gmail(
             .execute()
         )
 
-        email_account = profile.get(
-            "emailAddress"
+        email_account = (
+            profile.get(
+                "emailAddress"
+            )
         )
 
         message = crear_email(
@@ -1136,15 +1310,11 @@ def guardar_borrador_gmail(
             attachments
         )
 
-        raw_message = email_to_raw(
-            message
+        raw_message = (
+            email_to_raw(
+                message
+            )
         )
-
-        body = {
-            "message": {
-                "raw": raw_message
-            }
-        }
 
         result = (
             service
@@ -1152,7 +1322,12 @@ def guardar_borrador_gmail(
             .drafts()
             .create(
                 userId="me",
-                body=body
+                body={
+                    "message": {
+                        "raw":
+                            raw_message
+                    }
+                }
             )
             .execute()
         )
@@ -1162,17 +1337,12 @@ def guardar_borrador_gmail(
             f"{email_account}"
         )
 
-        st.info(
-            f"ID del borrador: "
-            f"{result.get('id', 'N/A')}"
-        )
-
         return True
 
     except Exception as e:
 
         st.error(
-            "❌ ERROR GUARDANDO BORRADOR EN GMAIL"
+            "❌ ERROR GUARDANDO BORRADOR"
         )
 
         st.exception(e)
@@ -1198,7 +1368,9 @@ def enviar_email_gmail(
 
     try:
 
-        service = get_gmail_service()
+        service = (
+            get_gmail_service()
+        )
 
         if not service:
 
@@ -1217,8 +1389,10 @@ def enviar_email_gmail(
             .execute()
         )
 
-        email_account = profile.get(
-            "emailAddress"
+        email_account = (
+            profile.get(
+                "emailAddress"
+            )
         )
 
         message = crear_email(
@@ -1228,13 +1402,11 @@ def enviar_email_gmail(
             attachments
         )
 
-        raw_message = email_to_raw(
-            message
+        raw_message = (
+            email_to_raw(
+                message
+            )
         )
-
-        body = {
-            "raw": raw_message
-        }
 
         result = (
             service
@@ -1242,7 +1414,10 @@ def enviar_email_gmail(
             .messages()
             .send(
                 userId="me",
-                body=body
+                body={
+                    "raw":
+                        raw_message
+                }
             )
             .execute()
         )
@@ -1250,11 +1425,6 @@ def enviar_email_gmail(
         st.success(
             f"✅ Correo enviado desde "
             f"{email_account}"
-        )
-
-        st.info(
-            f"ID del mensaje: "
-            f"{result.get('id', 'N/A')}"
         )
 
         return True
@@ -1276,13 +1446,8 @@ def enviar_email_gmail(
 
 
 # ============================================================
-# FUNCIONES DE FORMATO
+# FECHA ESPAÑOL
 # ============================================================
-
-def money_usd(value):
-
-    return f"${value:,.2f} USD"
-
 
 def format_date_es(fecha):
 
@@ -1309,7 +1474,7 @@ def format_date_es(fecha):
 
 
 # ============================================================
-# HTML DEL CORREO
+# GENERAR HTML
 # ============================================================
 
 def generar_html_email(
@@ -1320,17 +1485,21 @@ def generar_html_email(
     menores,
     opciones,
     transporte,
-    mensaje_personalizado
+    mensaje
 ):
 
-    filas_opciones = ""
+    noches = (
+        checkout - checkin
+    ).days
+
+    opciones_html = ""
 
     for opcion in opciones:
 
         if not opcion["activa"]:
             continue
 
-        nombre_suite = opcion[
+        suite = opcion[
             "suite"
         ]
 
@@ -1342,14 +1511,13 @@ def generar_html_email(
             "tarifa"
         ]
 
-        total_noches = (
-            tarifa *
-            (checkout - checkin).days
+        total = (
+            tarifa * noches
         )
 
-        filas_opciones += f"""
+        opciones_html += f"""
         <div style="
-            border:1px solid #d8d8d8;
+            border:1px solid #dddddd;
             border-radius:12px;
             padding:20px;
             margin:15px 0;
@@ -1357,34 +1525,34 @@ def generar_html_email(
         ">
 
             <div style="
-                font-size:20px;
+                font-size:21px;
                 font-weight:bold;
                 color:#071A2F;
-                margin-bottom:8px;
             ">
-                {nombre_suite}
+                {suite}
             </div>
 
             <div style="
                 color:#666666;
-                margin-bottom:12px;
+                margin-top:6px;
             ">
-                Plan: {plan}
+                {plan}
             </div>
 
             <div style="
-                font-size:25px;
-                font-weight:bold;
                 color:#C9A227;
+                font-size:26px;
+                font-weight:bold;
+                margin-top:12px;
             ">
                 ${tarifa:,.2f} USD
             </div>
 
             <div style="
                 color:#666666;
-                margin-top:4px;
+                margin-top:3px;
             ">
-                por noche
+                per night
             </div>
 
             <div style="
@@ -1393,10 +1561,9 @@ def generar_html_email(
                 padding-top:12px;
                 color:#444444;
             ">
-                Total por { (checkout - checkin).days }
-                noches:
+                Total for {noches} nights:
                 <strong>
-                    ${total_noches:,.2f} USD
+                    ${total:,.2f} USD
                 </strong>
             </div>
 
@@ -1410,19 +1577,26 @@ def generar_html_email(
         transporte_html = f"""
         <div style="
             margin-top:20px;
-            padding:15px;
+            padding:16px;
             background:#f5f5f5;
             border-radius:10px;
         ">
-            <strong>Transportation</strong><br>
-            Airport roundtrip transportation:
+
+            <strong>
+                Airport Transportation
+            </strong>
+
+            <br><br>
+
+            Roundtrip transportation:
             ${transporte:,.2f} USD
+
         </div>
         """
 
     mensaje_html = ""
 
-    if mensaje_personalizado.strip():
+    if mensaje.strip():
 
         mensaje_html = f"""
         <div style="
@@ -1431,9 +1605,17 @@ def generar_html_email(
             background:#f8f8f8;
             border-left:4px solid #C9A227;
         ">
-            {mensaje_personalizado}
+            {mensaje}
         </div>
         """
+
+    menores_html = ""
+
+    if menores > 0:
+
+        menores_html = (
+            f" and {menores} children"
+        )
 
     return f"""
     <!DOCTYPE html>
@@ -1443,18 +1625,16 @@ def generar_html_email(
     <body style="
         margin:0;
         padding:0;
-        background:#f2f2f2;
-        font-family:Arial, Helvetica, sans-serif;
+        background:#eeeeee;
+        font-family:Arial,Helvetica,sans-serif;
         color:#333333;
     ">
 
     <div style="
         max-width:700px;
         margin:auto;
-        background:white;
+        background:#ffffff;
     ">
-
-        <!-- HEADER -->
 
         <div style="
             background:#071A2F;
@@ -1464,7 +1644,7 @@ def generar_html_email(
 
             <div style="
                 color:#C9A227;
-                font-size:28px;
+                font-size:29px;
                 font-weight:bold;
             ">
                 CASA DORADA
@@ -1480,8 +1660,6 @@ def generar_html_email(
 
         </div>
 
-
-        <!-- CONTENIDO -->
 
         <div style="
             padding:30px;
@@ -1502,20 +1680,18 @@ def generar_html_email(
             </p>
 
 
-            <!-- ESTANCIA -->
-
             <div style="
                 background:#071A2F;
-                color:white;
+                color:#ffffff;
                 padding:20px;
                 border-radius:10px;
                 margin:20px 0;
             ">
 
                 <div style="
+                    color:#E0C15A;
                     font-size:18px;
                     font-weight:bold;
-                    color:#E0C15A;
                     margin-bottom:12px;
                 ">
                     Stay Details
@@ -1526,15 +1702,18 @@ def generar_html_email(
                     {format_date_es(checkin)}
                 </div>
 
-                <div style="margin-top:5px;">
+                <div style="
+                    margin-top:6px;
+                ">
                     <strong>Check out:</strong>
                     {format_date_es(checkout)}
                 </div>
 
-                <div style="margin-top:5px;">
+                <div style="
+                    margin-top:6px;
+                ">
                     <strong>Guests:</strong>
-                    {adultos} adults
-                    {f"and {menores} children" if menores > 0 else ""}
+                    {adultos} adults{menores_html}
                 </div>
 
             </div>
@@ -1542,17 +1721,14 @@ def generar_html_email(
 
             <h2 style="
                 color:#071A2F;
-                font-size:21px;
             ">
                 Accommodation Options
             </h2>
 
-            {filas_opciones}
+            {opciones_html}
 
             {transporte_html}
 
-
-            <!-- BENEFICIOS -->
 
             <div style="
                 margin-top:25px;
@@ -1569,17 +1745,29 @@ def generar_html_email(
                 </h3>
 
                 <ul>
-                    <li>Prime location in Cabo San Lucas</li>
-                    <li>Access to Medano Beach</li>
-                    <li>Spacious suite accommodations</li>
-                    <li>Resort amenities and services</li>
-                    <li>Personalized guest service</li>
+                    <li>
+                        Prime location in Cabo San Lucas
+                    </li>
+
+                    <li>
+                        Access to Medano Beach
+                    </li>
+
+                    <li>
+                        Spacious suite accommodations
+                    </li>
+
+                    <li>
+                        Resort amenities and services
+                    </li>
+
+                    <li>
+                        Personalized guest service
+                    </li>
                 </ul>
 
             </div>
 
-
-            <!-- RESERVATION -->
 
             <div style="
                 margin-top:25px;
@@ -1605,12 +1793,6 @@ def generar_html_email(
                     45 days prior to arrival.
                 </p>
 
-                <p>
-                    Rates and availability are
-                    subject to change until the
-                    reservation is confirmed.
-                </p>
-
             </div>
 
 
@@ -1629,8 +1811,6 @@ def generar_html_email(
 
         </div>
 
-
-        <!-- FOOTER -->
 
         <div style="
             background:#071A2F;
@@ -1713,15 +1893,15 @@ with st.sidebar:
 
 
 # ============================================================
-# INFORMACIÓN DEL HUÉSPED
+# HUÉSPED
 # ============================================================
 
 st.markdown(
     """
     <div class="card">
-    <div class="section-title">
-        👤 Información del huésped
-    </div>
+        <div class="section-title">
+            👤 Información del huésped
+        </div>
     """,
     unsafe_allow_html=True
 )
@@ -1756,13 +1936,6 @@ with col4:
     checkout = st.date_input(
         "Check out",
         value=date.today()
-    )
-
-if checkout <= checkin:
-
-    st.warning(
-        "⚠️ El check out debe ser posterior "
-        "al check in."
     )
 
 numero_noches = max(
@@ -1801,22 +1974,22 @@ st.markdown(
 
 
 # ============================================================
-# OPCIONES DE COTIZACIÓN
+# OPCIONES
 # ============================================================
 
 st.markdown(
     """
     <div class="card">
-    <div class="section-title">
-        🛏️ Opciones de alojamiento
-    </div>
+        <div class="section-title">
+            🛏️ Opciones de alojamiento
+        </div>
     """,
     unsafe_allow_html=True
 )
 
 opciones = []
 
-nombres_suite = [
+suite_names = [
     "Junior Suite",
     "One Bedroom Suite",
     "One Bedroom Plus w/ Jacuzzi",
@@ -1852,7 +2025,7 @@ for i in range(1, 4):
 
             suite = st.selectbox(
                 "Suite",
-                nombres_suite,
+                suite_names,
                 key=f"suite_{i}"
             )
 
@@ -1884,7 +2057,9 @@ for i in range(1, 4):
             <div class="price-card">
 
                 <div>
-                    {suite}
+                    <strong>
+                        {suite}
+                    </strong>
                 </div>
 
                 <div style="
@@ -1940,9 +2115,10 @@ st.markdown(
 st.markdown(
     """
     <div class="card">
-    <div class="section-title">
-        🚐 Transportation
-    </div>
+
+        <div class="section-title">
+            🚐 Transportation
+        </div>
     """,
     unsafe_allow_html=True
 )
@@ -1964,8 +2140,8 @@ if incluir_transporte:
     )
 
     st.caption(
-        "Transportation must be arranged at least "
-        "48 hours prior to service."
+        "Transportation must be arranged "
+        "at least 48 hours prior to service."
     )
 
 st.markdown(
@@ -1981,9 +2157,10 @@ st.markdown(
 st.markdown(
     """
     <div class="card">
-    <div class="section-title">
-        📎 Archivos adjuntos
-    </div>
+
+        <div class="section-title">
+            📎 Archivos adjuntos
+        </div>
     """,
     unsafe_allow_html=True
 )
@@ -2000,24 +2177,25 @@ st.markdown(
 
 
 # ============================================================
-# MENSAJE PERSONALIZADO
+# MENSAJE
 # ============================================================
 
 st.markdown(
     """
     <div class="card">
-    <div class="section-title">
-        ✍️ Mensaje personalizado
-    </div>
+
+        <div class="section-title">
+            ✍️ Mensaje personalizado
+        </div>
     """,
     unsafe_allow_html=True
 )
 
-mensaje_personalizado = st.text_area(
+mensaje = st.text_area(
     "Mensaje",
     placeholder=(
-        "Thank you for considering Casa Dorada "
-        "for your upcoming stay..."
+        "Thank you for considering "
+        "Casa Dorada for your upcoming stay..."
     ),
     height=150
 )
@@ -2033,13 +2211,13 @@ st.markdown(
 # ============================================================
 
 asunto = (
-    f"Casa Dorada Los Cabos "
-    f"Accommodation Proposal"
+    "Casa Dorada Los Cabos "
+    "Accommodation Proposal"
 )
 
 
 # ============================================================
-# GENERAR HTML
+# HTML EMAIL
 # ============================================================
 
 html_email = generar_html_email(
@@ -2050,27 +2228,28 @@ html_email = generar_html_email(
     menores=menores,
     opciones=opciones,
     transporte=transporte,
-    mensaje_personalizado=mensaje_personalizado
+    mensaje=mensaje
 )
 
 
 # ============================================================
-# PREVISUALIZACIÓN
+# PREVIEW
 # ============================================================
 
 st.markdown(
     """
     <div class="card">
-    <div class="section-title">
-        👁️ Vista previa
-    </div>
+
+        <div class="section-title">
+            👁️ Vista previa del correo
+        </div>
     """,
     unsafe_allow_html=True
 )
 
 st.components.v1.html(
     html_email,
-    height=950,
+    height=900,
     scrolling=True
 )
 
@@ -2078,37 +2257,6 @@ st.markdown(
     "</div>",
     unsafe_allow_html=True
 )
-
-
-# ============================================================
-# BOTONES
-# ============================================================
-
-st.markdown(
-    """
-    <div class="card">
-    <div class="section-title">
-        📤 Enviar cotización
-    </div>
-    """,
-    unsafe_allow_html=True
-)
-
-col1, col2 = st.columns(2)
-
-with col1:
-
-    guardar = st.button(
-        "💾 Guardar en borradores",
-        use_container_width=True
-    )
-
-with col2:
-
-    enviar = st.button(
-        "📤 Enviar correo",
-        use_container_width=True
-    )
 
 
 # ============================================================
@@ -2140,7 +2288,8 @@ def validar_cotizacion():
     if checkout <= checkin:
 
         errores.append(
-            "El check out debe ser posterior al check in."
+            "El check out debe ser posterior "
+            "al check in."
         )
 
     if not any(
@@ -2149,14 +2298,52 @@ def validar_cotizacion():
     ):
 
         errores.append(
-            "Debes seleccionar al menos una opción."
+            "Debes seleccionar al menos "
+            "una opción."
         )
 
     return errores
 
 
 # ============================================================
-# GUARDAR BORRADOR
+# BOTONES
+# ============================================================
+
+st.markdown(
+    """
+    <div class="card">
+
+        <div class="section-title">
+            📤 Acciones
+        </div>
+    """,
+    unsafe_allow_html=True
+)
+
+col1, col2 = st.columns(2)
+
+with col1:
+
+    guardar = st.button(
+        "💾 Guardar en borradores",
+        use_container_width=True
+    )
+
+with col2:
+
+    enviar = st.button(
+        "📤 Enviar correo",
+        use_container_width=True
+    )
+
+st.markdown(
+    "</div>",
+    unsafe_allow_html=True
+)
+
+
+# ============================================================
+# GUARDAR
 # ============================================================
 
 if guardar:
@@ -2220,7 +2407,7 @@ if enviar:
 
 
 # ============================================================
-# PANEL DE DIAGNÓSTICO
+# DIAGNÓSTICO
 # ============================================================
 
 with st.expander(
@@ -2229,21 +2416,13 @@ with st.expander(
 ):
 
     st.markdown(
-        "### Estado de Streamlit"
+        "### Estado de la aplicación"
     )
 
-    diagnostic = {
+    diagnostico = {
 
         "google_credentials":
             "google_credentials"
-            in st.session_state,
-
-        "oauth_flow":
-            "oauth_flow"
-            in st.session_state,
-
-        "oauth_state":
-            "oauth_state"
             in st.session_state,
 
         "oauth_url":
@@ -2254,29 +2433,34 @@ with st.expander(
             dict(st.query_params),
 
         "session_keys":
-            list(st.session_state.keys())
+            list(
+                st.session_state.keys()
+            )
     }
 
     st.code(
         json.dumps(
-            diagnostic,
+            diagnostico,
             indent=2,
             ensure_ascii=False
         ),
         language="json"
     )
 
-    if (
-        "google_credentials"
-        in st.session_state
-    ):
+    # --------------------------------------------------------
+    # CREDENTIALS
+    # --------------------------------------------------------
 
-        credentials = st.session_state[
+    credentials = (
+        st.session_state.get(
             "google_credentials"
-        ]
+        )
+    )
+
+    if credentials:
 
         st.markdown(
-            "### Estado de Credentials"
+            "### Estado de Gmail"
         )
 
         credential_info = {
@@ -2310,43 +2494,49 @@ with st.expander(
             language="json"
         )
 
+    # --------------------------------------------------------
+    # CONFIG
+    # --------------------------------------------------------
+
     st.markdown(
-        "### Configuración"
+        "### Configuración Google"
     )
 
     try:
 
+        google_config = (
+            get_google_secrets()
+        )
+
+        # Nunca mostramos el secret
+        google_debug = {
+
+            "client_id_present":
+                bool(
+                    google_config[
+                        "client_id"
+                    ]
+                ),
+
+            "client_secret_present":
+                bool(
+                    google_config[
+                        "client_secret"
+                    ]
+                ),
+
+            "redirect_uri":
+                google_config[
+                    "redirect_uri"
+                ],
+
+            "scopes":
+                SCOPES
+        }
+
         st.code(
             json.dumps(
-                {
-                    "redirect_uri":
-                        st.secrets[
-                            "google_oauth"
-                        ][
-                            "redirect_uri"
-                        ],
-
-                    "scopes":
-                        SCOPES,
-
-                    "client_id_present":
-                        bool(
-                            st.secrets[
-                                "google_oauth"
-                            ][
-                                "client_id"
-                            ]
-                        ),
-
-                    "client_secret_present":
-                        bool(
-                            st.secrets[
-                                "google_oauth"
-                            ][
-                                "client_secret"
-                            ]
-                        )
-                },
+                google_debug,
                 indent=2,
                 ensure_ascii=False
             ),
@@ -2356,7 +2546,7 @@ with st.expander(
     except Exception as e:
 
         st.error(
-            "❌ No se pudo leer la configuración."
+            "❌ Error leyendo configuración"
         )
 
         st.exception(e)
