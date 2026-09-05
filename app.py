@@ -1,13 +1,16 @@
+import streamlit as st
+import smtplib
+import traceback
+import json
 import base64
+import mimetypes
 from datetime import date
 from email.message import EmailMessage
+from email.utils import formataddr
 
-import streamlit as st
-
-from google.auth.transport.requests import Request
-from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
+from google.auth.transport.requests import Request
 
 
 # ============================================================
@@ -18,17 +21,8 @@ st.set_page_config(
     page_title="Cotizador Casa Dorada",
     page_icon="🏨",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="expanded"
 )
-
-
-# ============================================================
-# GOOGLE OAUTH
-# ============================================================
-
-SCOPES = [
-    "https://www.googleapis.com/auth/gmail.compose"
-]
 
 
 # ============================================================
@@ -67,324 +61,820 @@ st.markdown(
         color: {BLANCO};
     }}
 
-    [data-testid="stHeader"] {{
+    .main {{
         background: {FONDO};
     }}
 
-    [data-testid="stSidebar"] {{
+    section[data-testid="stSidebar"] {{
         background: {AZUL};
-        border-right: 1px solid {AZUL_3};
+        border-right: 1px solid #1D3553;
     }}
 
-    [data-testid="stSidebar"] * {{
+    section[data-testid="stSidebar"] * {{
         color: {BLANCO};
     }}
 
-    h1, h2, h3, h4 {{
+    h1, h2, h3 {{
         color: {BLANCO} !important;
     }}
 
     p, label {{
-        color: {GRIS};
+        color: {GRIS} !important;
     }}
 
-    .main-title {{
-        font-size: 32px;
-        font-weight: 700;
+    .hero {{
+        background: linear-gradient(
+            135deg,
+            {AZUL_2},
+            {AZUL_3}
+        );
+        padding: 28px;
+        border-radius: 16px;
+        border: 1px solid #1D3553;
+        margin-bottom: 25px;
+    }}
+
+    .hero-title {{
         color: {BLANCO};
-        margin-bottom: 4px;
+        font-size: 34px;
+        font-weight: 800;
+        margin-bottom: 5px;
     }}
 
-    .subtitle {{
+    .hero-subtitle {{
         color: {GRIS};
-        font-size: 15px;
-        margin-bottom: 25px;
+        font-size: 16px;
     }}
 
-    .top-card {{
-        background: linear-gradient(135deg, {AZUL_2}, {CARD});
-        border: 1px solid {AZUL_3};
-        border-bottom: 3px solid {DORADO};
-        border-radius: 12px;
-        padding: 22px;
-        margin-bottom: 25px;
-    }}
-
-    .section-card {{
+    .card {{
         background: {CARD};
-        border: 1px solid {AZUL_3};
-        border-radius: 12px;
-        padding: 20px;
-        margin-bottom: 20px;
+        border: 1px solid #1D3553;
+        border-radius: 14px;
+        padding: 22px;
+        margin-bottom: 18px;
     }}
 
-    .gold-text {{
+    .section-title {{
         color: {DORADO_CLARO};
+        font-size: 20px;
+        font-weight: 700;
+        margin-bottom: 15px;
+    }}
+
+    .price-card {{
+        background: {CARD_2};
+        border: 1px solid #29496C;
+        border-radius: 14px;
+        padding: 20px;
+        margin-bottom: 15px;
+    }}
+
+    .price {{
+        color: {DORADO_CLARO};
+        font-size: 28px;
+        font-weight: 800;
     }}
 
     .connected {{
         background: rgba(66, 200, 138, 0.12);
-        border: 1px solid {VERDE};
+        border: 1px solid rgba(66, 200, 138, 0.4);
         color: {VERDE};
         padding: 12px;
-        border-radius: 8px;
+        border-radius: 10px;
         margin-bottom: 15px;
     }}
 
     .disconnected {{
         background: rgba(229, 107, 111, 0.10);
-        border: 1px solid {ROJO};
+        border: 1px solid rgba(229, 107, 111, 0.35);
         color: {ROJO};
         padding: 12px;
-        border-radius: 8px;
+        border-radius: 10px;
         margin-bottom: 15px;
     }}
 
-    .metric-box {{
-        background: {CARD_2};
-        border: 1px solid {AZUL_3};
+    .debug {{
+        background: #020711;
+        border: 1px solid #263A54;
         border-radius: 10px;
         padding: 15px;
-        text-align: center;
     }}
 
-    .metric-label {{
-        color: {GRIS};
-        font-size: 12px;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-    }}
-
-    .metric-value {{
-        color: {DORADO_CLARO};
-        font-size: 22px;
+    div.stButton > button {{
+        background: {DORADO};
+        color: #050D18;
+        border: none;
+        border-radius: 8px;
         font-weight: 700;
-        margin-top: 4px;
+        min-height: 44px;
+    }}
+
+    div.stButton > button:hover {{
+        background: {DORADO_CLARO};
+        color: #050D18;
     }}
 
     .stTextInput input,
     .stNumberInput input,
-    .stDateInput input {{
-        background: {CARD_2} !important;
+    .stDateInput input,
+    .stTextArea textarea {{
+        background-color: {CARD_2} !important;
         color: {BLANCO} !important;
-        border: 1px solid {AZUL_3} !important;
+        border: 1px solid #29496C !important;
         border-radius: 8px !important;
     }}
 
-    .stSelectbox div[data-baseweb="select"] > div {{
-        background: {CARD_2} !important;
+    div[data-baseweb="select"] > div {{
+        background-color: {CARD_2} !important;
         color: {BLANCO} !important;
-        border-color: {AZUL_3} !important;
+        border-color: #29496C !important;
     }}
 
-    .stTextArea textarea {{
-        background: {CARD_2} !important;
-        color: {BLANCO} !important;
-        border: 1px solid {AZUL_3} !important;
+    .stSelectbox label,
+    .stNumberInput label,
+    .stTextInput label,
+    .stDateInput label,
+    .stTextArea label {{
+        color: {GRIS} !important;
     }}
 
-    button[kind="primary"] {{
-        background: {DORADO} !important;
-        color: #000000 !important;
-        border: none !important;
-        font-weight: 700 !important;
+    .stTabs [data-baseweb="tab"] {{
+        color: {GRIS};
     }}
 
-    button[kind="secondary"] {{
-        background: {AZUL_2} !important;
-        color: {BLANCO} !important;
-        border: 1px solid {DORADO} !important;
-    }}
-
-    .preview-container {{
-        background: #ffffff;
-        border-radius: 10px;
-        padding: 5px;
+    .stTabs [aria-selected="true"] {{
+        color: {DORADO_CLARO} !important;
     }}
 
     </style>
     """,
-    unsafe_allow_html=True,
+    unsafe_allow_html=True
 )
 
 
 # ============================================================
-# FUNCIONES GOOGLE
+# GOOGLE OAUTH
 # ============================================================
 
+SCOPES = [
+    "https://www.googleapis.com/auth/gmail.compose"
+]
+
+
 def get_google_client_config():
-    """
-    Obtiene las credenciales desde Streamlit Secrets.
-    """
-
-    return {
-        "web": {
-            "client_id": st.secrets["google_oauth"]["client_id"],
-            "client_secret": st.secrets["google_oauth"]["client_secret"],
-            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-            "token_uri": "https://oauth2.googleapis.com/token",
-            "redirect_uris": [
-                st.secrets["google_oauth"]["redirect_uri"]
-            ],
-        }
-    }
-
-
-def create_oauth_flow():
-    """
-    Crea el flujo OAuth.
-    """
-
-    config = get_google_client_config()
-
-    flow = Flow.from_client_config(
-        config,
-        scopes=SCOPES,
-        redirect_uri=st.secrets["google_oauth"]["redirect_uri"],
-    )
-
-    return flow
-
-
-def iniciar_google_login():
-    """
-    Genera la URL de autorización.
-
-    IMPORTANTE:
-    El flow se guarda en session_state para conservar
-    el code_verifier de PKCE.
-    """
-
-    if "oauth_flow" not in st.session_state:
-
-        flow = create_oauth_flow()
-
-        authorization_url, state = flow.authorization_url(
-            access_type="offline",
-            include_granted_scopes="true",
-            prompt="consent",
-        )
-
-        st.session_state["oauth_flow"] = flow
-        st.session_state["oauth_state"] = state
-        st.session_state["oauth_url"] = authorization_url
-
-
-def procesar_callback_google():
-    """
-    Procesa el regreso de Google después del login.
-    """
-
-    code = st.query_params.get("code")
-
-    if not code:
-        return None
-
-    flow = st.session_state.get("oauth_flow")
-
-    if flow is None:
-        st.error(
-            "La sesión de Google expiró. "
-            "Haz clic nuevamente en Iniciar sesión con Google."
-        )
-
-        return None
-
-    estado_google = st.query_params.get("state")
-    estado_guardado = st.session_state.get("oauth_state")
-
-    if (
-        estado_google
-        and estado_guardado
-        and estado_google != estado_guardado
-    ):
-        st.error(
-            "No fue posible validar la sesión de Google."
-        )
-
-        return None
 
     try:
 
-        flow.fetch_token(code=code)
+        client_id = st.secrets["google_oauth"]["client_id"]
+        client_secret = st.secrets["google_oauth"]["client_secret"]
+        redirect_uri = st.secrets["google_oauth"]["redirect_uri"]
+
+        return {
+            "web": {
+                "client_id": client_id,
+                "client_secret": client_secret,
+
+                "auth_uri":
+                    "https://accounts.google.com/o/oauth2/auth",
+
+                "token_uri":
+                    "https://oauth2.googleapis.com/token",
+
+                "redirect_uris": [
+                    redirect_uri
+                ]
+            }
+        }
+
+    except Exception as e:
+
+        st.error("❌ ERROR LEYENDO GOOGLE OAUTH")
+
+        st.exception(e)
+
+        st.code(
+            traceback.format_exc(),
+            language="text"
+        )
+
+        return None
+
+
+def create_oauth_flow():
+
+    try:
+
+        config = get_google_client_config()
+
+        if config is None:
+            return None
+
+        redirect_uri = st.secrets[
+            "google_oauth"
+        ][
+            "redirect_uri"
+        ]
+
+        flow = Flow.from_client_config(
+            config,
+            scopes=SCOPES,
+            redirect_uri=redirect_uri
+        )
+
+        # PKCE activado explícitamente
+        flow.autogenerate_code_verifier = True
+
+        return flow
+
+    except Exception as e:
+
+        st.error("❌ ERROR CREANDO OAUTH FLOW")
+
+        st.exception(e)
+
+        st.code(
+            traceback.format_exc(),
+            language="text"
+        )
+
+        return None
+
+
+# ============================================================
+# INICIAR GOOGLE LOGIN
+# ============================================================
+
+def iniciar_google_login():
+
+    try:
+
+        flow = create_oauth_flow()
+
+        if flow is None:
+            return None
+
+        authorization_url, state = flow.authorization_url(
+
+            access_type="offline",
+
+            include_granted_scopes="true",
+
+            prompt="consent"
+        )
+
+        # Guardamos el Flow completo
+        st.session_state["oauth_flow"] = flow
+
+        # Guardamos state
+        st.session_state["oauth_state"] = state
+
+        # Guardamos URL
+        st.session_state["oauth_url"] = authorization_url
+
+        # Información para diagnóstico
+        st.session_state["oauth_debug"] = {
+
+            "state": state,
+
+            "code_verifier_exists":
+                flow.code_verifier is not None,
+
+            "code_verifier_length":
+                len(flow.code_verifier)
+                if flow.code_verifier
+                else 0,
+
+            "redirect_uri":
+                st.secrets["google_oauth"]["redirect_uri"],
+
+            "scopes":
+                SCOPES
+        }
+
+        return authorization_url
+
+    except Exception as e:
+
+        st.error(
+            "❌ ERROR INICIANDO LOGIN CON GOOGLE"
+        )
+
+        st.exception(e)
+
+        st.code(
+            traceback.format_exc(),
+            language="text"
+        )
+
+        return None
+
+
+# ============================================================
+# PROCESAR CALLBACK GOOGLE
+# ============================================================
+
+def procesar_callback_google():
+
+    # --------------------------------------------------------
+    # Mostrar todos los parámetros recibidos
+    # --------------------------------------------------------
+
+    try:
+
+        query_params = dict(st.query_params)
+
+    except Exception:
+
+        query_params = {}
+
+    if query_params:
+
+        with st.expander(
+            "🔎 DEBUG: Parámetros recibidos desde Google",
+            expanded=True
+        ):
+
+            st.code(
+                json.dumps(
+                    query_params,
+                    indent=2,
+                    ensure_ascii=False
+                ),
+                language="json"
+            )
+
+    # --------------------------------------------------------
+    # ¿Google mandó error?
+    # --------------------------------------------------------
+
+    google_error = st.query_params.get(
+        "error"
+    )
+
+    if google_error:
+
+        st.error(
+            f"❌ GOOGLE DEVOLVIÓ UN ERROR: {google_error}"
+        )
+
+        description = st.query_params.get(
+            "error_description"
+        )
+
+        if description:
+
+            st.error(
+                f"Descripción: {description}"
+            )
+
+        error_uri = st.query_params.get(
+            "error_uri"
+        )
+
+        if error_uri:
+
+            st.info(
+                f"Error URI: {error_uri}"
+            )
+
+        return None
+
+    # --------------------------------------------------------
+    # CODE
+    # --------------------------------------------------------
+
+    code = st.query_params.get(
+        "code"
+    )
+
+    if not code:
+
+        return None
+
+    # --------------------------------------------------------
+    # RECUPERAR FLOW
+    # --------------------------------------------------------
+
+    flow = st.session_state.get(
+        "oauth_flow"
+    )
+
+    if flow is None:
+
+        st.error(
+            "❌ ERROR: SE PERDIÓ LA SESIÓN OAUTH"
+        )
+
+        st.warning(
+            "Google regresó correctamente a la aplicación, "
+            "pero Streamlit no encontró el OAuth Flow original."
+        )
+
+        st.markdown(
+            "### Diagnóstico"
+        )
+
+        debug_data = {
+
+            "oauth_flow_exists":
+                False,
+
+            "oauth_state_exists":
+                "oauth_state"
+                in st.session_state,
+
+            "oauth_url_exists":
+                "oauth_url"
+                in st.session_state,
+
+            "session_keys":
+                list(
+                    st.session_state.keys()
+                ),
+
+            "query_params":
+                dict(st.query_params)
+        }
+
+        st.code(
+            json.dumps(
+                debug_data,
+                indent=2,
+                ensure_ascii=False
+            ),
+            language="json"
+        )
+
+        return None
+
+    # --------------------------------------------------------
+    # ESTADOS
+    # --------------------------------------------------------
+
+    estado_google = st.query_params.get(
+        "state"
+    )
+
+    estado_guardado = st.session_state.get(
+        "oauth_state"
+    )
+
+    # --------------------------------------------------------
+    # DEBUG FLOW
+    # --------------------------------------------------------
+
+    with st.expander(
+        "🔎 DEBUG: OAuth Flow",
+        expanded=True
+    ):
+
+        debug_flow = {
+
+            "flow_exists":
+                True,
+
+            "code_received":
+                bool(code),
+
+            "code_verifier_exists":
+                flow.code_verifier is not None,
+
+            "code_verifier_length":
+                len(flow.code_verifier)
+                if flow.code_verifier
+                else 0,
+
+            "state_received":
+                estado_google,
+
+            "state_saved":
+                estado_guardado,
+
+            "state_matches":
+                estado_google == estado_guardado,
+
+            "redirect_uri":
+                st.secrets[
+                    "google_oauth"
+                ][
+                    "redirect_uri"
+                ],
+
+            "scopes":
+                SCOPES
+        }
+
+        st.code(
+            json.dumps(
+                debug_flow,
+                indent=2,
+                ensure_ascii=False
+            ),
+            language="json"
+        )
+
+    # --------------------------------------------------------
+    # VERIFICAR STATE
+    # --------------------------------------------------------
+
+    if estado_google != estado_guardado:
+
+        st.error(
+            "❌ ERROR: EL STATE NO COINCIDE"
+        )
+
+        st.code(
+            f"""
+STATE RECIBIDO DESDE GOOGLE:
+
+{estado_google}
+
+
+STATE GUARDADO EN STREAMLIT:
+
+{estado_guardado}
+""",
+            language="text"
+        )
+
+        return None
+
+    # --------------------------------------------------------
+    # OBTENER TOKEN
+    # --------------------------------------------------------
+
+    try:
+
+        st.info(
+            "🔄 Google autorizó la aplicación. "
+            "Intentando obtener el token..."
+        )
+
+        flow.fetch_token(
+            code=code
+        )
 
         credentials = flow.credentials
 
-        st.session_state["google_credentials"] = credentials
+        # ----------------------------------------------------
+        # CREDENTIALS
+        # ----------------------------------------------------
 
-        st.session_state.pop("oauth_flow", None)
-        st.session_state.pop("oauth_state", None)
-        st.session_state.pop("oauth_url", None)
+        credential_debug = {
 
-        st.query_params.clear()
+            "valid":
+                credentials.valid,
+
+            "expired":
+                credentials.expired,
+
+            "has_token":
+                bool(credentials.token),
+
+            "has_refresh_token":
+                bool(
+                    credentials.refresh_token
+                ),
+
+            "scopes":
+                credentials.scopes
+        }
+
+        with st.expander(
+            "🔎 DEBUG: Credentials",
+            expanded=True
+        ):
+
+            st.code(
+                json.dumps(
+                    credential_debug,
+                    indent=2,
+                    ensure_ascii=False
+                ),
+                language="json"
+            )
+
+        # ----------------------------------------------------
+        # GUARDAR
+        # ----------------------------------------------------
+
+        st.session_state[
+            "google_credentials"
+        ] = credentials
+
+        # Limpiar datos temporales
+        st.session_state.pop(
+            "oauth_flow",
+            None
+        )
+
+        st.session_state.pop(
+            "oauth_state",
+            None
+        )
+
+        st.session_state.pop(
+            "oauth_url",
+            None
+        )
+
+        # Limpiar query parameters
+        try:
+
+            st.query_params.clear()
+
+        except Exception:
+
+            pass
+
+        st.success(
+            "✅ Google conectado correctamente."
+        )
+
+        st.rerun()
 
         return credentials
 
     except Exception as e:
 
         st.error(
-            f"No fue posible completar la conexión con Google: {e}"
+            "❌❌❌ ERROR COMPLETO DE GOOGLE OAUTH ❌❌❌"
         )
 
-        return None
+        st.exception(e)
 
+        # ----------------------------------------------------
+        # TRACEBACK
+        # ----------------------------------------------------
 
-def obtener_credentials():
-    """
-    Recupera las credenciales actuales.
-    """
-
-    credentials = st.session_state.get(
-        "google_credentials"
-    )
-
-    if credentials is None:
-        return None
-
-    if isinstance(credentials, dict):
-
-        credentials = Credentials.from_authorized_user_info(
-            credentials,
-            SCOPES,
+        st.markdown(
+            "### Traceback completo"
         )
 
-        st.session_state["google_credentials"] = credentials
+        st.code(
+            traceback.format_exc(),
+            language="text"
+        )
 
-    if credentials.expired and credentials.refresh_token:
+        # ----------------------------------------------------
+        # DIAGNÓSTICO
+        # ----------------------------------------------------
+
+        st.markdown(
+            "### Datos del diagnóstico"
+        )
 
         try:
 
-            credentials.refresh(Request())
+            debug_error = {
 
-            st.session_state["google_credentials"] = credentials
+                "code_received":
+                    bool(code),
 
-        except Exception:
-            st.session_state.pop(
-                "google_credentials",
-                None
+                "state_received":
+                    estado_google,
+
+                "state_saved":
+                    estado_guardado,
+
+                "state_matches":
+                    estado_google ==
+                    estado_guardado,
+
+                "code_verifier_exists":
+                    flow.code_verifier
+                    is not None,
+
+                "code_verifier_length":
+                    len(flow.code_verifier)
+                    if flow.code_verifier
+                    else 0,
+
+                "redirect_uri":
+                    st.secrets[
+                        "google_oauth"
+                    ][
+                        "redirect_uri"
+                    ],
+
+                "scopes":
+                    SCOPES
+            }
+
+            st.code(
+                json.dumps(
+                    debug_error,
+                    indent=2,
+                    ensure_ascii=False
+                ),
+                language="json"
             )
 
-            return None
+        except Exception as debug_exception:
 
-    return credentials
+            st.error(
+                "También ocurrió un error "
+                "mostrando el diagnóstico."
+            )
 
+            st.exception(
+                debug_exception
+            )
 
-def obtener_gmail_service():
-    """
-    Construye el servicio Gmail API.
-    """
-
-    credentials = obtener_credentials()
-
-    if not credentials:
         return None
 
+
+# ============================================================
+# OBTENER CREDENTIALS
+# ============================================================
+
+def get_credentials():
+
     try:
+
+        credentials = st.session_state.get(
+            "google_credentials"
+        )
+
+        # --------------------------------------------
+        # Ya existe una sesión
+        # --------------------------------------------
+
+        if credentials:
+
+            if credentials.valid:
+
+                return credentials
+
+            # ----------------------------------------
+            # Intentar refresh
+            # ----------------------------------------
+
+            if (
+                credentials.expired
+                and credentials.refresh_token
+            ):
+
+                st.info(
+                    "🔄 Actualizando sesión de Google..."
+                )
+
+                credentials.refresh(
+                    Request()
+                )
+
+                st.session_state[
+                    "google_credentials"
+                ] = credentials
+
+                return credentials
+
+        # --------------------------------------------
+        # Callback
+        # --------------------------------------------
+
+        if st.query_params.get(
+            "code"
+        ):
+
+            return procesar_callback_google()
+
+        return None
+
+    except Exception as e:
+
+        st.error(
+            "❌ ERROR OBTENIENDO CREDENCIALES"
+        )
+
+        st.exception(e)
+
+        st.code(
+            traceback.format_exc(),
+            language="text"
+        )
+
+        return None
+
+
+# ============================================================
+# GMAIL SERVICE
+# ============================================================
+
+def get_gmail_service():
+
+    try:
+
+        credentials = get_credentials()
+
+        if not credentials:
+
+            return None
 
         service = build(
             "gmail",
             "v1",
-            credentials=credentials,
+            credentials=credentials
         )
 
         return service
@@ -392,587 +882,409 @@ def obtener_gmail_service():
     except Exception as e:
 
         st.error(
-            f"No fue posible conectar con Gmail: {e}"
+            "❌ ERROR CREANDO SERVICIO GMAIL"
+        )
+
+        st.exception(e)
+
+        st.code(
+            traceback.format_exc(),
+            language="text"
         )
 
         return None
 
 
-def obtener_email_usuario():
-    """
-    Obtiene el email de la cuenta autenticada.
-    """
+# ============================================================
+# MOSTRAR LOGIN
+# ============================================================
 
-    service = obtener_gmail_service()
+def mostrar_login_google():
 
-    if not service:
-        return None
+    credentials = get_credentials()
+
+    # --------------------------------------------------------
+    # YA CONECTADO
+    # --------------------------------------------------------
+
+    if credentials:
+
+        try:
+
+            service = get_gmail_service()
+
+            if service:
+
+                profile = (
+                    service
+                    .users()
+                    .getProfile(
+                        userId="me"
+                    )
+                    .execute()
+                )
+
+                email_google = profile.get(
+                    "emailAddress",
+                    "Correo desconocido"
+                )
+
+                st.markdown(
+                    f"""
+                    <div class="connected">
+                        🟢 <b>Google conectado</b><br>
+                        {email_google}
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+
+                return True
+
+        except Exception as e:
+
+            st.error(
+                "❌ Google está conectado, "
+                "pero Gmail no respondió."
+            )
+
+            st.exception(e)
+
+            st.code(
+                traceback.format_exc(),
+                language="text"
+            )
+
+            return False
+
+    # --------------------------------------------------------
+    # NO CONECTADO
+    # --------------------------------------------------------
+
+    st.markdown(
+        """
+        <div class="disconnected">
+            🔴 <b>Google no está conectado</b><br>
+            Conecta tu cuenta para guardar borradores
+            y enviar cotizaciones desde tu Gmail.
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    # --------------------------------------------------------
+    # CREAR URL
+    # --------------------------------------------------------
+
+    auth_url = st.session_state.get(
+        "oauth_url"
+    )
+
+    if not auth_url:
+
+        auth_url = iniciar_google_login()
+
+    if auth_url:
+
+        st.markdown(
+            f"""
+            <a href="{auth_url}"
+               target="_self"
+               style="
+                   display:block;
+                   text-align:center;
+                   padding:13px 18px;
+                   background:{DORADO};
+                   color:#050D18;
+                   text-decoration:none;
+                   border-radius:8px;
+                   font-weight:700;
+                   font-size:15px;
+                   margin-bottom:10px;
+               ">
+               🔐 Iniciar sesión con Google
+            </a>
+            """,
+            unsafe_allow_html=True
+        )
+
+    return False
+
+
+# ============================================================
+# CREAR EMAIL
+# ============================================================
+
+def crear_email(
+    destinatario,
+    asunto,
+    html,
+    attachments=None
+):
+
+    message = EmailMessage()
+
+    message["To"] = destinatario
+    message["Subject"] = asunto
+
+    message.set_content(
+        "Por favor visualice este correo en HTML."
+    )
+
+    message.add_alternative(
+        html,
+        subtype="html"
+    )
+
+    if attachments:
+
+        for archivo in attachments:
+
+            try:
+
+                archivo_bytes = archivo.read()
+
+                mime_type, _ = mimetypes.guess_type(
+                    archivo.name
+                )
+
+                if mime_type:
+
+                    maintype, subtype = (
+                        mime_type.split(
+                            "/",
+                            1
+                        )
+                    )
+
+                else:
+
+                    maintype = "application"
+                    subtype = "octet-stream"
+
+                message.add_attachment(
+                    archivo_bytes,
+                    maintype=maintype,
+                    subtype=subtype,
+                    filename=archivo.name
+                )
+
+            except Exception as e:
+
+                st.warning(
+                    f"No se pudo adjuntar "
+                    f"{archivo.name}: {e}"
+                )
+
+    return message
+
+
+# ============================================================
+# GMAIL RAW MESSAGE
+# ============================================================
+
+def email_to_raw(message):
+
+    raw_message = base64.urlsafe_b64encode(
+        message.as_bytes()
+    ).decode()
+
+    return raw_message
+
+
+# ============================================================
+# GUARDAR BORRADOR
+# ============================================================
+
+def guardar_borrador_gmail(
+    destinatario,
+    asunto,
+    html,
+    attachments=None
+):
 
     try:
 
+        service = get_gmail_service()
+
+        if not service:
+
+            st.error(
+                "❌ No hay conexión con Gmail."
+            )
+
+            return False
+
+        # Obtener cuenta
         profile = (
-            service.users()
-            .getProfile(userId="me")
+            service
+            .users()
+            .getProfile(
+                userId="me"
+            )
             .execute()
         )
 
-        return profile.get("emailAddress")
+        email_account = profile.get(
+            "emailAddress"
+        )
+
+        message = crear_email(
+            destinatario,
+            asunto,
+            html,
+            attachments
+        )
+
+        raw_message = email_to_raw(
+            message
+        )
+
+        body = {
+            "message": {
+                "raw": raw_message
+            }
+        }
+
+        result = (
+            service
+            .users()
+            .drafts()
+            .create(
+                userId="me",
+                body=body
+            )
+            .execute()
+        )
+
+        st.success(
+            f"✅ Borrador guardado en "
+            f"{email_account}"
+        )
+
+        st.info(
+            f"ID del borrador: "
+            f"{result.get('id', 'N/A')}"
+        )
+
+        return True
 
     except Exception as e:
 
         st.error(
-            f"No fue posible identificar la cuenta de Gmail: {e}"
+            "❌ ERROR GUARDANDO BORRADOR EN GMAIL"
         )
 
-        return None
+        st.exception(e)
+
+        st.code(
+            traceback.format_exc(),
+            language="text"
+        )
+
+        return False
 
 
 # ============================================================
-# PROCESAR CALLBACK ANTES DE DIBUJAR LA APP
+# ENVIAR EMAIL
 # ============================================================
 
-if "code" in st.query_params:
+def enviar_email_gmail(
+    destinatario,
+    asunto,
+    html,
+    attachments=None
+):
 
-    procesar_callback_google()
+    try:
 
+        service = get_gmail_service()
 
-# ============================================================
-# LOGIN AUTOMÁTICO
-# ============================================================
+        if not service:
 
-credentials = obtener_credentials()
-
-if credentials is None:
-
-    iniciar_google_login()
-
-
-# ============================================================
-# SIDEBAR
-# ============================================================
-
-with st.sidebar:
-
-    st.markdown(
-        f"""
-        <div style="
-            text-align:center;
-            padding:10px 0 20px 0;
-        ">
-            <div style="
-                color:{DORADO_CLARO};
-                font-size:25px;
-                font-weight:700;
-            ">
-                CASA DORADA
-            </div>
-
-            <div style="
-                color:{GRIS};
-                font-size:12px;
-                letter-spacing:1px;
-            ">
-                LOS CABOS RESORT & SPA
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    st.markdown("---")
-
-    st.subheader("🔐 Cuenta de Gmail")
-
-    credentials = obtener_credentials()
-
-    if credentials:
-
-        email_usuario = obtener_email_usuario()
-
-        if email_usuario:
-
-            st.markdown(
-                f"""
-                <div class="connected">
-                    ✓ Gmail conectado<br>
-                    <strong>{email_usuario}</strong>
-                </div>
-                """,
-                unsafe_allow_html=True,
+            st.error(
+                "❌ No hay conexión con Gmail."
             )
 
-        else:
+            return False
 
-            st.success("✓ Gmail conectado")
-
-        if st.button(
-            "Cerrar sesión",
-            use_container_width=True,
-        ):
-
-            for key in [
-                "google_credentials",
-                "oauth_flow",
-                "oauth_state",
-                "oauth_url",
-            ]:
-                st.session_state.pop(
-                    key,
-                    None,
-                )
-
-            st.rerun()
-
-    else:
-
-        st.markdown(
-            """
-            <div class="disconnected">
-                Gmail no conectado
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-        if "oauth_url" in st.session_state:
-
-            st.link_button(
-                "🔐 Iniciar sesión con Google",
-                st.session_state["oauth_url"],
-                use_container_width=True,
+        profile = (
+            service
+            .users()
+            .getProfile(
+                userId="me"
             )
-
-    st.markdown("---")
-
-    st.subheader("⚙️ Configuración")
-
-    moneda = st.radio(
-        "Moneda",
-        ["USD", "MXN"],
-        index=0,
-    )
-
-    tipo_cambio = st.number_input(
-        "Tipo de cambio USD → MXN",
-        min_value=1.0,
-        value=20.0,
-        step=0.1,
-    )
-
-
-# ============================================================
-# HEADER
-# ============================================================
-
-st.markdown(
-    """
-    <div class="top-card">
-
-        <div class="main-title">
-            Cotizador Casa Dorada
-        </div>
-
-        <div class="subtitle">
-            Crea cotizaciones profesionales y guárdalas
-            directamente en tu cuenta de Gmail.
-        </div>
-
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
-
-
-# ============================================================
-# SI NO HAY LOGIN
-# ============================================================
-
-credentials = obtener_credentials()
-
-if not credentials:
-
-    st.info(
-        "Para utilizar el cotizador debes iniciar sesión con Google."
-    )
-
-    if "oauth_url" in st.session_state:
-
-        st.link_button(
-            "🔐 Iniciar sesión con Google",
-            st.session_state["oauth_url"],
+            .execute()
         )
 
-    st.stop()
-
-
-# ============================================================
-# EMAIL DEL AGENTE
-# ============================================================
-
-email_usuario = obtener_email_usuario()
-
-if not email_usuario:
-
-    st.error(
-        "No fue posible identificar tu cuenta de Gmail."
-    )
-
-    st.stop()
-
-
-# ============================================================
-# COLUMNAS PRINCIPALES
-# ============================================================
-
-col_input, col_preview = st.columns(
-    [1, 1],
-    gap="large",
-)
-
-
-# ============================================================
-# INPUTS
-# ============================================================
-
-with col_input:
-
-    st.header("📝 Datos de la Cotización")
-
-    st.markdown(
-        '<div class="section-card">',
-        unsafe_allow_html=True,
-    )
-
-    nombre_huesped = st.text_input(
-        "Nombre del huésped",
-        placeholder="John Smith",
-    )
-
-    email_huesped = st.text_input(
-        "Correo del huésped",
-        placeholder="guest@email.com",
-    )
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-
-        fecha_checkin = st.date_input(
-            "Check in",
-            value=date.today(),
+        email_account = profile.get(
+            "emailAddress"
         )
 
-    with col2:
-
-        fecha_checkout = st.date_input(
-            "Check out",
-            value=date.today(),
+        message = crear_email(
+            destinatario,
+            asunto,
+            html,
+            attachments
         )
 
-    if fecha_checkout > fecha_checkin:
+        raw_message = email_to_raw(
+            message
+        )
 
-        noches = (
-            fecha_checkout - fecha_checkin
-        ).days
+        body = {
+            "raw": raw_message
+        }
 
-    else:
-
-        noches = 1
-
-        if fecha_checkout < fecha_checkin:
-
-            st.warning(
-                "El check out no puede ser anterior al check in."
+        result = (
+            service
+            .users()
+            .messages()
+            .send(
+                userId="me",
+                body=body
             )
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-
-        adultos = st.number_input(
-            "Adultos",
-            min_value=1,
-            value=2,
-            step=1,
+            .execute()
         )
 
-    with col2:
-
-        menores = st.number_input(
-            "Menores",
-            min_value=0,
-            value=0,
-            step=1,
+        st.success(
+            f"✅ Correo enviado desde "
+            f"{email_account}"
         )
 
-    st.markdown("</div>", unsafe_allow_html=True)
-
-
-# ============================================================
-# OPCIONES DE COTIZACIÓN
-# ============================================================
-
-with col_input:
-
-    st.markdown(
-        '<div class="section-card">',
-        unsafe_allow_html=True,
-    )
-
-    st.subheader("🏨 Opciones de estancia")
-
-    # --------------------------------------------------------
-    # OPCIÓN 1
-    # --------------------------------------------------------
-
-    st.markdown(
-        f"### Opción 1"
-    )
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-
-        suite_1 = st.selectbox(
-            "Suite",
-            [
-                "Junior Suite",
-                "One Bedroom Suite",
-                "One Bedroom Plus w/ Jacuzzi",
-                "Executive Suite",
-                "Two Bedroom Suite",
-                "One Bedroom Penthouse",
-            ],
-            key="suite_1",
+        st.info(
+            f"ID del mensaje: "
+            f"{result.get('id', 'N/A')}"
         )
 
-    with col2:
+        return True
 
-        plan_1 = st.selectbox(
-            "Plan",
-            [
-                "European Plan",
-                "All Inclusive",
-            ],
-            key="plan_1",
+    except Exception as e:
+
+        st.error(
+            "❌ ERROR ENVIANDO CORREO"
         )
 
-    tarifa_1 = st.number_input(
-        "Tarifa por noche USD",
-        min_value=0.0,
-        value=320.0,
-        step=10.0,
-        key="tarifa_1",
-    )
+        st.exception(e)
 
-    link_1 = st.text_input(
-        "Link de reserva Opción 1",
-        value="",
-        placeholder="https://...",
-        key="link_1",
-    )
-
-    # --------------------------------------------------------
-    # OPCIÓN 2
-    # --------------------------------------------------------
-
-    st.markdown(
-        "### Opción 2"
-    )
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-
-        suite_2 = st.selectbox(
-            "Suite",
-            [
-                "Junior Suite",
-                "One Bedroom Suite",
-                "One Bedroom Plus w/ Jacuzzi",
-                "Executive Suite",
-                "Two Bedroom Suite",
-                "One Bedroom Penthouse",
-            ],
-            key="suite_2",
+        st.code(
+            traceback.format_exc(),
+            language="text"
         )
 
-    with col2:
-
-        plan_2 = st.selectbox(
-            "Plan",
-            [
-                "European Plan",
-                "All Inclusive",
-            ],
-            key="plan_2",
-        )
-
-    tarifa_2 = st.number_input(
-        "Tarifa por noche USD",
-        min_value=0.0,
-        value=480.0,
-        step=10.0,
-        key="tarifa_2",
-    )
-
-    link_2 = st.text_input(
-        "Link de reserva Opción 2",
-        value="",
-        placeholder="https://...",
-        key="link_2",
-    )
-
-    # --------------------------------------------------------
-    # OPCIÓN 3
-    # --------------------------------------------------------
-
-    st.markdown(
-        "### Opción 3"
-
-    )
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-
-        suite_3 = st.selectbox(
-            "Suite",
-            [
-                "Junior Suite",
-                "One Bedroom Suite",
-                "One Bedroom Plus w/ Jacuzzi",
-                "Executive Suite",
-                "Two Bedroom Suite",
-                "One Bedroom Penthouse",
-            ],
-            key="suite_3",
-        )
-
-    with col2:
-
-        plan_3 = st.selectbox(
-            "Plan",
-            [
-                "European Plan",
-                "All Inclusive",
-            ],
-            key="plan_3",
-        )
-
-    tarifa_3 = st.number_input(
-        "Tarifa por noche USD",
-        min_value=0.0,
-        value=0.0,
-        step=10.0,
-        key="tarifa_3",
-    )
-
-    link_3 = st.text_input(
-        "Link de reserva Opción 3",
-        value="",
-        placeholder="Opcional",
-        key="link_3",
-    )
-
-    st.markdown("</div>", unsafe_allow_html=True)
-
-
-# ============================================================
-# TRANSPORTACIÓN
-# ============================================================
-
-with col_input:
-
-    st.markdown(
-        '<div class="section-card">',
-        unsafe_allow_html=True,
-    )
-
-    st.subheader("🚐 Transportación")
-
-    incluir_transportacion = st.checkbox(
-        "Incluir transportación aeropuerto",
-        value=False,
-    )
-
-    if incluir_transportacion:
-
-        traslado_usd = st.number_input(
-            "Roundtrip Airport Transportation USD",
-            min_value=0.0,
-            value=267.0,
-            step=1.0,
-        )
-
-    else:
-
-        traslado_usd = 0.0
-
-    st.markdown("</div>", unsafe_allow_html=True)
-
-
-# ============================================================
-# ARCHIVOS
-# ============================================================
-
-with col_input:
-
-    st.markdown(
-        '<div class="section-card">',
-        unsafe_allow_html=True,
-    )
-
-    st.subheader("📎 Archivos adjuntos")
-
-    archivos_adjuntos = st.file_uploader(
-        "Adjuntar PDF, imágenes u otros archivos",
-        accept_multiple_files=True,
-    )
-
-    st.markdown("</div>", unsafe_allow_html=True)
-
-
-# ============================================================
-# TEXTO PERSONALIZADO
-# ============================================================
-
-with col_input:
-
-    st.markdown(
-        '<div class="section-card">',
-        unsafe_allow_html=True,
-    )
-
-    st.subheader("💬 Mensaje adicional")
-
-    mensaje_adicional = st.text_area(
-        "Opcional",
-        placeholder=(
-            "Agrega información adicional para el huésped..."
-        ),
-        height=120,
-    )
-
-    st.markdown("</div>", unsafe_allow_html=True)
+        return False
 
 
 # ============================================================
 # FUNCIONES DE FORMATO
 # ============================================================
 
-def formatear(monto_usd):
+def money_usd(value):
 
-    if moneda == "MXN":
-
-        return (
-            f"${monto_usd * tipo_cambio:,.2f} MXN"
-        )
-
-    return f"${monto_usd:,.2f} USD"
+    return f"${value:,.2f} USD"
 
 
-def formatear_fecha_es(fecha):
+def format_date_es(fecha):
 
     meses = [
         "enero",
@@ -986,7 +1298,7 @@ def formatear_fecha_es(fecha):
         "septiembre",
         "octubre",
         "noviembre",
-        "diciembre",
+        "diciembre"
     ]
 
     return (
@@ -997,582 +1309,847 @@ def formatear_fecha_es(fecha):
 
 
 # ============================================================
-# TOTALES
+# HTML DEL CORREO
 # ============================================================
 
-total_1 = tarifa_1 * noches
-total_2 = tarifa_2 * noches
-total_3 = tarifa_3 * noches
-
-# ============================================================
-# EMAIL HTML
-# ============================================================
-
-fecha_checkin_texto = formatear_fecha_es(
-    fecha_checkin
-)
-
-fecha_checkout_texto = formatear_fecha_es(
-    fecha_checkout
-)
-
-
-def crear_bloque_opcion(
-    numero,
-    suite,
-    plan,
-    tarifa,
-    total,
-    link,
+def generar_html_email(
+    nombre,
+    checkin,
+    checkout,
+    adultos,
+    menores,
+    opciones,
+    transporte,
+    mensaje_personalizado
 ):
 
-    if tarifa <= 0:
-        return ""
+    filas_opciones = ""
 
-    boton = ""
+    for opcion in opciones:
 
-    if link.strip():
+        if not opcion["activa"]:
+            continue
 
-        boton = f"""
-        <a
-            href="{link}"
-            style="
-                display:inline-block;
-                background:#0B2545;
-                color:#ffffff;
-                text-decoration:none;
-                padding:12px 22px;
-                border-radius:6px;
+        nombre_suite = opcion[
+            "suite"
+        ]
+
+        plan = opcion[
+            "plan"
+        ]
+
+        tarifa = opcion[
+            "tarifa"
+        ]
+
+        total_noches = (
+            tarifa *
+            (checkout - checkin).days
+        )
+
+        filas_opciones += f"""
+        <div style="
+            border:1px solid #d8d8d8;
+            border-radius:12px;
+            padding:20px;
+            margin:15px 0;
+            background:#ffffff;
+        ">
+
+            <div style="
+                font-size:20px;
                 font-weight:bold;
-                margin-top:10px;
-                border-bottom:3px solid #C9A227;
-            "
-        >
-            RESERVAR OPCIÓN {numero}
-        </a>
+                color:#071A2F;
+                margin-bottom:8px;
+            ">
+                {nombre_suite}
+            </div>
+
+            <div style="
+                color:#666666;
+                margin-bottom:12px;
+            ">
+                Plan: {plan}
+            </div>
+
+            <div style="
+                font-size:25px;
+                font-weight:bold;
+                color:#C9A227;
+            ">
+                ${tarifa:,.2f} USD
+            </div>
+
+            <div style="
+                color:#666666;
+                margin-top:4px;
+            ">
+                por noche
+            </div>
+
+            <div style="
+                margin-top:12px;
+                border-top:1px solid #eeeeee;
+                padding-top:12px;
+                color:#444444;
+            ">
+                Total por { (checkout - checkin).days }
+                noches:
+                <strong>
+                    ${total_noches:,.2f} USD
+                </strong>
+            </div>
+
+        </div>
+        """
+
+    transporte_html = ""
+
+    if transporte > 0:
+
+        transporte_html = f"""
+        <div style="
+            margin-top:20px;
+            padding:15px;
+            background:#f5f5f5;
+            border-radius:10px;
+        ">
+            <strong>Transportation</strong><br>
+            Airport roundtrip transportation:
+            ${transporte:,.2f} USD
+        </div>
+        """
+
+    mensaje_html = ""
+
+    if mensaje_personalizado.strip():
+
+        mensaje_html = f"""
+        <div style="
+            margin:20px 0;
+            padding:15px;
+            background:#f8f8f8;
+            border-left:4px solid #C9A227;
+        ">
+            {mensaje_personalizado}
+        </div>
         """
 
     return f"""
-    <div style="
-        border:1px solid #D9DEE5;
-        border-top:4px solid #C9A227;
-        border-radius:8px;
-        padding:22px;
-        margin-bottom:22px;
-        background:#FAFAFA;
+    <!DOCTYPE html>
+
+    <html>
+
+    <body style="
+        margin:0;
+        padding:0;
+        background:#f2f2f2;
+        font-family:Arial, Helvetica, sans-serif;
+        color:#333333;
     ">
 
-        <div style="
-            font-size:19px;
-            font-weight:bold;
-            color:#0B2545;
-            margin-bottom:8px;
-        ">
-            Opción {numero}: {plan}
-        </div>
+    <div style="
+        max-width:700px;
+        margin:auto;
+        background:white;
+    ">
+
+        <!-- HEADER -->
 
         <div style="
-            color:#555555;
-            font-size:16px;
-            margin-bottom:12px;
-        ">
-            <strong>{suite}</strong>
-        </div>
-
-        <div style="
-            color:#444444;
-            line-height:1.7;
+            background:#071A2F;
+            padding:30px;
+            text-align:center;
         ">
 
-            <strong>Estancia:</strong>
-            {fecha_checkin_texto}
-            al
-            {fecha_checkout_texto}
-            ({noches} noches)
-
-            <br>
-
-            <strong>Huéspedes:</strong>
-            {adultos} adultos
-            {f" y {menores} menores" if menores > 0 else ""}
-
-            <br>
-
-            <strong>Tarifa por noche:</strong>
-            <span style="
-                color:#B18A19;
+            <div style="
+                color:#C9A227;
+                font-size:28px;
                 font-weight:bold;
             ">
-                {formatear(tarifa)}
-            </span>
+                CASA DORADA
+            </div>
+
+            <div style="
+                color:#ffffff;
+                font-size:14px;
+                margin-top:5px;
+            ">
+                Los Cabos Resort & Spa
+            </div>
 
         </div>
+
+
+        <!-- CONTENIDO -->
 
         <div style="
-            display:inline-block;
-            background:#EEF2F7;
-            color:#0B2545;
-            font-size:18px;
-            font-weight:bold;
-            padding:9px 14px;
-            margin-top:14px;
-            border-radius:5px;
+            padding:30px;
         ">
-            Total estancia: {formatear(total)}
-        </div>
 
-        <br>
+            <h2 style="
+                color:#071A2F;
+            ">
+                Dear {nombre},
+            </h2>
 
-        {boton}
+            {mensaje_html}
 
-    </div>
-    """
-
-
-bloques_opciones = ""
-
-bloques_opciones += crear_bloque_opcion(
-    1,
-    suite_1,
-    plan_1,
-    tarifa_1,
-    total_1,
-    link_1,
-)
-
-bloques_opciones += crear_bloque_opcion(
-    2,
-    suite_2,
-    plan_2,
-    tarifa_2,
-    total_2,
-    link_2,
-)
-
-bloques_opciones += crear_bloque_opcion(
-    3,
-    suite_3,
-    plan_3,
-    tarifa_3,
-    total_3,
-    link_3,
-)
-
-
-transportacion_html = ""
-
-if incluir_transportacion:
-
-    transportacion_html = f"""
-    <div style="
-        border-top:1px solid #D9DEE5;
-        padding-top:18px;
-        margin-top:20px;
-    ">
-
-        <strong>Servicios adicionales</strong>
-
-        <p>
-            Roundtrip Airport Transportation:
-            <strong style="color:#B18A19;">
-                {formatear(traslado_usd)}
-            </strong>
-        </p>
-
-    </div>
-    """
-
-
-mensaje_adicional_html = ""
-
-if mensaje_adicional.strip():
-
-    mensaje_adicional_html = f"""
-    <div style="
-        background:#F5F5F5;
-        padding:15px;
-        border-radius:6px;
-        margin-top:20px;
-    ">
-        {mensaje_adicional}
-    </div>
-    """
-
-
-cuerpo_html = f"""
-<!DOCTYPE html>
-
-<html>
-
-<head>
-
-<meta charset="UTF-8">
-
-<meta name="viewport"
-content="width=device-width, initial-scale=1.0">
-
-</head>
-
-<body style="
-    margin:0;
-    padding:20px;
-    background:#F4F5F7;
-    font-family:Arial,Helvetica,sans-serif;
-">
-
-<div style="
-    max-width:680px;
-    margin:auto;
-    background:#ffffff;
-    border-radius:10px;
-    overflow:hidden;
-">
-
-    <div style="
-        background:#0B2545;
-        padding:30px;
-        text-align:center;
-        border-bottom:4px solid #C9A227;
-    ">
-
-        <img
-            src="https://casadorada.com/wp-content/uploads/2021/04/logo-casa-dorada.png"
-            alt="Casa Dorada Los Cabos Resort & Spa"
-            style="
-                max-width:220px;
-                width:100%;
-                height:auto;
-            "
-        >
-
-    </div>
-
-
-    <div style="
-        padding:30px;
-        color:#333333;
-        line-height:1.65;
-    ">
-
-        <p style="
-            color:#0B2545;
-            font-size:19px;
-            font-weight:bold;
-        ">
-            Estimado/a {nombre_huesped},
-        </p>
-
-
-        <p>
-            Es un verdadero placer saludarle desde
-            <strong>
+            <p>
+                Thank you for considering
                 Casa Dorada Los Cabos Resort & Spa
-            </strong>.
-        </p>
+                for your upcoming stay.
+            </p>
 
 
-        <p>
-            A continuación, nos complace presentarle
-            nuestra propuesta personalizada para su
-            próxima estancia:
-        </p>
+            <!-- ESTANCIA -->
+
+            <div style="
+                background:#071A2F;
+                color:white;
+                padding:20px;
+                border-radius:10px;
+                margin:20px 0;
+            ">
+
+                <div style="
+                    font-size:18px;
+                    font-weight:bold;
+                    color:#E0C15A;
+                    margin-bottom:12px;
+                ">
+                    Stay Details
+                </div>
+
+                <div>
+                    <strong>Check in:</strong>
+                    {format_date_es(checkin)}
+                </div>
+
+                <div style="margin-top:5px;">
+                    <strong>Check out:</strong>
+                    {format_date_es(checkout)}
+                </div>
+
+                <div style="margin-top:5px;">
+                    <strong>Guests:</strong>
+                    {adultos} adults
+                    {f"and {menores} children" if menores > 0 else ""}
+                </div>
+
+            </div>
 
 
-        {bloques_opciones}
+            <h2 style="
+                color:#071A2F;
+                font-size:21px;
+            ">
+                Accommodation Options
+            </h2>
+
+            {filas_opciones}
+
+            {transporte_html}
 
 
-        {transportacion_html}
+            <!-- BENEFICIOS -->
+
+            <div style="
+                margin-top:25px;
+                padding:20px;
+                background:#f7f7f7;
+                border-radius:10px;
+            ">
+
+                <h3 style="
+                    color:#071A2F;
+                    margin-top:0;
+                ">
+                    Casa Dorada Benefits
+                </h3>
+
+                <ul>
+                    <li>Prime location in Cabo San Lucas</li>
+                    <li>Access to Medano Beach</li>
+                    <li>Spacious suite accommodations</li>
+                    <li>Resort amenities and services</li>
+                    <li>Personalized guest service</li>
+                </ul>
+
+            </div>
 
 
-        {mensaje_adicional_html}
+            <!-- RESERVATION -->
 
+            <div style="
+                margin-top:25px;
+                padding:20px;
+                border:1px solid #dddddd;
+                border-radius:10px;
+            ">
+
+                <h3 style="
+                    color:#071A2F;
+                    margin-top:0;
+                ">
+                    Reservation Policy
+                </h3>
+
+                <p>
+                    Reservation is guaranteed with
+                    first night deposit.
+                </p>
+
+                <p>
+                    The remaining balance is due
+                    45 days prior to arrival.
+                </p>
+
+                <p>
+                    Rates and availability are
+                    subject to change until the
+                    reservation is confirmed.
+                </p>
+
+            </div>
+
+
+            <p style="
+                margin-top:30px;
+            ">
+                We look forward to welcoming you
+                to Casa Dorada Los Cabos.
+            </p>
+
+            <p>
+                Best regards,<br>
+                <strong>Reservations Team</strong><br>
+                Casa Dorada Los Cabos Resort & Spa
+            </p>
+
+        </div>
+
+
+        <!-- FOOTER -->
 
         <div style="
-            border-top:1px solid #D9DEE5;
-            padding-top:20px;
-            margin-top:25px;
-            font-size:13px;
-            color:#666666;
+            background:#071A2F;
+            color:#aaaaaa;
+            text-align:center;
+            padding:20px;
+            font-size:12px;
         ">
 
-            <strong>Políticas:</strong>
-
-            <br>
-
-            Reservation is guaranteed with first night deposit.
-
-            <br>
-
-            Cancelación de acuerdo con la tarifa seleccionada.
+            Casa Dorada Los Cabos Resort & Spa<br>
+            Cabo San Lucas, Mexico
 
         </div>
 
     </div>
 
+    </body>
 
-    <div style="
-        background:#0B2545;
-        color:#AAB6C5;
-        text-align:center;
-        padding:22px;
-        font-size:12px;
-        border-top:2px solid #C9A227;
-    ">
+    </html>
+    """
 
-        <strong style="color:#ffffff;">
-            {email_usuario}
-        </strong>
 
-        <br>
+# ============================================================
+# HEADER
+# ============================================================
 
-        Casa Dorada Los Cabos Resort & Spa
+st.markdown(
+    """
+    <div class="hero">
 
-        <br>
+        <div class="hero-title">
+            🏨 Cotizador Casa Dorada
+        </div>
 
-        Medano Beach, Cabo San Lucas, BCS
+        <div class="hero-subtitle">
+            Cotizaciones profesionales y gestión
+            directa desde Gmail
+        </div>
 
     </div>
-
-</div>
-
-</body>
-
-</html>
-"""
+    """,
+    unsafe_allow_html=True
+)
 
 
 # ============================================================
-# VISTA PREVIA
+# SIDEBAR
 # ============================================================
 
-with col_preview:
-
-    st.header("👁️ Vista Previa")
+with st.sidebar:
 
     st.markdown(
-        f"""
-        <div class="metric-box">
-
-            <div class="metric-label">
-                Huésped
-            </div>
-
-            <div class="metric-value">
-                {nombre_huesped if nombre_huesped else "Sin nombre"}
-            </div>
-
-        </div>
-        """,
-        unsafe_allow_html=True,
+        "## 📧 Gmail"
     )
 
-    st.write("")
+    google_conectado = (
+        mostrar_login_google()
+    )
 
-    st.components.v1.html(
-        cuerpo_html,
-        height=900,
-        scrolling=True,
+    st.divider()
+
+    st.markdown(
+        "## ⚙️ Configuración"
+    )
+
+    moneda = st.selectbox(
+        "Moneda",
+        [
+            "USD",
+            "MXN"
+        ]
+    )
+
+    tipo_cambio = st.number_input(
+        "Tipo de cambio",
+        min_value=1.0,
+        value=18.50,
+        step=0.10
     )
 
 
 # ============================================================
-# CREAR MENSAJE MIME
+# INFORMACIÓN DEL HUÉSPED
 # ============================================================
 
-def crear_mensaje_mime():
+st.markdown(
+    """
+    <div class="card">
+    <div class="section-title">
+        👤 Información del huésped
+    </div>
+    """,
+    unsafe_allow_html=True
+)
 
-    msg = EmailMessage()
+col1, col2 = st.columns(2)
 
-    msg["From"] = email_usuario
+with col1:
 
-    msg["To"] = email_huesped
-
-    msg["Subject"] = (
-        f"Cotización Especial | "
-        f"Casa Dorada Los Cabos - "
-        f"{nombre_huesped}"
+    nombre = st.text_input(
+        "Nombre del huésped",
+        placeholder="John Smith"
     )
 
-    msg.set_content(
-        "Por favor visualice este correo en un cliente "
-        "de correo compatible con HTML."
+with col2:
+
+    email = st.text_input(
+        "Correo electrónico",
+        placeholder="guest@email.com"
     )
 
-    msg.add_alternative(
-        cuerpo_html,
-        subtype="html",
+col3, col4 = st.columns(2)
+
+with col3:
+
+    checkin = st.date_input(
+        "Check in",
+        value=date.today()
     )
 
-    if archivos_adjuntos:
+with col4:
 
-        for archivo in archivos_adjuntos:
+    checkout = st.date_input(
+        "Check out",
+        value=date.today()
+    )
 
-            contenido = archivo.getvalue()
+if checkout <= checkin:
 
-            nombre_archivo = archivo.name
+    st.warning(
+        "⚠️ El check out debe ser posterior "
+        "al check in."
+    )
 
-            tipo_mime = archivo.type
+numero_noches = max(
+    0,
+    (checkout - checkin).days
+)
 
-            if tipo_mime and "/" in tipo_mime:
+st.info(
+    f"🌙 Noches: **{numero_noches}**"
+)
 
-                maintype, subtype = tipo_mime.split(
-                    "/",
-                    1,
-                )
+col5, col6 = st.columns(2)
 
-            else:
+with col5:
 
-                maintype = "application"
-                subtype = "octet-stream"
+    adultos = st.number_input(
+        "Adultos",
+        min_value=1,
+        value=2,
+        step=1
+    )
 
-            msg.add_attachment(
-                contenido,
-                maintype=maintype,
-                subtype=subtype,
-                filename=nombre_archivo,
+with col6:
+
+    menores = st.number_input(
+        "Menores",
+        min_value=0,
+        value=0,
+        step=1
+    )
+
+st.markdown(
+    "</div>",
+    unsafe_allow_html=True
+)
+
+
+# ============================================================
+# OPCIONES DE COTIZACIÓN
+# ============================================================
+
+st.markdown(
+    """
+    <div class="card">
+    <div class="section-title">
+        🛏️ Opciones de alojamiento
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+opciones = []
+
+nombres_suite = [
+    "Junior Suite",
+    "One Bedroom Suite",
+    "One Bedroom Plus w/ Jacuzzi",
+    "Executive Suite",
+    "Two Bedroom Suite",
+    "One Bedroom Penthouse"
+]
+
+planes = [
+    "European Plan",
+    "All Inclusive"
+]
+
+for i in range(1, 4):
+
+    st.markdown(
+        f"### Opción {i}"
+    )
+
+    activa = st.checkbox(
+        f"Incluir opción {i}",
+        value=(i == 1),
+        key=f"activa_{i}"
+    )
+
+    if activa:
+
+        col1, col2, col3 = st.columns(
+            [1.4, 1, 1]
+        )
+
+        with col1:
+
+            suite = st.selectbox(
+                "Suite",
+                nombres_suite,
+                key=f"suite_{i}"
             )
 
-    return msg
+        with col2:
 
+            plan = st.selectbox(
+                "Plan",
+                planes,
+                key=f"plan_{i}"
+            )
 
-# ============================================================
-# FUNCIONES GMAIL API
-# ============================================================
+        with col3:
 
-def mensaje_raw_base64(msg):
+            tarifa = st.number_input(
+                "Tarifa por noche USD",
+                min_value=0.0,
+                value=221.0,
+                step=1.0,
+                key=f"tarifa_{i}"
+            )
 
-    raw_message = base64.urlsafe_b64encode(
-        msg.as_bytes()
-    ).decode()
-
-    return raw_message
-
-
-def guardar_borrador():
-
-    service = obtener_gmail_service()
-
-    if not service:
-        raise Exception(
-            "No existe conexión con Gmail."
+        total = (
+            tarifa *
+            numero_noches
         )
 
-    msg = crear_mensaje_mime()
+        st.markdown(
+            f"""
+            <div class="price-card">
 
-    raw_message = mensaje_raw_base64(msg)
+                <div>
+                    {suite}
+                </div>
 
-    body = {
-        "message": {
-            "raw": raw_message
+                <div style="
+                    color:#AAB6C5;
+                    margin-top:5px;
+                ">
+                    {plan}
+                </div>
+
+                <div class="price">
+                    ${tarifa:,.2f} USD
+                </div>
+
+                <div style="
+                    color:#AAB6C5;
+                ">
+                    Total:
+                    <strong>
+                        ${total:,.2f} USD
+                    </strong>
+                </div>
+
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+    else:
+
+        suite = ""
+        plan = ""
+        tarifa = 0.0
+
+    opciones.append(
+        {
+            "activa": activa,
+            "suite": suite,
+            "plan": plan,
+            "tarifa": tarifa
         }
-    }
-
-    resultado = (
-        service.users()
-        .drafts()
-        .create(
-            userId="me",
-            body=body,
-        )
-        .execute()
     )
 
-    return resultado
+st.markdown(
+    "</div>",
+    unsafe_allow_html=True
+)
 
 
-def enviar_correo():
+# ============================================================
+# TRANSPORTACIÓN
+# ============================================================
 
-    service = obtener_gmail_service()
+st.markdown(
+    """
+    <div class="card">
+    <div class="section-title">
+        🚐 Transportation
+    </div>
+    """,
+    unsafe_allow_html=True
+)
 
-    if not service:
-        raise Exception(
-            "No existe conexión con Gmail."
-        )
+incluir_transporte = st.checkbox(
+    "Incluir transportation",
+    value=False
+)
 
-    msg = crear_mensaje_mime()
+transporte = 0.0
 
-    raw_message = mensaje_raw_base64(msg)
+if incluir_transporte:
 
-    body = {
-        "raw": raw_message
-    }
-
-    resultado = (
-        service.users()
-        .messages()
-        .send(
-            userId="me",
-            body=body,
-        )
-        .execute()
+    transporte = st.number_input(
+        "Airport roundtrip transportation USD",
+        min_value=0.0,
+        value=267.0,
+        step=1.0
     )
 
-    return resultado
+    st.caption(
+        "Transportation must be arranged at least "
+        "48 hours prior to service."
+    )
+
+st.markdown(
+    "</div>",
+    unsafe_allow_html=True
+)
+
+
+# ============================================================
+# ARCHIVOS
+# ============================================================
+
+st.markdown(
+    """
+    <div class="card">
+    <div class="section-title">
+        📎 Archivos adjuntos
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+attachments = st.file_uploader(
+    "Adjuntar archivos",
+    accept_multiple_files=True
+)
+
+st.markdown(
+    "</div>",
+    unsafe_allow_html=True
+)
+
+
+# ============================================================
+# MENSAJE PERSONALIZADO
+# ============================================================
+
+st.markdown(
+    """
+    <div class="card">
+    <div class="section-title">
+        ✍️ Mensaje personalizado
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+mensaje_personalizado = st.text_area(
+    "Mensaje",
+    placeholder=(
+        "Thank you for considering Casa Dorada "
+        "for your upcoming stay..."
+    ),
+    height=150
+)
+
+st.markdown(
+    "</div>",
+    unsafe_allow_html=True
+)
+
+
+# ============================================================
+# ASUNTO
+# ============================================================
+
+asunto = (
+    f"Casa Dorada Los Cabos "
+    f"Accommodation Proposal"
+)
+
+
+# ============================================================
+# GENERAR HTML
+# ============================================================
+
+html_email = generar_html_email(
+    nombre=nombre or "Guest",
+    checkin=checkin,
+    checkout=checkout,
+    adultos=adultos,
+    menores=menores,
+    opciones=opciones,
+    transporte=transporte,
+    mensaje_personalizado=mensaje_personalizado
+)
+
+
+# ============================================================
+# PREVISUALIZACIÓN
+# ============================================================
+
+st.markdown(
+    """
+    <div class="card">
+    <div class="section-title">
+        👁️ Vista previa
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+st.components.v1.html(
+    html_email,
+    height=950,
+    scrolling=True
+)
+
+st.markdown(
+    "</div>",
+    unsafe_allow_html=True
+)
 
 
 # ============================================================
 # BOTONES
 # ============================================================
 
-st.markdown("---")
+st.markdown(
+    """
+    <div class="card">
+    <div class="section-title">
+        📤 Enviar cotización
+    </div>
+    """,
+    unsafe_allow_html=True
+)
 
-col_btn1, col_btn2 = st.columns(2)
+col1, col2 = st.columns(2)
 
+with col1:
 
-with col_btn1:
-
-    btn_borrador = st.button(
-        "📝 Guardar en Borradores",
-        type="primary",
-        use_container_width=True,
+    guardar = st.button(
+        "💾 Guardar en borradores",
+        use_container_width=True
     )
 
+with col2:
 
-with col_btn2:
-
-    btn_enviar = st.button(
-        "🚀 Enviar Ahora",
-        use_container_width=True,
+    enviar = st.button(
+        "📤 Enviar correo",
+        use_container_width=True
     )
 
 
 # ============================================================
-# VALIDACIONES
+# VALIDACIÓN
 # ============================================================
 
 def validar_cotizacion():
 
     errores = []
 
-    if not nombre_huesped.strip():
+    if not nombre.strip():
 
         errores.append(
-            "Ingresa el nombre del huésped."
+            "Falta el nombre del huésped."
         )
 
-    if not email_huesped.strip():
+    if not email.strip():
 
         errores.append(
-            "Ingresa el correo del huésped."
+            "Falta el correo electrónico."
         )
 
-    if "@" not in email_huesped:
+    if "@" not in email:
 
         errores.append(
-            "El correo del huésped no parece válido."
+            "El correo electrónico no parece válido."
         )
 
-    if tarifa_1 <= 0:
+    if checkout <= checkin:
 
         errores.append(
-            "La Opción 1 debe tener una tarifa."
+            "El check out debe ser posterior al check in."
         )
 
-    if fecha_checkout <= fecha_checkin:
+    if not any(
+        opcion["activa"]
+        for opcion in opciones
+    ):
 
         errores.append(
-            "La fecha de check out debe ser posterior "
-            "al check in."
+            "Debes seleccionar al menos una opción."
         )
 
     return errores
@@ -1582,7 +2159,7 @@ def validar_cotizacion():
 # GUARDAR BORRADOR
 # ============================================================
 
-if btn_borrador:
+if guardar:
 
     errores = validar_cotizacion()
 
@@ -1590,44 +2167,31 @@ if btn_borrador:
 
         for error in errores:
 
-            st.error(error)
+            st.error(
+                f"❌ {error}"
+            )
+
+    elif not google_conectado:
+
+        st.error(
+            "❌ Primero debes iniciar sesión con Google."
+        )
 
     else:
 
-        with st.spinner(
-            "Guardando borrador en Gmail..."
-        ):
-
-            try:
-
-                resultado = guardar_borrador()
-
-                draft_id = resultado.get(
-                    "id",
-                    "N/A",
-                )
-
-                st.success(
-                    f"✓ Borrador guardado correctamente "
-                    f"en **{email_usuario}**."
-                )
-
-                st.caption(
-                    f"Draft ID: {draft_id}"
-                )
-
-            except Exception as e:
-
-                st.error(
-                    f"No fue posible guardar el borrador: {e}"
-                )
+        guardar_borrador_gmail(
+            destinatario=email,
+            asunto=asunto,
+            html=html_email,
+            attachments=attachments
+        )
 
 
 # ============================================================
-# ENVIAR EMAIL
+# ENVIAR
 # ============================================================
 
-if btn_enviar:
+if enviar:
 
     errores = validar_cotizacion()
 
@@ -1635,58 +2199,164 @@ if btn_enviar:
 
         for error in errores:
 
-            st.error(error)
+            st.error(
+                f"❌ {error}"
+            )
+
+    elif not google_conectado:
+
+        st.error(
+            "❌ Primero debes iniciar sesión con Google."
+        )
 
     else:
 
-        with st.spinner(
-            "Enviando correo..."
-        ):
-
-            try:
-
-                resultado = enviar_correo()
-
-                message_id = resultado.get(
-                    "id",
-                    "N/A",
-                )
-
-                st.success(
-                    f"✓ Correo enviado correctamente "
-                    f"desde **{email_usuario}** "
-                    f"a **{email_huesped}**."
-                )
-
-                st.caption(
-                    f"Message ID: {message_id}"
-                )
-
-            except Exception as e:
-
-                st.error(
-                    f"No fue posible enviar el correo: {e}"
-                )
+        enviar_email_gmail(
+            destinatario=email,
+            asunto=asunto,
+            html=html_email,
+            attachments=attachments
+        )
 
 
 # ============================================================
-# FOOTER
+# PANEL DE DIAGNÓSTICO
 # ============================================================
 
-st.markdown(
-    f"""
-    <div style="
-        text-align:center;
-        color:{GRIS_2};
-        font-size:11px;
-        padding:30px 0 10px 0;
-    ">
+with st.expander(
+    "🛠️ Diagnóstico técnico",
+    expanded=False
+):
 
-        Casa Dorada Cotizador
-        <br>
-        Gmail conectado: {email_usuario}
+    st.markdown(
+        "### Estado de Streamlit"
+    )
 
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
+    diagnostic = {
+
+        "google_credentials":
+            "google_credentials"
+            in st.session_state,
+
+        "oauth_flow":
+            "oauth_flow"
+            in st.session_state,
+
+        "oauth_state":
+            "oauth_state"
+            in st.session_state,
+
+        "oauth_url":
+            "oauth_url"
+            in st.session_state,
+
+        "query_params":
+            dict(st.query_params),
+
+        "session_keys":
+            list(st.session_state.keys())
+    }
+
+    st.code(
+        json.dumps(
+            diagnostic,
+            indent=2,
+            ensure_ascii=False
+        ),
+        language="json"
+    )
+
+    if (
+        "google_credentials"
+        in st.session_state
+    ):
+
+        credentials = st.session_state[
+            "google_credentials"
+        ]
+
+        st.markdown(
+            "### Estado de Credentials"
+        )
+
+        credential_info = {
+
+            "valid":
+                credentials.valid,
+
+            "expired":
+                credentials.expired,
+
+            "has_token":
+                bool(
+                    credentials.token
+                ),
+
+            "has_refresh_token":
+                bool(
+                    credentials.refresh_token
+                ),
+
+            "scopes":
+                credentials.scopes
+        }
+
+        st.code(
+            json.dumps(
+                credential_info,
+                indent=2,
+                ensure_ascii=False
+            ),
+            language="json"
+        )
+
+    st.markdown(
+        "### Configuración"
+    )
+
+    try:
+
+        st.code(
+            json.dumps(
+                {
+                    "redirect_uri":
+                        st.secrets[
+                            "google_oauth"
+                        ][
+                            "redirect_uri"
+                        ],
+
+                    "scopes":
+                        SCOPES,
+
+                    "client_id_present":
+                        bool(
+                            st.secrets[
+                                "google_oauth"
+                            ][
+                                "client_id"
+                            ]
+                        ),
+
+                    "client_secret_present":
+                        bool(
+                            st.secrets[
+                                "google_oauth"
+                            ][
+                                "client_secret"
+                            ]
+                        )
+                },
+                indent=2,
+                ensure_ascii=False
+            ),
+            language="json"
+        )
+
+    except Exception as e:
+
+        st.error(
+            "❌ No se pudo leer la configuración."
+        )
+
+        st.exception(e)
