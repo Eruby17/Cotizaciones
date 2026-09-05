@@ -4,6 +4,8 @@ import hashlib
 import hmac
 import json
 import secrets
+import requests
+
 from datetime import date, datetime
 from email.message import EmailMessage
 from urllib.parse import urlencode
@@ -105,25 +107,6 @@ ROOM_TYPES = {
             "Free Breakfast Buffet at Maydan Restaurant",
         ],
         "360_url": "",
-    },
-}
-
-
-# ============================================================
-# MEAL PLANS
-# ============================================================
-
-MEAL_PLANS = {
-    "EP": {
-        "name": "European Plan",
-        "default_inclusions": [],
-    },
-
-    "AI": {
-        "name": "All Inclusive",
-        "default_inclusions": [
-            "All Inclusive Package",
-        ],
     },
 }
 
@@ -355,6 +338,19 @@ st.markdown(
         word-break: break-all;
     }
 
+    div[data-testid="stMetric"] {
+        background: #151f30;
+        border: 1px solid #2b394d;
+        border-radius: 9px;
+        padding: 10px 12px;
+        text-align: left !important;
+    }
+
+    div[data-testid="stMetric"] label,
+    div[data-testid="stMetric"] div {
+        text-align: left !important;
+    }
+
     hr {
         border-color: #293548 !important;
     }
@@ -366,24 +362,8 @@ st.markdown(
 
 
 # ============================================================
-# OAUTH FUNCTIONS
+# OAUTH CONFIG
 # ============================================================
-
-def b64url_encode(data):
-
-    return base64.urlsafe_b64encode(
-        data
-    ).decode().rstrip("=")
-
-
-def b64url_decode(value):
-
-    padding = "=" * (-len(value) % 4)
-
-    return base64.urlsafe_b64decode(
-        value + padding
-    )
-
 
 def get_oauth_config():
 
@@ -402,6 +382,146 @@ def get_state_secret():
         "client_secret"
     ].encode("utf-8")
 
+
+# ============================================================
+# SUPABASE CONFIG
+# ============================================================
+
+def get_supabase_config():
+
+    if "supabase" not in st.secrets:
+        return None
+
+    config = st.secrets["supabase"]
+
+    return {
+        "url": config["url"].rstrip("/"),
+        "key": config["key"],
+    }
+
+
+# ============================================================
+# SUPABASE TOKEN STORAGE
+# ============================================================
+
+def save_refresh_token(email, refresh_token):
+
+    if not email or not refresh_token:
+        return False
+
+    config = get_supabase_config()
+
+    if not config:
+        return False
+
+    endpoint = (
+        f"{config['url']}/rest/v1/gmail_tokens"
+    )
+
+    headers = {
+        "apikey": config["key"],
+        "Authorization": f"Bearer {config['key']}",
+        "Content-Type": "application/json",
+        "Prefer": "resolution=merge-duplicates",
+    }
+
+    payload = {
+        "email": email.lower().strip(),
+        "refresh_token": refresh_token,
+        "updated_at": datetime.utcnow().isoformat(),
+    }
+
+    try:
+
+        response = requests.post(
+            endpoint,
+            headers=headers,
+            json=payload,
+            timeout=15,
+        )
+
+        if response.status_code in [200, 201, 204]:
+            return True
+
+        return False
+
+    except Exception:
+        return False
+
+
+def get_saved_refresh_token(email):
+
+    if not email:
+        return None
+
+    config = get_supabase_config()
+
+    if not config:
+        return None
+
+    endpoint = (
+        f"{config['url']}/rest/v1/gmail_tokens"
+    )
+
+    headers = {
+        "apikey": config["key"],
+        "Authorization": f"Bearer {config['key']}",
+    }
+
+    params = {
+        "email": f"eq.{email.lower().strip()}",
+        "select": "refresh_token",
+        "limit": "1",
+    }
+
+    try:
+
+        response = requests.get(
+            endpoint,
+            headers=headers,
+            params=params,
+            timeout=15,
+        )
+
+        if response.status_code != 200:
+            return None
+
+        data = response.json()
+
+        if not data:
+            return None
+
+        return data[0].get(
+            "refresh_token"
+        )
+
+    except Exception:
+        return None
+
+
+# ============================================================
+# BASE64
+# ============================================================
+
+def b64url_encode(data):
+
+    return base64.urlsafe_b64encode(
+        data
+    ).decode().rstrip("=")
+
+
+def b64url_decode(value):
+
+    padding = "=" * (-len(value) % 4)
+
+    return base64.urlsafe_b64decode(
+        value + padding
+    )
+
+
+# ============================================================
+# OAUTH STATE
+# ============================================================
 
 def sign_state(payload):
 
@@ -452,16 +572,36 @@ def verify_state(state):
         ):
             return None
 
-        return json.loads(
+        payload = json.loads(
             b64url_decode(
                 encoded
             ).decode("utf-8")
         )
 
+        created_at = payload.get(
+            "created_at",
+            0,
+        )
+
+        current_time = datetime.utcnow().timestamp()
+
+        if (
+            current_time
+            - float(created_at)
+            > 900
+        ):
+            return None
+
+        return payload
+
     except Exception:
 
         return None
 
+
+# ============================================================
+# CREATE OAUTH FLOW
+# ============================================================
 
 def create_oauth_flow(
     code_verifier=None
@@ -470,16 +610,22 @@ def create_oauth_flow(
     config = get_oauth_config()
 
     client_config = {
+
         "web": {
-            "client_id": config["client_id"],
-            "client_secret": config["client_secret"],
-            "auth_uri": (
+
+            "client_id":
+                config["client_id"],
+
+            "client_secret":
+                config["client_secret"],
+
+            "auth_uri":
                 "https://accounts.google.com/"
-                "o/oauth2/v2/auth"
-            ),
-            "token_uri": (
-                "https://oauth2.googleapis.com/token"
-            ),
+                "o/oauth2/v2/auth",
+
+            "token_uri":
+                "https://oauth2.googleapis.com/token",
+
             "redirect_uris": [
                 config["redirect_uri"]
             ],
@@ -499,6 +645,10 @@ def create_oauth_flow(
     return flow
 
 
+# ============================================================
+# GOOGLE LOGIN URL
+# ============================================================
+
 def get_google_login_url():
 
     code_verifier = (
@@ -514,8 +664,12 @@ def get_google_login_url():
     )
 
     payload = {
-        "code_verifier": code_verifier,
-        "created_at": datetime.utcnow().timestamp(),
+
+        "code_verifier":
+            code_verifier,
+
+        "created_at":
+            datetime.utcnow().timestamp(),
     }
 
     signed_state = sign_state(
@@ -525,23 +679,76 @@ def get_google_login_url():
     config = get_oauth_config()
 
     params = {
-        "client_id": config["client_id"],
-        "redirect_uri": config["redirect_uri"],
-        "response_type": "code",
-        "scope": " ".join(SCOPES),
-        "access_type": "offline",
-        "include_granted_scopes": "true",
-        "prompt": "consent",
-        "state": signed_state,
-        "code_challenge": code_challenge,
-        "code_challenge_method": "S256",
+
+        "client_id":
+            config["client_id"],
+
+        "redirect_uri":
+            config["redirect_uri"],
+
+        "response_type":
+            "code",
+
+        "scope":
+            " ".join(SCOPES),
+
+        "access_type":
+            "offline",
+
+        "include_granted_scopes":
+            "true",
+
+        "prompt":
+            "consent",
+
+        "state":
+            signed_state,
+
+        "code_challenge":
+            code_challenge,
+
+        "code_challenge_method":
+            "S256",
     }
 
     return (
-        "https://accounts.google.com/o/oauth2/v2/auth?"
+        "https://accounts.google.com/"
+        "o/oauth2/v2/auth?"
         + urlencode(params)
     )
 
+
+# ============================================================
+# CREDENTIALS TO DICT
+# ============================================================
+
+def credentials_to_dict(credentials):
+
+    return {
+
+        "token":
+            credentials.token,
+
+        "refresh_token":
+            credentials.refresh_token,
+
+        "token_uri":
+            credentials.token_uri,
+
+        "client_id":
+            credentials.client_id,
+
+        "client_secret":
+            credentials.client_secret,
+
+        "scopes":
+            credentials.scopes,
+    }
+
+
+# ============================================================
+# PROCESS GOOGLE CALLBACK
+# ============================================================
 
 def process_google_callback():
 
@@ -602,6 +809,45 @@ def process_google_callback():
 
         st.session_state.google_connected = True
 
+        # ----------------------------------------------------
+        # OBTENER EMAIL DE LA CUENTA
+        # ----------------------------------------------------
+
+        service = build(
+            "gmail",
+            "v1",
+            credentials=credentials,
+        )
+
+        profile = (
+            service.users()
+            .getProfile(
+                userId="me"
+            )
+            .execute()
+        )
+
+        email = profile.get(
+            "emailAddress"
+        )
+
+        st.session_state.google_email = email
+
+        # ----------------------------------------------------
+        # GUARDAR REFRESH TOKEN
+        # ----------------------------------------------------
+
+        refresh_token = (
+            credentials.refresh_token
+        )
+
+        if refresh_token and email:
+
+            save_refresh_token(
+                email=email,
+                refresh_token=refresh_token,
+            )
+
         st.query_params.clear()
 
         return True
@@ -615,17 +861,9 @@ def process_google_callback():
         return False
 
 
-def credentials_to_dict(credentials):
-
-    return {
-        "token": credentials.token,
-        "refresh_token": credentials.refresh_token,
-        "token_uri": credentials.token_uri,
-        "client_id": credentials.client_id,
-        "client_secret": credentials.client_secret,
-        "scopes": credentials.scopes,
-    }
-
+# ============================================================
+# GET CREDENTIALS
+# ============================================================
 
 def get_credentials():
 
@@ -633,52 +871,131 @@ def get_credentials():
         "google_credentials"
     )
 
-    if not data:
+    # --------------------------------------------------------
+    # SI YA EXISTE EN SESSION
+    # --------------------------------------------------------
+
+    if data:
+
+        credentials = Credentials(
+
+            token=data.get(
+                "token"
+            ),
+
+            refresh_token=data.get(
+                "refresh_token"
+            ),
+
+            token_uri=data.get(
+                "token_uri"
+            ),
+
+            client_id=data.get(
+                "client_id"
+            ),
+
+            client_secret=data.get(
+                "client_secret"
+            ),
+
+            scopes=data.get(
+                "scopes"
+            ),
+        )
+
+        if (
+            credentials.expired
+            and credentials.refresh_token
+        ):
+
+            try:
+
+                credentials.refresh(
+                    Request()
+                )
+
+                st.session_state.google_credentials = (
+                    credentials_to_dict(
+                        credentials
+                    )
+                )
+
+            except Exception:
+
+                return None
+
+        return credentials
+
+    # --------------------------------------------------------
+    # RECUPERAR DESDE STORAGE PERSISTENTE
+    # --------------------------------------------------------
+
+    saved_email = st.session_state.get(
+        "google_email"
+    )
+
+    if not saved_email:
 
         return None
 
-    credentials = Credentials(
-        token=data.get("token"),
-        refresh_token=data.get(
-            "refresh_token"
-        ),
-        token_uri=data.get(
-            "token_uri"
-        ),
-        client_id=data.get(
-            "client_id"
-        ),
-        client_secret=data.get(
-            "client_secret"
-        ),
-        scopes=data.get(
-            "scopes"
-        ),
+    refresh_token = (
+        get_saved_refresh_token(
+            saved_email
+        )
     )
 
-    if (
-        credentials.expired
-        and credentials.refresh_token
-    ):
+    if not refresh_token:
 
-        try:
+        return None
 
-            credentials.refresh(
-                Request()
+    config = get_oauth_config()
+
+    credentials = Credentials(
+
+        token=None,
+
+        refresh_token=refresh_token,
+
+        token_uri=(
+            "https://oauth2.googleapis.com/token"
+        ),
+
+        client_id=config[
+            "client_id"
+        ],
+
+        client_secret=config[
+            "client_secret"
+        ],
+
+        scopes=SCOPES,
+    )
+
+    try:
+
+        credentials.refresh(
+            Request()
+        )
+
+        st.session_state.google_credentials = (
+            credentials_to_dict(
+                credentials
             )
+        )
 
-            st.session_state.google_credentials = (
-                credentials_to_dict(
-                    credentials
-                )
-            )
+        st.session_state.google_connected = True
 
-        except Exception:
+        return credentials
 
-            return None
+    except Exception:
 
-    return credentials
+        return None
 
+
+# ============================================================
+# GMAIL SERVICE
+# ============================================================
 
 def get_gmail_service():
 
@@ -688,14 +1005,34 @@ def get_gmail_service():
 
         return None
 
-    return build(
-        "gmail",
-        "v1",
-        credentials=credentials,
-    )
+    try:
 
+        return build(
+            "gmail",
+            "v1",
+            credentials=credentials,
+        )
+
+    except Exception:
+
+        return None
+
+
+# ============================================================
+# CONNECTED EMAIL
+# ============================================================
 
 def get_connected_email():
+
+    session_email = (
+        st.session_state.get(
+            "google_email"
+        )
+    )
+
+    if session_email:
+
+        return session_email
 
     service = get_gmail_service()
 
@@ -713,9 +1050,17 @@ def get_connected_email():
             .execute()
         )
 
-        return profile.get(
+        email = profile.get(
             "emailAddress"
         )
+
+        if email:
+
+            st.session_state.google_email = (
+                email
+            )
+
+        return email
 
     except Exception:
 
@@ -776,13 +1121,27 @@ def calculate_rate_values(
     )
 
     return {
-        "total_with_tax": total_with_tax,
-        "total_before_tax": total_before_tax,
-        "taxes": taxes,
-        "nightly_with_tax": nightly_with_tax,
-        "nightly_before_tax": nightly_before_tax,
+
+        "total_with_tax":
+            total_with_tax,
+
+        "total_before_tax":
+            total_before_tax,
+
+        "taxes":
+            taxes,
+
+        "nightly_with_tax":
+            nightly_with_tax,
+
+        "nightly_before_tax":
+            nightly_before_tax,
     }
 
+
+# ============================================================
+# MONEY
+# ============================================================
 
 def money(value):
 
@@ -796,6 +1155,10 @@ def money(value):
 
         return "$0.00 USD"
 
+
+# ============================================================
+# HTML ESCAPE
+# ============================================================
 
 def html_escape(value):
 
@@ -812,6 +1175,10 @@ def html_escape(value):
         .replace("'", "&#039;")
     )
 
+
+# ============================================================
+# DATE FORMAT
+# ============================================================
 
 def format_date_email(value):
 
@@ -842,13 +1209,12 @@ def format_date_email(value):
 
 
 # ============================================================
-# HTML DE CADA OPCIÓN
+# HTML OPTION
 # ============================================================
 
 def build_option_html(
     option_number,
     room_type,
-    plan,
     valid_until,
     nights,
     stay_total_tax_included,
@@ -885,9 +1251,8 @@ def build_option_html(
         "nightly_before_tax"
     ]
 
-
     # --------------------------------------------------------
-    # BENEFICIOS
+    # BENEFITS
     # --------------------------------------------------------
 
     inclusions_html = ""
@@ -905,7 +1270,6 @@ def build_option_html(
         </li>
         """
 
-
     if not inclusions_html:
 
         inclusions_html = """
@@ -917,15 +1281,13 @@ def build_option_html(
         </li>
         """
 
-
     # --------------------------------------------------------
-    # SERVICIOS
+    # SERVICES
     # --------------------------------------------------------
 
     services_html = ""
 
     additional_services_total = 0.0
-
 
     for service in selected_services:
 
@@ -942,6 +1304,7 @@ def build_option_html(
                 padding:6px 0;
                 color:#555555;
                 font-size:14px;
+                text-align:left;
             ">
                 {html_escape(service)}
             </td>
@@ -958,7 +1321,6 @@ def build_option_html(
         </tr>
         """
 
-
     if not services_html:
 
         services_html = """
@@ -969,6 +1331,7 @@ def build_option_html(
                     padding:6px 0;
                     color:#777777;
                     font-size:14px;
+                    text-align:left;
                 ">
                 No additional services
             </td>
@@ -976,19 +1339,16 @@ def build_option_html(
         </tr>
         """
 
-
     final_total = (
         total_with_tax
         + additional_services_total
     )
 
-
     # --------------------------------------------------------
-    # BOTONES
+    # BUTTONS
     # --------------------------------------------------------
 
     buttons_html = ""
-
 
     if room_360_url:
 
@@ -1011,7 +1371,6 @@ def build_option_html(
         </a>
         """
 
-
     if payment_url:
 
         buttons_html += f"""
@@ -1031,9 +1390,8 @@ def build_option_html(
         </a>
         """
 
-
     # --------------------------------------------------------
-    # HTML OPTION
+    # OPTION
     # --------------------------------------------------------
 
     return f"""
@@ -1044,9 +1402,8 @@ def build_option_html(
            border="0"
            style="
                border:1px solid #dddddd;
-               border-radius:8px;
-               margin-bottom:22px;
                background:#ffffff;
+               margin-bottom:22px;
            ">
 
         <tr>
@@ -1055,7 +1412,6 @@ def build_option_html(
                 padding:20px;
                 text-align:left;
             ">
-
 
                 <div style="
                     color:#1f4f78;
@@ -1067,29 +1423,18 @@ def build_option_html(
                     Option {option_number}
                 </div>
 
-
                 <div style="
                     color:#333333;
                     font-size:20px;
                     font-weight:bold;
-                    margin-bottom:4px;
+                    margin-bottom:18px;
                     text-align:left;
                 ">
                     {html_escape(room_type)}
                 </div>
 
 
-                <div style="
-                    color:#777777;
-                    font-size:13px;
-                    margin-bottom:18px;
-                    text-align:left;
-                ">
-                    {html_escape(plan)}
-                </div>
-
-
-                <!-- RATES -->
+                <!-- RATE DETAILS -->
 
                 <div style="
                     color:#1f4f78;
@@ -1101,12 +1446,10 @@ def build_option_html(
                     Rate Details
                 </div>
 
-
                 <table width="100%"
                        cellpadding="0"
                        cellspacing="0"
                        border="0">
-
 
                     <tr>
 
@@ -1129,7 +1472,6 @@ def build_option_html(
                         </td>
 
                     </tr>
-
 
                     <tr>
 
@@ -1154,7 +1496,6 @@ def build_option_html(
 
                     </tr>
 
-
                     <tr>
 
                         <td style="
@@ -1176,7 +1517,6 @@ def build_option_html(
                         </td>
 
                     </tr>
-
 
                     <tr>
 
@@ -1200,7 +1540,6 @@ def build_option_html(
 
                     </tr>
 
-
                     <tr>
 
                         <td style="
@@ -1222,7 +1561,6 @@ def build_option_html(
                         </td>
 
                     </tr>
-
 
                     <tr>
 
@@ -1250,7 +1588,6 @@ def build_option_html(
 
                     </tr>
 
-
                 </table>
 
 
@@ -1266,7 +1603,6 @@ def build_option_html(
                 ">
                     Included
                 </div>
-
 
                 <ul style="
                     padding-left:22px;
@@ -1293,14 +1629,12 @@ def build_option_html(
                     Additional Services
                 </div>
 
-
                 <table width="100%"
                        cellpadding="0"
                        cellspacing="0"
                        border="0">
 
                     {services_html}
-
 
                     <tr>
 
@@ -1337,7 +1671,6 @@ def build_option_html(
                     margin-top:18px;
                     padding:15px;
                     background:#f5f7fa;
-                    border-radius:6px;
                 ">
 
                     <table width="100%"
@@ -1456,7 +1789,6 @@ def build_option_html(
 
                 </div>
 
-
             </td>
 
         </tr>
@@ -1467,7 +1799,227 @@ def build_option_html(
 
 
 # ============================================================
-# EMAIL COMPLETO
+# PLAIN TEXT VERSION
+# ============================================================
+
+def build_plain_text(
+    guest_name,
+    arrival,
+    departure,
+    adults,
+    children,
+    nights,
+    options,
+):
+
+    lines = []
+
+    lines.append(
+        "YOUR CUSTOM QUOTATION"
+    )
+
+    lines.append("")
+
+    lines.append(
+        f"Dear {guest_name},"
+    )
+
+    lines.append("")
+
+    lines.append(
+        "Thank you for considering "
+        "Casa Dorada Los Cabos Resort & Spa "
+        "for your upcoming stay."
+    )
+
+    lines.append("")
+
+    lines.append(
+        "YOUR STAY"
+    )
+
+    lines.append(
+        f"Guests: {adults} Adults"
+    )
+
+    if children > 0:
+
+        lines.append(
+            f"Children: {children}"
+        )
+
+    lines.append(
+        f"Nights: {nights}"
+    )
+
+    lines.append(
+        f"Arrival: {format_date_email(arrival)}"
+    )
+
+    lines.append(
+        f"Departure: {format_date_email(departure)}"
+    )
+
+    lines.append("")
+
+    lines.append(
+        "AVAILABLE OPTIONS"
+    )
+
+    lines.append("")
+
+    for index, option in enumerate(
+        options,
+        start=1,
+    ):
+
+        calculations = calculate_rate_values(
+            option[
+                "stay_total_tax_included"
+            ],
+            nights,
+        )
+
+        services_total = sum(
+            ADDITIONAL_SERVICES[
+                service
+            ]
+            for service in option[
+                "selected_services"
+            ]
+        )
+
+        final_total = (
+            calculations[
+                "total_with_tax"
+            ]
+            + services_total
+        )
+
+        lines.append(
+            f"OPTION {index}"
+        )
+
+        lines.append(
+            f"Room: {option['room_type']}"
+        )
+
+        lines.append(
+            f"Rate per night before taxes: "
+            f"{money(calculations['nightly_before_tax'])}"
+        )
+
+        lines.append(
+            f"Rate per night taxes included: "
+            f"{money(calculations['nightly_with_tax'])}"
+        )
+
+        lines.append(
+            f"Stay total before taxes: "
+            f"{money(calculations['total_before_tax'])}"
+        )
+
+        lines.append(
+            f"Taxes: "
+            f"{money(calculations['taxes'])}"
+        )
+
+        lines.append(
+            f"Stay total taxes included: "
+            f"{money(calculations['total_with_tax'])}"
+        )
+
+        lines.append("")
+
+        lines.append(
+            "Included:"
+        )
+
+        for inclusion in option[
+            "selected_inclusions"
+        ]:
+
+            lines.append(
+                f"• {inclusion}"
+            )
+
+        lines.append("")
+
+        lines.append(
+            "Additional Services:"
+        )
+
+        for service in option[
+            "selected_services"
+        ]:
+
+            lines.append(
+                f"• {service}: "
+                f"{money(ADDITIONAL_SERVICES[service])}"
+            )
+
+        lines.append("")
+
+        lines.append(
+            f"TOTAL AMOUNT: "
+            f"{money(final_total)}"
+        )
+
+        lines.append("")
+
+        lines.append(
+            "Deposit Policy:"
+        )
+
+        lines.append(
+            option[
+                "deposit_policy"
+            ]
+        )
+
+        lines.append("")
+
+        lines.append(
+            "Cancellation Policy:"
+        )
+
+        lines.append(
+            option[
+                "cancellation_policy"
+            ]
+        )
+
+        lines.append("")
+
+        lines.append(
+            f"Quote valid until: "
+            f"{format_date_email(option['valid_until'])}"
+        )
+
+        lines.append("")
+        lines.append(
+            "----------------------------------------"
+        )
+        lines.append("")
+
+    lines.append(
+        "Casa Dorada Los Cabos Resort & Spa"
+    )
+
+    lines.append(
+        "Av. del Pescador s/n, "
+        "Cabo San Lucas, B.C.S."
+    )
+
+    lines.append(
+        "US: 1-866-448-0151"
+    )
+
+    return "\n".join(lines)
+
+
+# ============================================================
+# COMPLETE EMAIL HTML
 # ============================================================
 
 def build_email_html(
@@ -1482,54 +2034,67 @@ def build_email_html(
 
     options_html = ""
 
-
     for index, option in enumerate(
         options,
         start=1,
     ):
 
         options_html += build_option_html(
+
             option_number=index,
-            room_type=option["room_type"],
-            plan=option["plan"],
-            valid_until=option["valid_until"],
+
+            room_type=option[
+                "room_type"
+            ],
+
+            valid_until=option[
+                "valid_until"
+            ],
+
             nights=nights,
+
             stay_total_tax_included=option[
                 "stay_total_tax_included"
             ],
+
             selected_inclusions=option[
                 "selected_inclusions"
             ],
+
             selected_services=option[
                 "selected_services"
             ],
+
             deposit_policy=option[
                 "deposit_policy"
             ],
+
             cancellation_policy=option[
                 "cancellation_policy"
             ],
+
             payment_url=option[
                 "payment_url"
             ],
+
             room_360_url=option[
                 "room_360_url"
             ],
         )
 
+    # --------------------------------------------------------
+    # GUEST SUMMARY
+    # --------------------------------------------------------
+
+    guest_summary = (
+        f"{adults} Adults"
+    )
 
     if children > 0:
 
-        guest_summary = (
-            f"{adults} Adults + {children} Children"
+        guest_summary += (
+            f" + {children} Children"
         )
-
-    else:
-
-        guest_summary = (
-            f"{adults} Adults"
-        )
-
 
     return f"""
 <!DOCTYPE html>
@@ -1555,7 +2120,6 @@ def build_email_html(
     font-family:Arial,Helvetica,sans-serif;
 ">
 
-
 <table width="100%"
        cellpadding="0"
        cellspacing="0"
@@ -1566,7 +2130,6 @@ def build_email_html(
 <td align="center"
     style="padding:30px 10px;">
 
-
 <table width="600"
        cellpadding="0"
        cellspacing="0"
@@ -1575,10 +2138,6 @@ def build_email_html(
            width:600px;
            max-width:100%;
            background:#ffffff;
-           border-radius:8px;
-           overflow:hidden;
-           box-shadow:
-               0 2px 8px rgba(0,0,0,0.08);
        ">
 
 
@@ -1688,10 +2247,12 @@ quotation and available options.
     color:#1f4f78;
     font-size:19px;
     font-weight:bold;
-    margin-bottom:14px;
+    margin-bottom:12px;
     text-align:left;
 ">
-    Your Stay
+
+Your Stay
+
 </div>
 
 
@@ -1702,145 +2263,132 @@ quotation and available options.
        style="
            background:#f7f8fa;
            border:1px solid #e5e7eb;
-           border-radius:8px;
        ">
 
 <tr>
 
-
-<!-- GUESTS -->
-
 <td style="
-    padding:16px 12px;
-    width:25%;
-    border-right:1px solid #e5e7eb;
-    text-align:left;
-">
-
-<div style="
+    padding:10px 14px;
+    width:35%;
     color:#777777;
-    font-size:11px;
-    text-transform:uppercase;
-    letter-spacing:0.5px;
-    margin-bottom:5px;
-    text-align:left;
-">
-    Guests
-</div>
-
-<div style="
-    color:#1f2937;
-    font-size:14px;
+    font-size:13px;
     font-weight:bold;
     text-align:left;
+    border-bottom:1px solid #e5e7eb;
 ">
-    {html_escape(guest_summary)}
-</div>
+
+Guests
 
 </td>
 
-
-<!-- NIGHTS -->
-
 <td style="
-    padding:16px 12px;
-    width:25%;
-    border-right:1px solid #e5e7eb;
-    text-align:left;
-">
-
-<div style="
-    color:#777777;
-    font-size:11px;
-    text-transform:uppercase;
-    letter-spacing:0.5px;
-    margin-bottom:5px;
-    text-align:left;
-">
-    Nights
-</div>
-
-<div style="
-    color:#1f2937;
-    font-size:15px;
-    font-weight:bold;
-    text-align:left;
-">
-    {html_escape(nights)}
-    {" Night" if nights == 1 else " Nights"}
-</div>
-
-</td>
-
-
-<!-- ARRIVAL -->
-
-<td style="
-    padding:16px 12px;
-    width:25%;
-    border-right:1px solid #e5e7eb;
-    text-align:left;
-">
-
-<div style="
-    color:#777777;
-    font-size:11px;
-    text-transform:uppercase;
-    letter-spacing:0.5px;
-    margin-bottom:5px;
-    text-align:left;
-">
-    Arrival
-</div>
-
-<div style="
+    padding:10px 14px;
     color:#1f2937;
     font-size:13px;
     font-weight:bold;
-    line-height:1.3;
     text-align:left;
+    border-bottom:1px solid #e5e7eb;
 ">
-    {html_escape(
-        format_date_email(arrival)
-    )}
-</div>
+
+{html_escape(guest_summary)}
 
 </td>
 
+</tr>
 
-<!-- DEPARTURE -->
+
+<tr>
 
 <td style="
-    padding:16px 12px;
-    width:25%;
-    text-align:left;
-">
-
-<div style="
+    padding:10px 14px;
     color:#777777;
-    font-size:11px;
-    text-transform:uppercase;
-    letter-spacing:0.5px;
-    margin-bottom:5px;
+    font-size:13px;
+    font-weight:bold;
     text-align:left;
+    border-bottom:1px solid #e5e7eb;
 ">
-    Departure
-</div>
 
-<div style="
+Nights
+
+</td>
+
+<td style="
+    padding:10px 14px;
     color:#1f2937;
     font-size:13px;
     font-weight:bold;
-    line-height:1.3;
     text-align:left;
+    border-bottom:1px solid #e5e7eb;
 ">
-    {html_escape(
-        format_date_email(departure)
-    )}
-</div>
+
+{html_escape(nights)}
+{" Night" if nights == 1 else " Nights"}
 
 </td>
 
+</tr>
+
+
+<tr>
+
+<td style="
+    padding:10px 14px;
+    color:#777777;
+    font-size:13px;
+    font-weight:bold;
+    text-align:left;
+    border-bottom:1px solid #e5e7eb;
+">
+
+Arrival
+
+</td>
+
+<td style="
+    padding:10px 14px;
+    color:#1f2937;
+    font-size:13px;
+    font-weight:bold;
+    text-align:left;
+    border-bottom:1px solid #e5e7eb;
+">
+
+{html_escape(
+    format_date_email(arrival)
+)}
+
+</td>
+
+</tr>
+
+
+<tr>
+
+<td style="
+    padding:10px 14px;
+    color:#777777;
+    font-size:13px;
+    font-weight:bold;
+    text-align:left;
+">
+
+Departure
+
+</td>
+
+<td style="
+    padding:10px 14px;
+    color:#1f2937;
+    font-size:13px;
+    font-weight:bold;
+    text-align:left;
+">
+
+{html_escape(
+    format_date_email(departure)
+)}
+
+</td>
 
 </tr>
 
@@ -1872,9 +2420,7 @@ Available Options
 
 </div>
 
-
 {options_html}
-
 
 </td>
 
@@ -1888,7 +2434,7 @@ Available Options
 <td style="
     background:#1f4f78;
     padding:22px 30px;
-    text-align:center;
+    text-align:left;
 ">
 
 <div style="
@@ -1896,6 +2442,7 @@ Available Options
     font-size:14px;
     font-weight:bold;
     margin-bottom:6px;
+    text-align:left;
 ">
 
 Casa Dorada Los Cabos Resort & Spa
@@ -1907,9 +2454,30 @@ Casa Dorada Los Cabos Resort & Spa
     color:#dbeafe;
     font-size:12px;
     line-height:1.5;
+    text-align:left;
 ">
 
-Medano Beach, Cabo San Lucas, Mexico
+Av. del Pescador s/n,
+Cabo San Lucas, B.C.S.
+
+</div>
+
+
+<div style="
+    color:#dbeafe;
+    font-size:12px;
+    line-height:1.5;
+    text-align:left;
+">
+
+US:
+<a href="tel:18664480151"
+   style="
+       color:#ffffff;
+       text-decoration:none;
+   ">
+1-866-448-0151
+</a>
 
 </div>
 
@@ -1920,13 +2488,11 @@ Medano Beach, Cabo San Lucas, Mexico
 
 </table>
 
-
 </td>
 
 </tr>
 
 </table>
-
 
 </body>
 
@@ -1942,16 +2508,18 @@ def create_gmail_message(
     to_email,
     subject,
     html_body,
+    plain_text_body,
     attachments=None,
 ):
 
     message = EmailMessage()
 
     message["To"] = to_email
+
     message["Subject"] = subject
 
     message.set_content(
-        "Please view this email in an HTML compatible email client."
+        plain_text_body
     )
 
     message.add_alternative(
@@ -1959,12 +2527,12 @@ def create_gmail_message(
         subtype="html",
     )
 
-
     if attachments:
 
         for attachment in attachments:
 
             file_name = attachment.name
+
             file_bytes = attachment.getvalue()
 
             mime_type = (
@@ -1984,6 +2552,7 @@ def create_gmail_message(
             else:
 
                 maintype = "application"
+
                 subtype = "octet-stream"
 
             message.add_attachment(
@@ -1992,7 +2561,6 @@ def create_gmail_message(
                 subtype=subtype,
                 filename=file_name,
             )
-
 
     encoded_message = (
         base64.urlsafe_b64encode(
@@ -2006,10 +2574,15 @@ def create_gmail_message(
     }
 
 
+# ============================================================
+# SAVE DRAFT
+# ============================================================
+
 def save_gmail_draft(
     to_email,
     subject,
     html_body,
+    plain_text_body,
     attachments=None,
 ):
 
@@ -2022,9 +2595,15 @@ def save_gmail_draft(
         )
 
     message = create_gmail_message(
+
         to_email=to_email,
+
         subject=subject,
+
         html_body=html_body,
+
+        plain_text_body=plain_text_body,
+
         attachments=attachments,
     )
 
@@ -2041,10 +2620,15 @@ def save_gmail_draft(
     )
 
 
+# ============================================================
+# SEND EMAIL
+# ============================================================
+
 def send_gmail_message(
     to_email,
     subject,
     html_body,
+    plain_text_body,
     attachments=None,
 ):
 
@@ -2057,9 +2641,15 @@ def send_gmail_message(
         )
 
     message = create_gmail_message(
+
         to_email=to_email,
+
         subject=subject,
+
         html_body=html_body,
+
+        plain_text_body=plain_text_body,
+
         attachments=attachments,
     )
 
@@ -2088,6 +2678,11 @@ if "google_credentials" not in st.session_state:
     st.session_state.google_credentials = None
 
 
+if "google_email" not in st.session_state:
+
+    st.session_state.google_email = None
+
+
 # ============================================================
 # GOOGLE CALLBACK
 # ============================================================
@@ -2110,9 +2705,9 @@ with st.sidebar:
         "## Gmail"
     )
 
-
-    connected_email = get_connected_email()
-
+    connected_email = (
+        get_connected_email()
+    )
 
     if connected_email:
 
@@ -2135,7 +2730,9 @@ with st.sidebar:
 
     else:
 
-        login_url = get_google_login_url()
+        login_url = (
+            get_google_login_url()
+        )
 
         st.markdown(
             f"""
@@ -2175,8 +2772,11 @@ with st.sidebar:
 
 
     number_options = st.selectbox(
+
         "Number of quotation options",
+
         [1, 2, 3],
+
         index=0,
     )
 
@@ -2343,34 +2943,22 @@ for option_number in range(
 
 
     # --------------------------------------------------------
-    # ROOM / PLAN
+    # ROOM
     # --------------------------------------------------------
 
-    col1, col2 = st.columns(2)
+    room_type = st.selectbox(
 
+        "Room type",
 
-    with col1:
+        list(
+            ROOM_TYPES.keys()
+        ),
 
-        room_type = st.selectbox(
-            "Room type",
-            list(
-                ROOM_TYPES.keys()
-            ),
-            key=f"room_type_{option_number}",
-        )
-
-
-    with col2:
-
-        plan_code = st.selectbox(
-            "Meal plan",
-            list(
-                MEAL_PLANS.keys()
-            ),
-            format_func=lambda x:
-                MEAL_PLANS[x]["name"],
-            key=f"meal_plan_{option_number}",
-        )
+        key=(
+            f"room_type_"
+            f"{option_number}"
+        ),
+    )
 
 
     # --------------------------------------------------------
@@ -2392,24 +2980,35 @@ for option_number in range(
 
     with rate_col1:
 
-        stay_total_tax_included = st.number_input(
-            "Stay Total Taxes Included (USD)",
-            min_value=0.00,
-            value=0.00,
-            step=100.00,
-            format="%.2f",
-            key=(
-                f"stay_total_tax_included_"
-                f"{option_number}"
-            ),
+        stay_total_tax_included = (
+            st.number_input(
+
+                "Stay Total Taxes Included (USD)",
+
+                min_value=0.00,
+
+                value=0.00,
+
+                step=100.00,
+
+                format="%.2f",
+
+                key=(
+                    f"stay_total_tax_included_"
+                    f"{option_number}"
+                ),
+            )
         )
 
 
     with rate_col2:
 
         valid_until = st.date_input(
+
             "Quote valid until",
+
             value=date.today(),
+
             key=(
                 f"valid_until_"
                 f"{option_number}"
@@ -2417,9 +3016,11 @@ for option_number in range(
         )
 
 
-    calculations = calculate_rate_values(
-        stay_total_tax_included,
-        nights,
+    calculations = (
+        calculate_rate_values(
+            stay_total_tax_included,
+            nights,
+        )
     )
 
 
@@ -2499,23 +3100,8 @@ for option_number in range(
     )
 
 
-    for inclusion in MEAL_PLANS[
-        plan_code
-    ][
-        "default_inclusions"
-    ]:
-
-        if inclusion not in defaults:
-
-            defaults.append(
-                inclusion
-            )
-
-
     inclusion_signature = (
         room_type
-        + "|"
-        + plan_code
         + "|"
         + "|".join(
             AVAILABLE_INCLUSIONS
@@ -2529,8 +3115,10 @@ for option_number in range(
     )
 
 
-    old_signature = st.session_state.get(
-        signature_key
+    old_signature = (
+        st.session_state.get(
+            signature_key
+        )
     )
 
 
@@ -2579,7 +3167,9 @@ for option_number in range(
             )
 
             checked = st.checkbox(
+
                 inclusion,
+
                 key=checkbox_key,
             )
 
@@ -2628,7 +3218,9 @@ for option_number in range(
             )
 
             selected = st.checkbox(
+
                 f"{service} — {money(price)}",
+
                 key=service_key,
             )
 
@@ -2640,17 +3232,21 @@ for option_number in range(
 
 
     services_total = sum(
+
         ADDITIONAL_SERVICES[
             service
         ]
+
         for service in selected_services
     )
 
 
     final_total = (
+
         calculations[
             "total_with_tax"
         ]
+
         + services_total
     )
 
@@ -2671,8 +3267,11 @@ for option_number in range(
 
 
     deposit_policy = st.selectbox(
+
         "Select deposit policy",
+
         DEPOSIT_POLICIES,
+
         key=(
             f"deposit_policy_"
             f"{option_number}"
@@ -2690,8 +3289,11 @@ for option_number in range(
 
 
     cancellation_policy = st.selectbox(
+
         "Select cancellation policy",
+
         CANCELLATION_POLICIES,
+
         key=(
             f"cancellation_policy_"
             f"{option_number}"
@@ -2713,18 +3315,24 @@ for option_number in range(
 
     with link_col1:
 
-        default_360 = ROOM_TYPES[
-            room_type
-        ].get(
-            "360_url",
-            ""
+        default_360 = (
+            ROOM_TYPES[
+                room_type
+            ].get(
+                "360_url",
+                ""
+            )
         )
 
 
         room_360_url = st.text_input(
+
             "360° Room View Link",
+
             value=default_360,
+
             placeholder="https://...",
+
             key=(
                 f"room_360_url_"
                 f"{option_number}"
@@ -2735,8 +3343,11 @@ for option_number in range(
     with link_col2:
 
         payment_url = st.text_input(
+
             "Payment Link",
+
             placeholder="https://...",
+
             key=(
                 f"payment_url_"
                 f"{option_number}"
@@ -2746,13 +3357,11 @@ for option_number in range(
 
     option_data = {
 
-        "room_type": room_type,
+        "room_type":
+            room_type,
 
-        "plan": MEAL_PLANS[
-            plan_code
-        ]["name"],
-
-        "valid_until": valid_until,
+        "valid_until":
+            valid_until,
 
         "stay_total_tax_included":
             stay_total_tax_included,
@@ -2774,7 +3383,6 @@ for option_number in range(
 
         "room_360_url":
             room_360_url,
-
     }
 
 
@@ -2791,12 +3399,43 @@ for option_number in range(
 # ============================================================
 
 email_html = build_email_html(
-    guest_name=guest_name or "Guest",
+
+    guest_name=(
+        guest_name
+        or "Guest"
+    ),
+
     arrival=arrival,
+
     departure=departure,
+
     adults=adults,
+
     children=children,
+
     nights=nights,
+
+    options=all_options,
+)
+
+
+plain_text_email = build_plain_text(
+
+    guest_name=(
+        guest_name
+        or "Guest"
+    ),
+
+    arrival=arrival,
+
+    departure=departure,
+
+    adults=adults,
+
+    children=children,
+
+    nights=nights,
+
     options=all_options,
 )
 
@@ -2815,11 +3454,14 @@ st.caption(
 
 
 st.components.v1.html(
+
     email_html,
+
     height=(
         850
         + number_options * 750
     ),
+
     scrolling=True,
 )
 
@@ -2833,7 +3475,9 @@ st.markdown(
 )
 
 
-action_col1, action_col2 = st.columns(2)
+action_col1, action_col2 = (
+    st.columns(2)
+)
 
 
 subject = (
@@ -2849,7 +3493,9 @@ subject = (
 with action_col1:
 
     if st.button(
+
         "💾 Save Draft to Gmail",
+
         use_container_width=True,
     ):
 
@@ -2870,9 +3516,17 @@ with action_col1:
             try:
 
                 save_gmail_draft(
+
                     to_email=guest_email,
+
                     subject=subject,
+
                     html_body=email_html,
+
+                    plain_text_body=(
+                        plain_text_email
+                    ),
+
                     attachments=attachments,
                 )
 
@@ -2894,7 +3548,9 @@ with action_col1:
 with action_col2:
 
     if st.button(
+
         "📤 Send Email",
+
         use_container_width=True,
     ):
 
@@ -2915,9 +3571,17 @@ with action_col2:
             try:
 
                 send_gmail_message(
+
                     to_email=guest_email,
+
                     subject=subject,
+
                     html_body=email_html,
+
+                    plain_text_body=(
+                        plain_text_email
+                    ),
+
                     attachments=attachments,
                 )
 
