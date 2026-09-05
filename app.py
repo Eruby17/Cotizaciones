@@ -4,15 +4,14 @@ import hashlib
 import hmac
 import json
 import secrets
-import html
 from datetime import date, datetime
 from email.message import EmailMessage
 from urllib.parse import urlencode
 
-from google_auth_oauthlib.flow import Flow
-from google.oauth2.credentials import Credentials
-from googleapiclient.discovery import build
 from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
+from google_auth_oauthlib.flow import Flow
+from googleapiclient.discovery import build
 
 
 # ============================================================
@@ -21,296 +20,10 @@ from google.auth.transport.requests import Request
 
 st.set_page_config(
     page_title="Cotizador Casa Dorada",
-    page_icon="✦",
+    page_icon="✉️",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="expanded"
 )
-
-
-# ============================================================
-# COLORES
-# ============================================================
-
-AZUL = "#173B63"
-AZUL_OSCURO = "#102C4A"
-AZUL_SUAVE = "#EAF1F7"
-DORADO = "#C6A15B"
-DORADO_SUAVE = "#F6F0E4"
-
-FONDO = "#F5F7FA"
-BLANCO = "#FFFFFF"
-TEXTO = "#263238"
-GRIS = "#667085"
-BORDE = "#E4E7EC"
-
-VERDE = "#16855B"
-ROJO = "#B42318"
-
-
-# ============================================================
-# CSS
-# ============================================================
-
-st.markdown(
-    f"""
-    <style>
-
-    html, body, [class*="css"] {{
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
-        Roboto, Helvetica, Arial, sans-serif;
-    }}
-
-    .stApp {{
-        background: {FONDO};
-    }}
-
-    .block-container {{
-        padding-top: 2rem;
-        padding-bottom: 3rem;
-        max-width: 1350px;
-    }}
-
-    /* SIDEBAR */
-
-    section[data-testid="stSidebar"] {{
-        background: {BLANCO};
-        border-right: 1px solid {BORDE};
-    }}
-
-    section[data-testid="stSidebar"] h1,
-    section[data-testid="stSidebar"] h2,
-    section[data-testid="stSidebar"] h3 {{
-        color: {AZUL};
-    }}
-
-    /* HEADER */
-
-    .app-header {{
-        background: linear-gradient(
-            135deg,
-            {AZUL_OSCURO},
-            {AZUL}
-        );
-        padding: 28px 34px;
-        border-radius: 16px;
-        margin-bottom: 24px;
-        color: white;
-        box-shadow: 0 5px 18px rgba(16,44,74,0.12);
-    }}
-
-    .app-header-title {{
-        font-size: 30px;
-        font-weight: 700;
-        margin-bottom: 5px;
-    }}
-
-    .app-header-subtitle {{
-        font-size: 14px;
-        opacity: .85;
-    }}
-
-    /* CARDS */
-
-    .card {{
-        background: {BLANCO};
-        border: 1px solid {BORDE};
-        border-radius: 14px;
-        padding: 24px;
-        margin-bottom: 20px;
-        box-shadow: 0 2px 8px rgba(16,24,40,0.04);
-    }}
-
-    .section-title {{
-        color: {AZUL};
-        font-size: 18px;
-        font-weight: 700;
-        margin-bottom: 5px;
-    }}
-
-    .section-subtitle {{
-        color: {GRIS};
-        font-size: 13px;
-        margin-bottom: 18px;
-    }}
-
-    /* OPTION CARD */
-
-    .option-title {{
-        color: {AZUL};
-        font-size: 19px;
-        font-weight: 700;
-        padding-bottom: 10px;
-        margin-bottom: 16px;
-        border-bottom: 2px solid {DORADO};
-    }}
-
-    /* GOOGLE STATUS */
-
-    .google-connected {{
-        background: #ECFDF3;
-        border: 1px solid #ABEFC6;
-        color: {VERDE};
-        padding: 12px 15px;
-        border-radius: 10px;
-        font-size: 13px;
-        margin-bottom: 12px;
-    }}
-
-    .google-disconnected {{
-        background: #FFF7ED;
-        border: 1px solid #FED7AA;
-        color: #9A3412;
-        padding: 12px 15px;
-        border-radius: 10px;
-        font-size: 13px;
-        margin-bottom: 12px;
-    }}
-
-    /* BUTTONS */
-
-    .stButton > button {{
-        border-radius: 9px;
-        border: 1px solid {AZUL};
-        font-weight: 600;
-        min-height: 42px;
-    }}
-
-    .stButton > button:hover {{
-        border-color: {DORADO};
-    }}
-
-    /* INPUTS */
-
-    div[data-baseweb="input"] > div,
-    div[data-baseweb="select"] > div,
-    textarea {{
-        border-radius: 8px !important;
-    }}
-
-    /* PREVIEW */
-
-    .preview-wrapper {{
-        background: #EEF2F6;
-        border-radius: 12px;
-        padding: 20px;
-    }}
-
-    /* SMALL LABEL */
-
-    .small-label {{
-        color: {GRIS};
-        font-size: 12px;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: .4px;
-    }}
-
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
-
-# ============================================================
-# CONFIGURACIÓN DE HABITACIONES
-# ============================================================
-#
-# MODIFICA AQUÍ LAS HABITACIONES.
-#
-# Puedes agregar habitaciones nuevas siguiendo el mismo formato.
-#
-# El campo "default_includes" se utilizará como base cuando
-# selecciones esa habitación.
-#
-# El campo "360_url" es opcional.
-#
-# ============================================================
-
-ROOM_TYPES = {
-
-    "Junior Suite": {
-        "default_includes": [
-            "Accommodation",
-            "Daily breakfast",
-            "WiFi"
-        ],
-        "360_url": ""
-    },
-
-    "One Bedroom Suite": {
-        "default_includes": [
-            "Accommodation",
-            "Daily breakfast",
-            "WiFi"
-        ],
-        "360_url": ""
-    },
-
-    "One Bedroom Plus w/ Jacuzzi": {
-        "default_includes": [
-            "Accommodation",
-            "Daily breakfast",
-            "WiFi",
-            "Private Jacuzzi"
-        ],
-        "360_url": ""
-    },
-
-    "Executive Suite": {
-        "default_includes": [
-            "Accommodation",
-            "Daily breakfast",
-            "WiFi"
-        ],
-        "360_url": ""
-    },
-
-    "Two Bedroom Suite": {
-        "default_includes": [
-            "Accommodation",
-            "Daily breakfast",
-            "WiFi"
-        ],
-        "360_url": ""
-    },
-
-    "One Bedroom Penthouse": {
-        "default_includes": [
-            "Accommodation",
-            "Daily breakfast",
-            "WiFi"
-        ],
-        "360_url": ""
-    },
-
-}
-
-
-# ============================================================
-# PLANES
-# ============================================================
-
-MEAL_PLANS = {
-
-    "EP": {
-        "name": "European Plan",
-        "includes": [
-            "Accommodation",
-            "Daily breakfast"
-        ]
-    },
-
-    "AI": {
-        "name": "All Inclusive",
-        "includes": [
-            "Accommodation",
-            "All Inclusive",
-            "Food and beverages",
-            "Domestic beverages"
-        ]
-    },
-
-}
 
 
 # ============================================================
@@ -324,183 +37,561 @@ SCOPES = [
 ]
 
 
-def get_google_client_config():
+# ============================================================
+# CONFIGURACIÓN DE HABITACIONES
+# ============================================================
 
-    return {
-        "web": {
-            "client_id": st.secrets["google_oauth"]["client_id"],
-            "client_secret": st.secrets["google_oauth"]["client_secret"],
-            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-            "token_uri": "https://oauth2.googleapis.com/token",
-            "redirect_uris": [
-                st.secrets["google_oauth"]["redirect_uri"]
-            ],
-        }
+ROOM_TYPES = {
+    "Junior Suite": {
+        "default_inclusions": [
+            "Accommodation",
+            "Daily breakfast",
+            "WiFi",
+        ],
+        "360_url": "",
+    },
+
+    "One Bedroom Suite": {
+        "default_inclusions": [
+            "Accommodation",
+            "Daily breakfast",
+            "WiFi",
+        ],
+        "360_url": "",
+    },
+
+    "One Bedroom Plus w/ Jacuzzi": {
+        "default_inclusions": [
+            "Accommodation",
+            "Daily breakfast",
+            "WiFi",
+        ],
+        "360_url": "",
+    },
+
+    "Executive Suite": {
+        "default_inclusions": [
+            "Accommodation",
+            "Daily breakfast",
+            "WiFi",
+        ],
+        "360_url": "",
+    },
+
+    "Two Bedroom Suite": {
+        "default_inclusions": [
+            "Accommodation",
+            "Daily breakfast",
+            "WiFi",
+        ],
+        "360_url": "",
+    },
+
+    "One Bedroom Penthouse": {
+        "default_inclusions": [
+            "Accommodation",
+            "Daily breakfast",
+            "WiFi",
+        ],
+        "360_url": "",
+    },
+}
+
+
+# ============================================================
+# PLANES
+# ============================================================
+
+MEAL_PLANS = {
+    "EP": {
+        "name": "European Plan",
+        "default_inclusions": [
+            "Accommodation",
+            "Daily breakfast",
+        ],
+    },
+
+    "AI": {
+        "name": "All Inclusive",
+        "default_inclusions": [
+            "Accommodation",
+            "All Inclusive",
+            "Food and beverages",
+            "Domestic beverages",
+        ],
+    },
+}
+
+
+# ============================================================
+# LISTA CENTRAL DE BENEFICIOS
+#
+# AQUÍ PUEDES AGREGAR / QUITAR BENEFICIOS
+# ============================================================
+
+AVAILABLE_INCLUSIONS = [
+    "Accommodation",
+    "Daily breakfast",
+    "All Inclusive",
+    "Food and beverages",
+    "Domestic beverages",
+    "WiFi",
+    "Airport transportation",
+    "Welcome amenity",
+]
+
+
+# ============================================================
+# LOGO
+#
+# SOLO SE UTILIZA DENTRO DEL EMAIL
+# ============================================================
+
+EMAIL_LOGO_URL = (
+    "https://umutu.com/wp-content/uploads/2021/02/Logo-2-3.png"
+)
+
+
+# ============================================================
+# POLÍTICAS
+# ============================================================
+
+DEFAULT_POLICIES = """
+Reservation is guaranteed with first night deposit.
+
+The remaining balance is due 45 days prior to arrival.
+
+Non refundable rates cannot be cancelled or modified.
+
+All reservations are subject to hotel availability and confirmation.
+"""
+
+
+# ============================================================
+# ESTILOS DE LA APLICACIÓN
+# ============================================================
+
+st.markdown(
+    """
+    <style>
+
+    /* ======================================================
+       GLOBAL
+       ====================================================== */
+
+    .stApp {
+        background:
+            radial-gradient(
+                circle at top right,
+                rgba(43, 70, 100, 0.25),
+                transparent 35%
+            ),
+            #111827;
+        color: #f3f4f6;
+    }
+
+    .main {
+        background: transparent;
+    }
+
+    .block-container {
+        padding-top: 1.5rem;
+        padding-bottom: 3rem;
+        max-width: 1450px;
     }
 
 
-def create_oauth_flow():
+    /* ======================================================
+       SIDEBAR
+       ====================================================== */
 
-    config = get_google_client_config()
+    section[data-testid="stSidebar"] {
+        background: #0b1220;
+        border-right: 1px solid #263244;
+    }
 
-    flow = Flow.from_client_config(
-        config,
-        scopes=SCOPES,
-        redirect_uri=st.secrets["google_oauth"]["redirect_uri"],
-    )
+    section[data-testid="stSidebar"] * {
+        color: #f3f4f6;
+    }
 
-    return flow
+
+    /* ======================================================
+       INPUTS
+       ====================================================== */
+
+    div[data-baseweb="input"] > div,
+    div[data-baseweb="textarea"] > div,
+    div[data-baseweb="select"] > div {
+        background-color: #182235 !important;
+        border-color: #334155 !important;
+    }
+
+    input,
+    textarea {
+        color: #f8fafc !important;
+    }
+
+    div[data-baseweb="select"] span {
+        color: #f8fafc !important;
+    }
+
+    label {
+        color: #cbd5e1 !important;
+        font-weight: 500 !important;
+    }
+
+
+    /* ======================================================
+       TÍTULOS
+       ====================================================== */
+
+    h1, h2, h3, h4 {
+        color: #f8fafc !important;
+    }
+
+
+    /* ======================================================
+       CARDS
+       ====================================================== */
+
+    .dark-card {
+        background: #182235;
+        border: 1px solid #2c3a4f;
+        border-radius: 14px;
+        padding: 20px;
+        margin-bottom: 18px;
+    }
+
+    .section-title {
+        font-size: 18px;
+        font-weight: 700;
+        color: #f8fafc;
+        margin-bottom: 14px;
+    }
+
+    .section-subtitle {
+        color: #94a3b8;
+        font-size: 13px;
+        margin-bottom: 15px;
+    }
+
+
+    /* ======================================================
+       OPTION CARD
+       ====================================================== */
+
+    .option-header {
+        background: linear-gradient(
+            135deg,
+            #22324a,
+            #1b2739
+        );
+        border: 1px solid #34445c;
+        border-radius: 12px;
+        padding: 14px 18px;
+        margin-bottom: 15px;
+    }
+
+    .option-number {
+        font-size: 17px;
+        font-weight: 700;
+        color: #ffffff;
+    }
+
+    .option-description {
+        color: #94a3b8;
+        font-size: 12px;
+        margin-top: 3px;
+    }
+
+
+    /* ======================================================
+       CHECKBOXES
+       ====================================================== */
+
+    div[data-testid="stCheckbox"] {
+        background: #141e2f;
+        border: 1px solid #27364b;
+        border-radius: 8px;
+        padding: 6px 10px;
+        margin-bottom: 5px;
+    }
+
+    div[data-testid="stCheckbox"]:hover {
+        border-color: #64748b;
+        background: #1b293d;
+    }
+
+
+    /* ======================================================
+       BUTTONS
+       ====================================================== */
+
+    .stButton > button {
+        border-radius: 9px;
+        border: 1px solid #475569;
+        background: #1e293b;
+        color: #f8fafc;
+        font-weight: 600;
+        min-height: 42px;
+    }
+
+    .stButton > button:hover {
+        border-color: #94a3b8;
+        color: #ffffff;
+    }
+
+
+    /* ======================================================
+       STATUS
+       ====================================================== */
+
+    .connected-box {
+        background: rgba(22, 163, 74, 0.12);
+        border: 1px solid rgba(34, 197, 94, 0.35);
+        border-radius: 10px;
+        padding: 12px;
+        margin-bottom: 15px;
+    }
+
+    .connected-title {
+        color: #86efac;
+        font-weight: 700;
+        font-size: 14px;
+    }
+
+    .connected-email {
+        color: #bbf7d0;
+        font-size: 13px;
+        margin-top: 3px;
+        word-break: break-all;
+    }
+
+
+    /* ======================================================
+       PREVIEW
+       ====================================================== */
+
+    .preview-wrapper {
+        background: #0b1220;
+        border: 1px solid #2c3a4f;
+        border-radius: 14px;
+        padding: 18px;
+    }
+
+    .preview-title {
+        color: #f8fafc;
+        font-weight: 700;
+        font-size: 18px;
+        margin-bottom: 12px;
+    }
+
+
+    /* ======================================================
+       DIVIDER
+       ====================================================== */
+
+    hr {
+        border-color: #293548 !important;
+    }
+
+    </style>
+    """,
+    unsafe_allow_html=True
+)
 
 
 # ============================================================
-# STATE OAUTH SIN DEPENDER DE SESSION STATE
+# HELPERS OAUTH
 # ============================================================
+
+def b64url_encode(data):
+    return base64.urlsafe_b64encode(data).decode().rstrip("=")
+
+
+def b64url_decode(value):
+    padding = "=" * (-len(value) % 4)
+    return base64.urlsafe_b64decode(value + padding)
+
+
+def get_oauth_config():
+
+    config = st.secrets["google_oauth"]
+
+    return {
+        "client_id": config["client_id"],
+        "client_secret": config["client_secret"],
+        "redirect_uri": config["redirect_uri"],
+    }
+
 
 def get_state_secret():
 
-    return st.secrets["google_oauth"]["client_secret"].encode("utf-8")
+    config = get_oauth_config()
+
+    return config["client_secret"].encode("utf-8")
 
 
-def create_signed_state(code_verifier):
-
-    payload = {
-        "code_verifier": code_verifier,
-        "timestamp": int(datetime.now().timestamp()),
-        "nonce": secrets.token_urlsafe(16),
-    }
+def sign_state(payload):
 
     payload_json = json.dumps(
         payload,
         separators=(",", ":")
-    )
+    ).encode("utf-8")
 
-    payload_encoded = base64.urlsafe_b64encode(
-        payload_json.encode()
-    ).decode().rstrip("=")
+    encoded = b64url_encode(payload_json)
 
     signature = hmac.new(
         get_state_secret(),
-        payload_encoded.encode(),
+        encoded.encode("utf-8"),
         hashlib.sha256
     ).digest()
 
-    signature_encoded = base64.urlsafe_b64encode(
-        signature
-    ).decode().rstrip("=")
-
-    return f"{payload_encoded}.{signature_encoded}"
+    return encoded + "." + b64url_encode(signature)
 
 
-def decode_signed_state(state):
+def verify_state(state):
 
     try:
 
-        payload_encoded, signature_encoded = state.split(".")
+        encoded, signature = state.split(".", 1)
 
-        expected_signature = hmac.new(
+        expected = hmac.new(
             get_state_secret(),
-            payload_encoded.encode(),
+            encoded.encode("utf-8"),
             hashlib.sha256
         ).digest()
 
-        received_signature = base64.urlsafe_b64decode(
-            signature_encoded + "=" * (
-                4 - len(signature_encoded) % 4
-            )
-        )
+        received = b64url_decode(signature)
 
-        if not hmac.compare_digest(
-            expected_signature,
-            received_signature
-        ):
+        if not hmac.compare_digest(expected, received):
             return None
 
-        payload = base64.urlsafe_b64decode(
-            payload_encoded + "=" * (
-                4 - len(payload_encoded) % 4
-            )
+        payload = json.loads(
+            b64url_decode(encoded).decode("utf-8")
         )
 
-        data = json.loads(payload.decode())
-
-        # Expira después de 10 minutos
-        if (
-            int(datetime.now().timestamp())
-            - data["timestamp"]
-            > 600
-        ):
-            return None
-
-        return data
+        return payload
 
     except Exception:
         return None
 
 
-def generate_pkce():
+def create_oauth_flow(code_verifier=None):
 
-    code_verifier = secrets.token_urlsafe(64)
+    config = get_oauth_config()
 
-    digest = hashlib.sha256(
-        code_verifier.encode("ascii")
-    ).digest()
+    client_config = {
+        "web": {
+            "client_id": config["client_id"],
+            "client_secret": config["client_secret"],
+            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+            "token_uri": "https://oauth2.googleapis.com/token",
+            "redirect_uris": [
+                config["redirect_uri"]
+            ],
+        }
+    }
 
-    code_challenge = base64.urlsafe_b64encode(
-        digest
-    ).decode("ascii").rstrip("=")
+    flow = Flow.from_client_config(
+        client_config,
+        scopes=SCOPES,
+        redirect_uri=config["redirect_uri"],
+    )
 
-    return code_verifier, code_challenge
+    if code_verifier:
+        flow.code_verifier = code_verifier
+
+    return flow
 
 
 def get_google_login_url():
 
-    flow = create_oauth_flow()
-
-    code_verifier, code_challenge = generate_pkce()
-
-    state = create_signed_state(code_verifier)
-
-    authorization_url = (
-        "https://accounts.google.com/o/oauth2/v2/auth?"
-        + urlencode({
-            "client_id": st.secrets["google_oauth"]["client_id"],
-            "redirect_uri": st.secrets["google_oauth"]["redirect_uri"],
-            "response_type": "code",
-            "scope": " ".join(SCOPES),
-            "access_type": "offline",
-            "prompt": "consent",
-            "include_granted_scopes": "true",
-            "state": state,
-            "code_challenge": code_challenge,
-            "code_challenge_method": "S256",
-        })
+    code_verifier = (
+        secrets.token_urlsafe(64)
+        .replace("-", "")
+        .replace("_", "")
     )
 
-    return authorization_url
+    flow = create_oauth_flow(
+        code_verifier=code_verifier
+    )
+
+    authorization_url, state = (
+        flow.authorization_url(
+            access_type="offline",
+            include_granted_scopes="true",
+            prompt="consent",
+            code_challenge_method="S256",
+            code_challenge=(
+                hashlib.sha256(
+                    code_verifier.encode("utf-8")
+                ).digest()
+            )
+        )
+    )
+
+    payload = {
+        "oauth_state": state,
+        "code_verifier": code_verifier,
+        "created_at": datetime.utcnow().timestamp(),
+    }
+
+    signed_state = sign_state(payload)
+
+    parsed = authorization_url.split("?")[0]
+
+    query = urlencode({
+        "client_id": get_oauth_config()["client_id"],
+        "redirect_uri": get_oauth_config()["redirect_uri"],
+        "response_type": "code",
+        "scope": " ".join(SCOPES),
+        "access_type": "offline",
+        "include_granted_scopes": "true",
+        "prompt": "consent",
+        "state": signed_state,
+        "code_challenge": b64url_encode(
+            hashlib.sha256(
+                code_verifier.encode("utf-8")
+            ).digest()
+        ),
+        "code_challenge_method": "S256",
+    })
+
+    return parsed + "?" + query
 
 
 def process_google_callback():
 
-    code = st.query_params.get("code")
-    state = st.query_params.get("state")
+    query_params = st.query_params
+
+    code = query_params.get("code")
+    state = query_params.get("state")
 
     if not code or not state:
-        return None
+        return False
 
-    state_data = decode_signed_state(state)
+    payload = verify_state(state)
 
-    if not state_data:
+    if not payload:
         st.error(
-            "No fue posible validar la conexión con Google. "
-            "Intenta nuevamente."
+            "No fue posible validar la sesión de Google."
         )
-        return None
+        return False
 
-    code_verifier = state_data["code_verifier"]
+    code_verifier = payload.get("code_verifier")
+
+    if not code_verifier:
+        st.error(
+            "No se encontró el código de seguridad de OAuth."
+        )
+        return False
 
     try:
 
-        flow = create_oauth_flow()
+        flow = create_oauth_flow(
+            code_verifier=code_verifier
+        )
 
         flow.fetch_token(
             code=code,
@@ -509,21 +600,23 @@ def process_google_callback():
 
         credentials = flow.credentials
 
-        st.session_state["google_credentials"] = (
+        st.session_state.google_credentials = (
             credentials_to_dict(credentials)
         )
 
+        st.session_state.google_connected = True
+
         st.query_params.clear()
 
-        st.rerun()
+        return True
 
     except Exception as e:
 
         st.error(
-            f"No fue posible completar la conexión con Google: {e}"
+            f"Error conectando con Google: {e}"
         )
 
-        return None
+        return False
 
 
 def credentials_to_dict(credentials):
@@ -540,45 +633,47 @@ def credentials_to_dict(credentials):
 
 def get_credentials():
 
-    data = st.session_state.get(
+    credentials_data = st.session_state.get(
         "google_credentials"
     )
 
-    if not data:
+    if not credentials_data:
         return None
 
-    try:
+    credentials = Credentials(
+        token=credentials_data.get("token"),
+        refresh_token=credentials_data.get(
+            "refresh_token"
+        ),
+        token_uri=credentials_data.get(
+            "token_uri"
+        ),
+        client_id=credentials_data.get(
+            "client_id"
+        ),
+        client_secret=credentials_data.get(
+            "client_secret"
+        ),
+        scopes=credentials_data.get(
+            "scopes"
+        ),
+    )
 
-        credentials = Credentials(
-            token=data["token"],
-            refresh_token=data.get("refresh_token"),
-            token_uri=data["token_uri"],
-            client_id=data["client_id"],
-            client_secret=data["client_secret"],
-            scopes=data.get("scopes"),
-        )
+    if credentials.expired and credentials.refresh_token:
 
-        if credentials.expired and credentials.refresh_token:
+        try:
 
             credentials.refresh(Request())
 
-            st.session_state["google_credentials"] = (
+            st.session_state.google_credentials = (
                 credentials_to_dict(credentials)
             )
 
-        return credentials
+        except Exception:
 
-    except Exception:
+            return None
 
-        return None
-
-
-def disconnect_google():
-
-    if "google_credentials" in st.session_state:
-        del st.session_state["google_credentials"]
-
-    st.rerun()
+    return credentials
 
 
 def get_gmail_service():
@@ -618,34 +713,32 @@ def get_connected_email():
 
 
 # ============================================================
-# CALLBACK GOOGLE
+# EMAIL
 # ============================================================
 
-process_google_callback()
-
-
-# ============================================================
-# FUNCIONES DE FORMATO
-# ============================================================
-
-def escape_html(value):
+def html_escape(value):
 
     if value is None:
         return ""
 
-    return html.escape(str(value))
+    value = str(value)
+
+    return (
+        value
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+        .replace("'", "&#039;")
+    )
 
 
-def format_currency(value):
+def money(value):
 
     try:
 
-        number = float(value)
-
-        return (
-            "$"
-            + f"{number:,.2f}"
-            + " USD"
+        return "${:,.2f} USD".format(
+            float(value)
         )
 
     except Exception:
@@ -653,26 +746,23 @@ def format_currency(value):
         return "$0.00 USD"
 
 
-def format_date_english(value):
+def format_date_email(value):
 
     if not value:
         return ""
 
-    if isinstance(value, date):
-
-        return value.strftime(
-            "%B %-d, %Y"
-        )
-
     try:
 
-        parsed = datetime.strptime(
-            str(value),
-            "%Y-%m-%d"
-        )
+        if isinstance(value, date):
+            d = value
+        else:
+            d = datetime.strptime(
+                str(value),
+                "%Y-%m-%d"
+            ).date()
 
-        return parsed.strftime(
-            "%B %-d, %Y"
+        return d.strftime(
+            "%B %d, %Y"
         )
 
     except Exception:
@@ -680,751 +770,816 @@ def format_date_english(value):
         return str(value)
 
 
-def includes_to_html(includes):
+def calculate_total(
+    nightly_rate,
+    nights,
+    taxes_included
+):
 
-    if not includes:
-        return "<p style='margin:0;color:#777;'>None</p>"
+    try:
 
-    items = ""
+        nightly = float(nightly_rate)
 
-    for item in includes:
+    except Exception:
 
-        if str(item).strip():
+        nightly = 0
 
-            items += f"""
+    try:
+
+        number_nights = int(nights)
+
+    except Exception:
+
+        number_nights = 0
+
+    total_before_taxes = (
+        nightly * number_nights
+    )
+
+    if taxes_included:
+
+        return total_before_taxes
+
+    return total_before_taxes * 1.30
+
+
+def build_option_html(
+    option_number,
+    room_type,
+    plan,
+    valid_until,
+    nightly_rate,
+    taxes_included,
+    selected_inclusions,
+    payment_url,
+    room_360_url,
+    additional_service,
+    nights,
+):
+
+    rate_label = (
+        "Rate taxes included"
+        if taxes_included
+        else "Rate before taxes"
+    )
+
+    total = calculate_total(
+        nightly_rate,
+        nights,
+        taxes_included
+    )
+
+    if taxes_included:
+        total_label = "Stay total"
+    else:
+        total_label = "Stay total including taxes"
+
+    inclusions_html = ""
+
+    if selected_inclusions:
+
+        for inclusion in selected_inclusions:
+
+            inclusions_html += f"""
             <li style="
-                margin-bottom:5px;
-                color:#444;
-                line-height:1.45;
+                margin-bottom:7px;
+                color:#444444;
+                font-size:14px;
+                line-height:1.4;
             ">
-                {escape_html(item.strip())}
+                {html_escape(inclusion)}
             </li>
             """
 
-    return f"""
-    <ul style="
-        margin:0;
-        padding-left:20px;
-    ">
-        {items}
-    </ul>
-    """
+    else:
 
+        inclusions_html = """
+        <li style="
+            margin-bottom:7px;
+            color:#777777;
+            font-size:14px;
+        ">
+            No inclusions selected
+        </li>
+        """
 
-def text_to_includes(text):
+    buttons_html = ""
 
-    if not text:
-        return []
+    if room_360_url:
 
-    lines = []
+        buttons_html += f"""
+        <a href="{html_escape(room_360_url)}"
+           target="_blank"
+           style="
+               display:inline-block;
+               background:#ffffff;
+               color:#1f4f78;
+               border:1px solid #1f4f78;
+               text-decoration:none;
+               padding:11px 18px;
+               border-radius:5px;
+               font-size:13px;
+               font-weight:bold;
+               margin-right:7px;
+           ">
+           VIEW ROOM
+        </a>
+        """
 
-    for line in text.splitlines():
+    if payment_url:
 
-        clean = line.strip()
+        buttons_html += f"""
+        <a href="{html_escape(payment_url)}"
+           target="_blank"
+           style="
+               display:inline-block;
+               background:#c9a227;
+               color:#ffffff;
+               text-decoration:none;
+               padding:12px 18px;
+               border-radius:5px;
+               font-size:13px;
+               font-weight:bold;
+           ">
+           SECURE YOUR BOOKING
+        </a>
+        """
 
-        if clean:
-            lines.append(clean)
+    additional_service_html = ""
 
-    return lines
+    if additional_service:
 
-
-# ============================================================
-# CREAR HTML DEL CORREO
-# ============================================================
-
-def create_email_html(
-    guest_name,
-    arrival,
-    departure,
-    nights,
-    adults,
-    children,
-    options,
-    deposit_policy,
-    cancellation_policy,
-):
-
-    guest_name = escape_html(guest_name)
-
-    children_text = ""
-
-    if children > 0:
-        children_text = f" + {children} Children"
-
-    options_html = ""
-
-    for index, option in enumerate(options, start=1):
-
-        room = escape_html(
-            option["room"]
-        )
-
-        plan = escape_html(
-            option["plan"]
-        )
-
-        includes_html = includes_to_html(
-            option["includes"]
-        )
-
-        rate_before = format_currency(
-            option["rate_before"]
-        )
-
-        rate_tax = format_currency(
-            option["rate_tax"]
-        )
-
-        stay_total = (
-            option["rate_tax"]
-            * nights
-        )
-
-        additional_amount = option.get(
-            "additional_amount",
-            0
-        )
-
-        grand_total = (
-            stay_total
-            + additional_amount
-        )
-
-        additional_html = ""
-
-        if additional_amount > 0:
-
-            additional_description = escape_html(
-                option.get(
-                    "additional_description",
-                    "Additional Services"
-                )
-            )
-
-            additional_html = f"""
-            <tr>
-                <td style="
-                    padding:10px 0;
-                    color:#555;
-                    border-top:1px solid #E2E8F0;
-                ">
-                    Additional Services:
-                    <span style="
-                        color:#64748B;
-                    ">
-                        {additional_description}
-                    </span>
-                </td>
-
-                <td style="
-                    padding:10px 0;
-                    font-weight:bold;
-                    border-top:1px solid #E2E8F0;
-                    white-space:nowrap;
-                ">
-                    {format_currency(additional_amount)}
-                </td>
-            </tr>
-            """
-
-        buttons_html = ""
-
-        room_360 = option.get(
-            "room_360",
-            ""
-        )
-
-        payment_link = option.get(
-            "payment_link",
-            ""
-        )
-
-        if room_360:
-
-            buttons_html += f"""
-            <a href="{escape_html(room_360)}"
-               style="
-                   background-color:#F6F0E4;
-                   color:#173B63;
-                   border:1px solid #C6A15B;
-                   padding:13px 20px;
-                   text-decoration:none;
-                   border-radius:5px;
-                   font-weight:bold;
-                   display:inline-block;
-                   font-size:13px;
-                   margin-right:8px;
-               ">
-               VIEW ROOM
-            </a>
-            """
-
-        if payment_link:
-
-            buttons_html += f"""
-            <a href="{escape_html(payment_link)}"
-               style="
-                   background-color:#173B63;
-                   color:#ffffff;
-                   padding:13px 20px;
-                   text-decoration:none;
-                   border-radius:5px;
-                   font-weight:bold;
-                   display:inline-block;
-                   font-size:13px;
-               ">
-               SECURE YOUR BOOKING
-            </a>
-            """
-
-        valid_until_html = ""
-
-        if option.get("valid_until"):
-
-            valid_until_html = f"""
-            <p style="
-                font-size:12px;
-                color:#999;
-                margin:13px 0 0 0;
+        additional_service_html = f"""
+        <tr>
+            <td style="
+                padding:6px 0;
+                color:#555555;
+                font-size:14px;
             ">
-                Quote valid until:
-                <strong>
-                    {format_date_english(option["valid_until"])}
-                </strong>
-            </p>
-            """
+                Additional services
+            </td>
 
-        options_html += f"""
+            <td style="
+                padding:6px 0;
+                color:#222222;
+                font-size:14px;
+                text-align:right;
+            ">
+                {html_escape(additional_service)}
+            </td>
+        </tr>
+        """
 
-        <!-- OPTION {index} -->
+    return f"""
 
-        <table
-            width="100%"
-            border="0"
-            cellpadding="0"
-            cellspacing="0"
-            style="
-                width:100%;
-                margin-bottom:25px;
-                border:1px solid #E2E8F0;
-                border-radius:7px;
-                overflow:hidden;
-            "
-        >
+    <table width="100%"
+           cellpadding="0"
+           cellspacing="0"
+           border="0"
+           style="
+               border:1px solid #dddddd;
+               border-radius:8px;
+               margin-bottom:22px;
+               background:#ffffff;
+           ">
 
-            <tr>
-                <td style="
-                    background-color:#173B63;
-                    color:#ffffff;
-                    padding:15px 20px;
-                    font-size:14px;
+        <tr>
+            <td style="
+                padding:20px;
+            ">
+
+                <div style="
+                    color:#1f4f78;
+                    font-size:18px;
                     font-weight:bold;
-                    letter-spacing:.3px;
+                    margin-bottom:5px;
                 ">
-                    OPTION {index}
-                </td>
-            </tr>
+                    Option {option_number}
+                </div>
 
-            <tr>
-                <td style="
-                    padding:20px;
+                <div style="
+                    color:#333333;
+                    font-size:20px;
+                    font-weight:bold;
+                    margin-bottom:3px;
                 ">
+                    {html_escape(room_type)}
+                </div>
 
-                    <h3 style="
-                        margin:0 0 5px 0;
-                        color:#173B63;
-                        font-size:20px;
-                    ">
-                        {room}
-                    </h3>
+                <div style="
+                    color:#777777;
+                    font-size:13px;
+                    margin-bottom:18px;
+                ">
+                    {html_escape(plan)}
+                </div>
 
-                    <p style="
-                        margin:0 0 18px 0;
-                        color:#777;
-                        font-size:13px;
-                    ">
-                        {plan} · {nights} Nights
-                    </p>
 
-                    <table
-                        width="100%"
-                        border="0"
-                        cellpadding="0"
-                        cellspacing="0"
-                        style="
-                            width:100%;
+                <table width="100%"
+                       cellpadding="0"
+                       cellspacing="0"
+                       border="0">
+
+                    <tr>
+                        <td style="
+                            padding:6px 0;
+                            color:#555555;
                             font-size:14px;
-                        "
-                    >
+                        ">
+                            {html_escape(rate_label)}
+                        </td>
+
+                        <td style="
+                            padding:6px 0;
+                            color:#222222;
+                            font-size:14px;
+                            text-align:right;
+                            font-weight:bold;
+                        ">
+                            {money(nightly_rate)}
+                            / night
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <td style="
+                            padding:6px 0;
+                            color:#555555;
+                            font-size:14px;
+                        ">
+                            Number of nights
+                        </td>
+
+                        <td style="
+                            padding:6px 0;
+                            color:#222222;
+                            font-size:14px;
+                            text-align:right;
+                        ">
+                            {html_escape(nights)}
+                        </td>
+                    </tr>
+
+                    {additional_service_html}
+
+                </table>
+
+
+                <div style="
+                    margin-top:20px;
+                    margin-bottom:8px;
+                    color:#1f4f78;
+                    font-size:15px;
+                    font-weight:bold;
+                ">
+                    Included
+                </div>
+
+                <ul style="
+                    padding-left:22px;
+                    margin-top:8px;
+                    margin-bottom:20px;
+                ">
+                    {inclusions_html}
+                </ul>
+
+
+                <div style="
+                    border-top:1px solid #eeeeee;
+                    padding-top:15px;
+                ">
+
+                    <table width="100%"
+                           cellpadding="0"
+                           cellspacing="0"
+                           border="0">
 
                         <tr>
 
                             <td style="
-                                width:50%;
-                                vertical-align:top;
-                                padding-right:15px;
+                                color:#555555;
+                                font-size:14px;
                             ">
-
-                                <div style="
-                                    color:#888;
-                                    font-size:10px;
-                                    font-weight:bold;
-                                    text-transform:uppercase;
-                                    margin-bottom:8px;
-                                ">
-                                    Inclusions
-                                </div>
-
-                                {includes_html}
-
+                                {html_escape(total_label)}
                             </td>
 
                             <td style="
-                                width:50%;
-                                vertical-align:top;
+                                color:#222222;
+                                font-size:17px;
+                                font-weight:bold;
+                                text-align:right;
                             ">
-
-                                <table
-                                    width="100%"
-                                    border="0"
-                                    cellpadding="0"
-                                    cellspacing="0"
-                                >
-
-                                    <tr>
-                                        <td style="
-                                            padding-bottom:7px;
-                                            color:#666;
-                                        ">
-                                            Rate per night
-                                            before taxes:
-                                        </td>
-
-                                        <td style="
-                                            padding-bottom:7px;
-                                            text-align:right;
-                                            white-space:nowrap;
-                                        ">
-                                            {rate_before}
-                                        </td>
-                                    </tr>
-
-                                    <tr>
-
-                                        <td style="
-                                            padding-bottom:10px;
-                                            color:#666;
-                                            border-bottom:
-                                            1px solid #EEEEEE;
-                                        ">
-                                            Rate per night
-                                            taxes included:
-                                        </td>
-
-                                        <td style="
-                                            padding-bottom:10px;
-                                            text-align:right;
-                                            border-bottom:
-                                            1px solid #EEEEEE;
-                                            white-space:nowrap;
-                                        ">
-                                            {rate_tax}
-                                        </td>
-
-                                    </tr>
-
-                                    <tr>
-
-                                        <td style="
-                                            padding:14px 0 5px 0;
-                                            color:#444;
-                                        ">
-                                            Stay Total
-                                            ({nights} nights):
-                                        </td>
-
-                                        <td style="
-                                            padding:14px 0 5px 0;
-                                            text-align:right;
-                                            font-weight:bold;
-                                            white-space:nowrap;
-                                        ">
-                                            {format_currency(stay_total)}
-                                        </td>
-
-                                    </tr>
-
-                                    {additional_html}
-
-                                    <tr>
-
-                                        <td style="
-                                            padding-top:14px;
-                                            color:#173B63;
-                                            font-size:17px;
-                                            font-weight:bold;
-                                            border-top:
-                                            2px solid #CBD5E1;
-                                        ">
-                                            TOTAL AMOUNT:
-                                        </td>
-
-                                        <td style="
-                                            padding-top:14px;
-                                            text-align:right;
-                                            color:#173B63;
-                                            font-size:17px;
-                                            font-weight:bold;
-                                            border-top:
-                                            2px solid #CBD5E1;
-                                            white-space:nowrap;
-                                        ">
-                                            {format_currency(grand_total)}
-                                        </td>
-
-                                    </tr>
-
-                                </table>
-
+                                {money(total)}
                             </td>
 
                         </tr>
 
                     </table>
 
-                    <div style="
-                        margin-top:20px;
-                    ">
-
-                        {buttons_html}
-
-                        {valid_until_html}
-
-                    </div>
-
-                </td>
-            </tr>
-
-        </table>
-        """
-
-    # ========================================================
-    # EMAIL COMPLETO
-    # ========================================================
-
-    cuerpo = f"""
-    <!DOCTYPE html>
-
-    <html>
-
-    <body style="
-        margin:0;
-        padding:20px 0;
-        background-color:#F3F4F6;
-        font-family:Arial, Helvetica, sans-serif;
-        color:#333333;
-    ">
-
-    <table
-        width="600"
-        border="0"
-        cellpadding="0"
-        cellspacing="0"
-        align="center"
-        style="
-            width:600px;
-            max-width:600px;
-            background-color:#ffffff;
-            border:1px solid #EEEEEE;
-        "
-    >
-
-        <!-- HEADER -->
-
-        <tr>
-
-            <td style="
-                padding:30px;
-                border-bottom:3px solid #C6A15B;
-                background-color:#ffffff;
-            ">
-
-                <img
-                    src="https://umutu.com/wp-content/uploads/2021/02/Logo-2-3.png"
-                    width="280"
-                    alt="Casa Dorada Los Cabos Resort & Spa"
-                    style="
-                        display:block;
-                        width:280px;
-                        max-width:100%;
-                        height:auto;
-                        border:0;
-                    "
-                >
-
-            </td>
-
-        </tr>
+                </div>
 
 
-        <!-- BODY -->
-
-        <tr>
-
-            <td style="
-                padding:30px;
-            ">
-
-                <h2 style="
-                    color:#173B63;
-                    margin:0 0 20px 0;
-                    font-size:24px;
-                    font-weight:500;
+                <div style="
+                    margin-top:20px;
                 ">
-                    Your Custom Quotation
-                </h2>
+                    {buttons_html}
+                </div>
 
-                <p style="
-                    font-size:16px;
-                    line-height:1.5;
-                    margin:0 0 12px 0;
-                ">
-                    Hola <strong>{guest_name}</strong>,
-                </p>
 
-                <p style="
-                    font-size:15px;
-                    line-height:1.6;
-                    color:#555555;
-                    margin:0 0 22px 0;
+                <div style="
+                    margin-top:16px;
+                    color:#777777;
+                    font-size:12px;
                 ">
-                    Thank you for considering
+                    Quote valid until:
                     <strong>
-                        Casa Dorada Los Cabos Resort & Spa
+                        {html_escape(
+                            format_date_email(valid_until)
+                        )}
                     </strong>
-                    as an option to enjoy Cabo.
-                    It is our pleasure to present the details
-                    of your requested stay.
-                </p>
-
-
-                <!-- STAY DETAILS -->
-
-                <table
-                    width="100%"
-                    border="0"
-                    cellpadding="0"
-                    cellspacing="0"
-                    style="
-                        width:100%;
-                        font-size:14px;
-                        margin-bottom:28px;
-                    "
-                >
-
-                    <tr>
-
-                        <td style="
-                            padding:10px 0;
-                            color:#888888;
-                            width:40%;
-                            font-size:10px;
-                            font-weight:bold;
-                            text-transform:uppercase;
-                            border-bottom:1px solid #EEEEEE;
-                        ">
-                            Arrival
-                        </td>
-
-                        <td style="
-                            padding:10px 0;
-                            font-weight:bold;
-                            border-bottom:1px solid #EEEEEE;
-                        ">
-                            {format_date_english(arrival)}
-                        </td>
-
-                    </tr>
-
-
-                    <tr>
-
-                        <td style="
-                            padding:10px 0;
-                            color:#888888;
-                            font-size:10px;
-                            font-weight:bold;
-                            text-transform:uppercase;
-                            border-bottom:1px solid #EEEEEE;
-                        ">
-                            Departure
-                        </td>
-
-                        <td style="
-                            padding:10px 0;
-                            font-weight:bold;
-                            border-bottom:1px solid #EEEEEE;
-                        ">
-                            {format_date_english(departure)}
-                        </td>
-
-                    </tr>
-
-
-                    <tr>
-
-                        <td style="
-                            padding:10px 0;
-                            color:#888888;
-                            font-size:10px;
-                            font-weight:bold;
-                            text-transform:uppercase;
-                            border-bottom:1px solid #EEEEEE;
-                        ">
-                            Guests
-                        </td>
-
-                        <td style="
-                            padding:10px 0;
-                            border-bottom:1px solid #EEEEEE;
-                        ">
-                            {adults} Adults{children_text}
-                        </td>
-
-                    </tr>
-
-
-                    <tr>
-
-                        <td style="
-                            padding:10px 0;
-                            color:#888888;
-                            font-size:10px;
-                            font-weight:bold;
-                            text-transform:uppercase;
-                        ">
-                            Stay
-                        </td>
-
-                        <td style="
-                            padding:10px 0;
-                            font-weight:bold;
-                        ">
-                            {nights} Nights
-                        </td>
-
-                    </tr>
-
-                </table>
-
-
-                <!-- OPTIONS -->
-
-                <h3 style="
-                    color:#173B63;
-                    font-size:17px;
-                    margin:0 0 15px 0;
-                ">
-                    Accommodation Options
-                </h3>
-
-                {options_html}
+                </div>
 
             </td>
-
-        </tr>
-
-
-        <!-- POLICIES -->
-
-        <tr>
-
-            <td style="
-                background-color:#F8FAFC;
-                padding:25px 30px;
-                border-top:1px solid #E2E8F0;
-                font-size:13px;
-                color:#555555;
-            ">
-
-                <h4 style="
-                    margin:0 0 12px 0;
-                    color:#173B63;
-                    text-transform:uppercase;
-                    font-size:12px;
-                ">
-                    Booking Policies
-                </h4>
-
-                <p style="
-                    margin:0 0 7px 0;
-                    line-height:1.5;
-                ">
-                    <strong>Deposit:</strong>
-                    {escape_html(deposit_policy)}
-                </p>
-
-                <p style="
-                    margin:0;
-                    line-height:1.5;
-                ">
-                    <strong>Cancellation:</strong>
-                    {escape_html(cancellation_policy)}
-                </p>
-
-            </td>
-
-        </tr>
-
-
-        <!-- FOOTER -->
-
-        <tr>
-
-            <td style="
-                background-color:#173B63;
-                padding:25px 30px;
-                color:#C9D3DE;
-                font-size:11px;
-            ">
-
-                <p style="
-                    color:#ffffff;
-                    margin:0 0 6px 0;
-                    font-weight:bold;
-                    font-size:12px;
-                ">
-                    Casa Dorada Los Cabos Resort & Spa
-                </p>
-
-                <p style="
-                    margin:0;
-                    line-height:1.5;
-                ">
-                    Av. del Pescador s/n,
-                    Cabo San Lucas, B.C.S.
-                </p>
-
-            </td>
-
         </tr>
 
     </table>
 
-    </body>
-    </html>
     """
 
-    return cuerpo
+
+def build_email_html(
+    guest_name,
+    arrival,
+    departure,
+    adults,
+    children,
+    nights,
+    options,
+    policies,
+):
+
+    options_html = ""
+
+    for index, option in enumerate(
+        options,
+        start=1
+    ):
+
+        options_html += build_option_html(
+            option_number=index,
+            room_type=option["room_type"],
+            plan=option["plan"],
+            valid_until=option["valid_until"],
+            nightly_rate=option["nightly_rate"],
+            taxes_included=option["taxes_included"],
+            selected_inclusions=option[
+                "selected_inclusions"
+            ],
+            payment_url=option["payment_url"],
+            room_360_url=option["room_360_url"],
+            additional_service=option[
+                "additional_service"
+            ],
+            nights=nights,
+        )
+
+
+    children_text = ""
+
+    if children > 0:
+
+        children_text = f"""
+        <tr>
+            <td style="
+                padding:5px 0;
+                color:#666666;
+                font-size:14px;
+            ">
+                Children
+            </td>
+
+            <td style="
+                padding:5px 0;
+                color:#222222;
+                font-size:14px;
+                text-align:right;
+            ">
+                {html_escape(children)}
+            </td>
+        </tr>
+        """
+
+
+    policies_html = ""
+
+    for line in policies.splitlines():
+
+        line = line.strip()
+
+        if line:
+
+            policies_html += f"""
+            <li style="
+                margin-bottom:8px;
+                color:#555555;
+                font-size:13px;
+                line-height:1.5;
+            ">
+                {html_escape(line)}
+            </li>
+            """
+
+
+    return f"""
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="UTF-8">
+
+<meta name="viewport"
+      content="width=device-width,
+               initial-scale=1.0">
+
+<title>Your Custom Quotation</title>
+
+</head>
+
+
+<body style="
+    margin:0;
+    padding:0;
+    background:#f3f4f6;
+    font-family:Arial,Helvetica,sans-serif;
+">
+
+<table width="100%"
+       cellpadding="0"
+       cellspacing="0"
+       border="0">
+
+<tr>
+
+<td align="center"
+    style="padding:30px 10px;">
+
+<table width="600"
+       cellpadding="0"
+       cellspacing="0"
+       border="0"
+       style="
+           width:600px;
+           max-width:100%;
+           background:#ffffff;
+           border-radius:8px;
+           overflow:hidden;
+           box-shadow:
+               0 2px 8px rgba(0,0,0,0.08);
+       ">
+
+
+<!-- HEADER -->
+
+<tr>
+
+<td align="center"
+    style="
+        background:#ffffff;
+        padding:25px 25px 15px 25px;
+    ">
+
+<img src="{EMAIL_LOGO_URL}"
+     alt="Casa Dorada"
+     style="
+         max-width:220px;
+         width:100%;
+         height:auto;
+         display:block;
+     ">
+
+</td>
+
+</tr>
+
+
+<!-- TITLE -->
+
+<tr>
+
+<td style="
+    padding:15px 35px 5px 35px;
+    text-align:center;
+">
+
+<div style="
+    color:#1f4f78;
+    font-size:25px;
+    font-weight:bold;
+">
+
+Your Custom Quotation
+
+</div>
+
+</td>
+
+</tr>
+
+
+<!-- GREETING -->
+
+<tr>
+
+<td style="
+    padding:15px 35px 10px 35px;
+">
+
+<p style="
+    color:#333333;
+    font-size:15px;
+    line-height:1.6;
+    margin:0 0 12px 0;
+">
+
+Dear {html_escape(guest_name)},
+
+</p>
+
+<p style="
+    color:#555555;
+    font-size:14px;
+    line-height:1.6;
+    margin:0;
+">
+
+Thank you for considering
+Casa Dorada Los Cabos Resort & Spa
+for your upcoming stay.
+
+Please find below your personalized
+quotation and available options.
+
+</p>
+
+</td>
+
+</tr>
+
+
+<!-- STAY DETAILS -->
+
+<tr>
+
+<td style="
+    padding:15px 35px;
+">
+
+<table width="100%"
+       cellpadding="0"
+       cellspacing="0"
+       border="0"
+       style="
+           background:#f7f7f7;
+           border-radius:6px;
+           padding:15px;
+       ">
+
+<tr>
+
+<td style="
+    padding:5px 0;
+    color:#666666;
+    font-size:14px;
+">
+
+Arrival
+
+</td>
+
+<td style="
+    padding:5px 0;
+    color:#222222;
+    font-size:14px;
+    text-align:right;
+    font-weight:bold;
+">
+
+{html_escape(
+    format_date_email(arrival)
+)}
+
+</td>
+
+</tr>
+
+
+<tr>
+
+<td style="
+    padding:5px 0;
+    color:#666666;
+    font-size:14px;
+">
+
+Departure
+
+</td>
+
+<td style="
+    padding:5px 0;
+    color:#222222;
+    font-size:14px;
+    text-align:right;
+    font-weight:bold;
+">
+
+{html_escape(
+    format_date_email(departure)
+)}
+
+</td>
+
+</tr>
+
+
+<tr>
+
+<td style="
+    padding:5px 0;
+    color:#666666;
+    font-size:14px;
+">
+
+Adults
+
+</td>
+
+<td style="
+    padding:5px 0;
+    color:#222222;
+    font-size:14px;
+    text-align:right;
+">
+
+{html_escape(adults)}
+
+</td>
+
+</tr>
+
+
+{children_text}
+
+
+<tr>
+
+<td style="
+    padding:5px 0;
+    color:#666666;
+    font-size:14px;
+">
+
+Nights
+
+</td>
+
+<td style="
+    padding:5px 0;
+    color:#222222;
+    font-size:14px;
+    text-align:right;
+">
+
+{html_escape(nights)}
+
+</td>
+
+</tr>
+
+</table>
+
+</td>
+
+</tr>
+
+
+<!-- OPTIONS -->
+
+<tr>
+
+<td style="
+    padding:15px 35px 5px 35px;
+">
+
+<div style="
+    color:#1f4f78;
+    font-size:19px;
+    font-weight:bold;
+    margin-bottom:15px;
+">
+
+Available Options
+
+</div>
+
+{options_html}
+
+</td>
+
+</tr>
+
+
+<!-- POLICIES -->
+
+<tr>
+
+<td style="
+    padding:10px 35px 30px 35px;
+">
+
+<div style="
+    color:#1f4f78;
+    font-size:18px;
+    font-weight:bold;
+    margin-bottom:10px;
+">
+
+Booking Policies
+
+</div>
+
+<ul style="
+    margin:0;
+    padding-left:20px;
+">
+
+{policies_html}
+
+</ul>
+
+</td>
+
+</tr>
+
+
+<!-- FOOTER -->
+
+<tr>
+
+<td style="
+    background:#1f4f78;
+    padding:22px 30px;
+    text-align:center;
+">
+
+<div style="
+    color:#ffffff;
+    font-size:14px;
+    font-weight:bold;
+    margin-bottom:6px;
+">
+
+Casa Dorada Los Cabos Resort & Spa
+
+</div>
+
+<div style="
+    color:#dbeafe;
+    font-size:12px;
+    line-height:1.5;
+">
+
+Medano Beach, Cabo San Lucas, Mexico
+
+</div>
+
+</td>
+
+</tr>
+
+
+</table>
+
+</td>
+
+</tr>
+
+</table>
+
+</body>
+
+</html>
+"""
 
 
 # ============================================================
-# CREAR MIME
+# GMAIL MESSAGE
 # ============================================================
 
-def create_email_message(
-    sender,
-    recipient,
+def create_gmail_message(
+    to_email,
     subject,
     html_body,
     attachments=None,
@@ -1432,8 +1587,7 @@ def create_email_message(
 
     message = EmailMessage()
 
-    message["To"] = recipient
-    message["From"] = sender
+    message["To"] = to_email
     message["Subject"] = subject
 
     message.set_content(
@@ -1449,15 +1603,18 @@ def create_email_message(
 
         for attachment in attachments:
 
-            file_name = attachment["name"]
-            file_type = attachment["type"]
-            file_data = attachment["data"]
+            file_name = attachment.name
 
-            if "/" in file_type:
+            file_bytes = attachment.getvalue()
 
-                maintype, subtype = file_type.split(
-                    "/",
-                    1
+            mime_type = attachment.type or (
+                "application/octet-stream"
+            )
+
+            if "/" in mime_type:
+
+                maintype, subtype = (
+                    mime_type.split("/", 1)
                 )
 
             else:
@@ -1466,98 +1623,110 @@ def create_email_message(
                 subtype = "octet-stream"
 
             message.add_attachment(
-                file_data,
+                file_bytes,
                 maintype=maintype,
                 subtype=subtype,
-                filename=file_name
+                filename=file_name,
             )
 
-    return message
-
-
-# ============================================================
-# GMAIL DRAFT
-# ============================================================
-
-def save_gmail_draft(
-    service,
-    message,
-):
-
-    raw_message = base64.urlsafe_b64encode(
+    encoded_message = base64.urlsafe_b64encode(
         message.as_bytes()
     ).decode()
 
-    body = {
-        "message": {
-            "raw": raw_message
-        }
+    return {
+        "raw": encoded_message
     }
 
-    result = (
+
+def save_gmail_draft(
+    to_email,
+    subject,
+    html_body,
+    attachments=None,
+):
+
+    service = get_gmail_service()
+
+    if not service:
+        raise Exception(
+            "No hay una cuenta de Gmail conectada."
+        )
+
+    message = create_gmail_message(
+        to_email=to_email,
+        subject=subject,
+        html_body=html_body,
+        attachments=attachments,
+    )
+
+    draft = {
+        "message": message
+    }
+
+    return (
         service.users()
         .drafts()
         .create(
             userId="me",
-            body=body
+            body=draft
         )
         .execute()
     )
 
-    return result
-
-
-# ============================================================
-# GMAIL SEND
-# ============================================================
 
 def send_gmail_message(
-    service,
-    message,
+    to_email,
+    subject,
+    html_body,
+    attachments=None,
 ):
 
-    raw_message = base64.urlsafe_b64encode(
-        message.as_bytes()
-    ).decode()
+    service = get_gmail_service()
 
-    body = {
-        "raw": raw_message
-    }
+    if not service:
+        raise Exception(
+            "No hay una cuenta de Gmail conectada."
+        )
 
-    result = (
+    message = create_gmail_message(
+        to_email=to_email,
+        subject=subject,
+        html_body=html_body,
+        attachments=attachments,
+    )
+
+    return (
         service.users()
         .messages()
         .send(
             userId="me",
-            body=body
+            body=message
         )
         .execute()
     )
 
-    return result
+
+# ============================================================
+# SESSION STATE
+# ============================================================
+
+if "google_connected" not in st.session_state:
+
+    st.session_state.google_connected = False
+
+
+if "google_credentials" not in st.session_state:
+
+    st.session_state.google_credentials = None
 
 
 # ============================================================
-# HEADER DE LA APP
+# PROCESAR CALLBACK DE GOOGLE
 # ============================================================
 
-st.markdown(
-    """
-    <div class="app-header">
+if "code" in st.query_params and "state" in st.query_params:
 
-        <div class="app-header-title">
-            Cotizador Casa Dorada
-        </div>
-
-        <div class="app-header-subtitle">
-            Create, preview and send professional quotations
-            directly from your Casa Dorada Gmail account.
-        </div>
-
-    </div>
-    """,
-    unsafe_allow_html=True
-)
+    process_google_callback()
 
 
 # ============================================================
@@ -1567,46 +1736,45 @@ st.markdown(
 with st.sidebar:
 
     st.markdown(
-        "### Gmail"
+        """
+        <div style="
+            font-size:20px;
+            font-weight:700;
+            margin-bottom:18px;
+            color:#f8fafc;
+        ">
+            Gmail
+        </div>
+        """,
+        unsafe_allow_html=True
     )
 
+
     connected_email = get_connected_email()
+
 
     if connected_email:
 
         st.markdown(
             f"""
-            <div class="google-connected">
-                ✓ Google connected<br>
-                <strong>{escape_html(connected_email)}</strong>
+            <div class="connected-box">
+
+                <div class="connected-title">
+                    ✓ Connected
+                </div>
+
+                <div class="connected-email">
+                    {html_escape(connected_email)}
+                </div>
+
             </div>
             """,
             unsafe_allow_html=True
         )
-
-        if st.button(
-            "Disconnect Google",
-            use_container_width=True
-        ):
-
-            disconnect_google()
 
     else:
 
-        st.markdown(
-            """
-            <div class="google-disconnected">
-                Google account not connected.
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-
         login_url = get_google_login_url()
-
-        # IMPORTANTE:
-        # target="_blank" hace que Google OAuth se abra
-        # en una nueva pestaña.
 
         st.markdown(
             f"""
@@ -1619,9 +1787,9 @@ with st.sidebar:
                    box-sizing:border-box;
                    text-align:center;
                    text-decoration:none;
-                   background:#173B63;
+                   background:#2563eb;
                    color:white;
-                   padding:12px 15px;
+                   padding:12px 10px;
                    border-radius:9px;
                    font-weight:600;
                    margin-bottom:15px;
@@ -1633,461 +1801,524 @@ with st.sidebar:
         )
 
         st.caption(
-            "Google authorization will open in a new tab."
+            "Google se abrirá en una nueva pestaña."
         )
+
 
     st.divider()
 
-    st.markdown(
-        "### Default Policies"
-    )
-
-    deposit_policy = st.text_area(
-        "Deposit Policy",
-        value=(
-            "Reservation is guaranteed with first night deposit."
-        ),
-        height=90,
-        key="deposit_policy"
-    )
-
-    cancellation_policy = st.text_area(
-        "Cancellation Policy",
-        value=(
-            "Cancellation policies vary according to the selected rate."
-        ),
-        height=110,
-        key="cancellation_policy"
-    )
-
-
-# ============================================================
-# INFORMACIÓN DEL HUÉSPED
-# ============================================================
-
-st.markdown(
-    '<div class="card">',
-    unsafe_allow_html=True
-)
-
-st.markdown(
-    '<div class="section-title">Guest Information</div>',
-    unsafe_allow_html=True
-)
-
-st.markdown(
-    '<div class="section-subtitle">Enter the details of the requested stay.</div>',
-    unsafe_allow_html=True
-)
-
-col1, col2 = st.columns(2)
-
-with col1:
-
-    guest_name = st.text_input(
-        "Guest Name",
-        placeholder="John Smith"
-    )
-
-with col2:
-
-    guest_email = st.text_input(
-        "Guest Email",
-        placeholder="guest@email.com"
-    )
-
-col1, col2, col3, col4 = st.columns(4)
-
-with col1:
-
-    arrival = st.date_input(
-        "Arrival",
-        value=date.today(),
-        format="MM/DD/YYYY"
-    )
-
-with col2:
-
-    departure = st.date_input(
-        "Departure",
-        value=date.today(),
-        format="MM/DD/YYYY"
-    )
-
-with col3:
-
-    adults = st.number_input(
-        "Adults",
-        min_value=1,
-        max_value=20,
-        value=2
-    )
-
-with col4:
-
-    children = st.number_input(
-        "Children",
-        min_value=0,
-        max_value=20,
-        value=0
-    )
-
-if departure >= arrival:
-
-    nights = (
-        departure - arrival
-    ).days
-
-else:
-
-    nights = 0
-    st.error(
-        "Departure must be after Arrival."
-    )
-
-st.markdown(
-    "</div>",
-    unsafe_allow_html=True
-)
-
-
-# ============================================================
-# OPCIONES
-# ============================================================
-
-st.markdown(
-    '<div class="card">',
-    unsafe_allow_html=True
-)
-
-st.markdown(
-    '<div class="section-title">Quotation Options</div>',
-    unsafe_allow_html=True
-)
-
-st.markdown(
-    '<div class="section-subtitle">'
-    'Choose how many accommodation options you want to include in the email.'
-    '</div>',
-    unsafe_allow_html=True
-)
-
-number_options = st.radio(
-    "Number of quotation options",
-    options=[1, 2, 3],
-    horizontal=True,
-    index=0
-)
-
-st.markdown(
-    "</div>",
-    unsafe_allow_html=True
-)
-
-
-# ============================================================
-# CREACIÓN DE OPCIONES
-# ============================================================
-
-options = []
-
-for option_number in range(1, number_options + 1):
 
     st.markdown(
-        '<div class="card">',
-        unsafe_allow_html=True
-    )
-
-    st.markdown(
-        f"""
-        <div class="option-title">
-            Option {option_number}
+        """
+        <div style="
+            font-size:16px;
+            font-weight:700;
+            color:#f8fafc;
+            margin-bottom:12px;
+        ">
+            Quote Settings
         </div>
         """,
         unsafe_allow_html=True
     )
 
-    col1, col2, col3 = st.columns(
-        [2.2, 1.2, 1.2]
+
+    number_options = st.selectbox(
+        "Number of quotation options",
+        options=[1, 2, 3],
+        index=0,
     )
+
+
+    st.divider()
+
+
+    st.markdown(
+        """
+        <div style="
+            color:#94a3b8;
+            font-size:12px;
+            line-height:1.5;
+        ">
+        Cada opción puede tener habitación,
+        tarifa, beneficios, link de pago y
+        vista 360° diferentes.
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+# ============================================================
+# TÍTULO PRINCIPAL
+# ============================================================
+
+st.markdown(
+    """
+    <h1 style="
+        margin-bottom:5px;
+        font-size:28px;
+    ">
+        Create Quotation
+    </h1>
+
+    <div style="
+        color:#94a3b8;
+        font-size:14px;
+        margin-bottom:25px;
+    ">
+        Create a professional quotation and
+        save it directly to your Casa Dorada Gmail.
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+
+# ============================================================
+# DATOS DEL HUÉSPED
+# ============================================================
+
+st.markdown(
+    """
+    <div class="dark-card">
+
+        <div class="section-title">
+            Guest Information
+        </div>
+
+        <div class="section-subtitle">
+            Basic information for the quotation.
+        </div>
+
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+
+guest_col1, guest_col2 = st.columns(2)
+
+with guest_col1:
+
+    guest_name = st.text_input(
+        "Guest name",
+        placeholder="John Smith"
+    )
+
+with guest_col2:
+
+    guest_email = st.text_input(
+        "Guest email",
+        placeholder="guest@email.com"
+    )
+
+
+guest_col3, guest_col4 = st.columns(2)
+
+with guest_col3:
+
+    arrival = st.date_input(
+        "Arrival",
+        value=date.today()
+    )
+
+with guest_col4:
+
+    departure = st.date_input(
+        "Departure",
+        value=date.today()
+    )
+
+
+guest_col5, guest_col6, guest_col7 = st.columns(3)
+
+with guest_col5:
+
+    adults = st.number_input(
+        "Adults",
+        min_value=1,
+        max_value=20,
+        value=2,
+        step=1
+    )
+
+with guest_col6:
+
+    children = st.number_input(
+        "Children",
+        min_value=0,
+        max_value=20,
+        value=0,
+        step=1
+    )
+
+with guest_col7:
+
+    calculated_nights = (
+        departure - arrival
+    ).days
+
+    if calculated_nights < 1:
+        calculated_nights = 1
+
+    nights = st.number_input(
+        "Nights",
+        min_value=1,
+        max_value=365,
+        value=calculated_nights,
+        step=1
+    )
+
+
+st.markdown("<br>", unsafe_allow_html=True)
+
+
+# ============================================================
+# OPCIONES DE COTIZACIÓN
+# ============================================================
+
+all_options = []
+
+
+for option_number in range(
+    1,
+    number_options + 1
+):
+
+    st.markdown(
+        f"""
+        <div class="dark-card">
+
+            <div class="option-header">
+
+                <div class="option-number">
+                    Quotation Option {option_number}
+                </div>
+
+                <div class="option-description">
+                    Configure this option independently.
+                </div>
+
+            </div>
+
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+    # --------------------------------------------------------
+    # ROOM + PLAN
+    # --------------------------------------------------------
+
+    col1, col2 = st.columns(2)
 
     with col1:
 
-        room = st.selectbox(
-            "Room Type",
-            options=list(ROOM_TYPES.keys()),
-            key=f"room_{option_number}"
+        room_type = st.selectbox(
+            "Room type",
+            options=list(
+                ROOM_TYPES.keys()
+            ),
+            key=f"room_type_{option_number}",
         )
+
 
     with col2:
 
-        plan = st.selectbox(
-            "Plan",
-            options=list(MEAL_PLANS.keys()),
-            key=f"plan_{option_number}"
+        plan_code = st.selectbox(
+            "Meal plan",
+            options=list(
+                MEAL_PLANS.keys()
+            ),
+            format_func=lambda x:
+                MEAL_PLANS[x]["name"],
+            key=f"plan_{option_number}",
         )
 
-    with col3:
+
+    # --------------------------------------------------------
+    # RATE
+    # --------------------------------------------------------
+
+    rate_col1, rate_col2, rate_col3 = (
+        st.columns(3)
+    )
+
+
+    with rate_col1:
+
+        nightly_rate = st.number_input(
+            "Nightly rate (USD)",
+            min_value=0.0,
+            value=0.0,
+            step=10.0,
+            format="%.2f",
+            key=f"nightly_rate_{option_number}",
+        )
+
+
+    with rate_col2:
+
+        taxes_included = st.checkbox(
+            "Rate includes taxes",
+            value=True,
+            key=f"taxes_included_{option_number}",
+        )
+
+
+    with rate_col3:
 
         valid_until = st.date_input(
-            "Quote Valid Until",
+            "Quote valid until",
             value=date.today(),
             key=f"valid_until_{option_number}",
-            format="MM/DD/YYYY"
         )
 
-    col1, col2 = st.columns(2)
-
-    with col1:
-
-        rate_before = st.number_input(
-            "Rate Per Night Before Taxes",
-            min_value=0.0,
-            value=0.0,
-            step=10.0,
-            key=f"rate_before_{option_number}"
-        )
-
-    with col2:
-
-        rate_tax = st.number_input(
-            "Rate Per Night Taxes Included",
-            min_value=0.0,
-            value=0.0,
-            step=10.0,
-            key=f"rate_tax_{option_number}"
-        )
 
     # --------------------------------------------------------
-    # INCLUSIONES
-    # --------------------------------------------------------
-
-    default_includes = (
-        ROOM_TYPES[room]["default_includes"]
-        +
-        MEAL_PLANS[plan]["includes"]
-    )
-
-    # Eliminamos duplicados manteniendo orden
-
-    unique_includes = []
-
-    for item in default_includes:
-
-        if item not in unique_includes:
-            unique_includes.append(item)
-
-    default_text = "\n".join(
-        unique_includes
-    )
-
-    include_key = f"includes_{option_number}"
-
-    if include_key not in st.session_state:
-
-        st.session_state[include_key] = default_text
-
-    includes_text = st.text_area(
-        "Included Values",
-        key=include_key,
-        height=130,
-        help=(
-            "One inclusion per line. "
-            "You can freely modify these values."
-        )
-    )
-
-    # --------------------------------------------------------
-    # LINKS
+    # INCLUSIONS
     # --------------------------------------------------------
 
     st.markdown(
-        '<div class="small-label">Optional Links</div>',
-        unsafe_allow_html=True
-    )
+        """
+        <div style="
+            margin-top:18px;
+            margin-bottom:8px;
+            font-size:15px;
+            font-weight:700;
+            color:#f8fafc;
+        ">
+            Included Benefits
+        </div>
 
-    col1, col2 = st.columns(2)
-
-    with col1:
-
-        include_360 = st.checkbox(
-            "Include 360° Room View",
-            key=f"include_360_{option_number}"
-        )
-
-        room_360 = ""
-
-        if include_360:
-
-            # Si la habitación ya tiene un link configurado,
-            # lo ponemos automáticamente.
-
-            room_360 = st.text_input(
-                "360° Room URL",
-                value=ROOM_TYPES[room].get(
-                    "360_url",
-                    ""
-                ),
-                key=f"room_360_{option_number}",
-                placeholder="https://..."
-            )
-
-    with col2:
-
-        include_payment = st.checkbox(
-            "Include Payment Link",
-            key=f"include_payment_{option_number}"
-        )
-
-        payment_link = ""
-
-        if include_payment:
-
-            payment_link = st.text_input(
-                "Payment URL",
-                key=f"payment_{option_number}",
-                placeholder="https://..."
-            )
-
-    # --------------------------------------------------------
-    # SERVICIO ADICIONAL
-    # --------------------------------------------------------
-
-    include_additional = st.checkbox(
-        "Include Additional Service",
-        key=f"include_additional_{option_number}"
-    )
-
-    additional_description = ""
-    additional_amount = 0.0
-
-    if include_additional:
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-
-            additional_description = st.text_input(
-                "Service Description",
-                placeholder="Airport Transportation"
-            )
-
-        with col2:
-
-            additional_amount = st.number_input(
-                "Service Amount",
-                min_value=0.0,
-                step=10.0,
-                key=f"additional_amount_{option_number}"
-            )
-
-    options.append(
-        {
-            "room": room,
-            "plan": plan,
-            "valid_until": valid_until,
-            "rate_before": rate_before,
-            "rate_tax": rate_tax,
-            "includes": text_to_includes(
-                includes_text
-            ),
-            "room_360": room_360
-                if include_360
-                else "",
-            "payment_link": payment_link
-                if include_payment
-                else "",
-            "additional_description":
-                additional_description,
-            "additional_amount":
-                additional_amount,
-        }
-    )
-
-    st.markdown(
-        "</div>",
+        <div style="
+            color:#94a3b8;
+            font-size:12px;
+            margin-bottom:12px;
+        ">
+            Select independently what is included
+            in this quotation option.
+        </div>
+        """,
         unsafe_allow_html=True
     )
 
 
-# ============================================================
-# ARCHIVOS
-# ============================================================
+    defaults = list(
+        ROOM_TYPES[room_type][
+            "default_inclusions"
+        ]
+    )
 
-st.markdown(
-    '<div class="card">',
-    unsafe_allow_html=True
-)
+    for inclusion in MEAL_PLANS[
+        plan_code
+    ]["default_inclusions"]:
 
-st.markdown(
-    '<div class="section-title">Attachments</div>',
-    unsafe_allow_html=True
-)
+        if inclusion not in defaults:
 
-st.markdown(
-    '<div class="section-subtitle">'
-    'Optional files to attach to the email.'
-    '</div>',
-    unsafe_allow_html=True
-)
+            defaults.append(inclusion)
 
-uploaded_files = st.file_uploader(
-    "Upload files",
-    accept_multiple_files=True,
-    type=[
-        "pdf",
-        "jpg",
-        "jpeg",
-        "png",
-        "doc",
-        "docx",
-        "xls",
-        "xlsx"
-    ]
-)
 
-attachments = []
+    signature = (
+        f"{room_type}|"
+        f"{plan_code}|"
+        f"{'|'.join(AVAILABLE_INCLUSIONS)}"
+    )
 
-if uploaded_files:
 
-    for file in uploaded_files:
+    signature_key = (
+        f"inclusion_signature_"
+        f"{option_number}"
+    )
 
-        attachments.append(
-            {
-                "name": file.name,
-                "type": file.type,
-                "data": file.getvalue(),
-            }
+
+    previous_signature = st.session_state.get(
+        signature_key
+    )
+
+
+    if previous_signature != signature:
+
+        for index, inclusion in enumerate(
+            AVAILABLE_INCLUSIONS
+        ):
+
+            checkbox_key = (
+                f"inclusion_"
+                f"{option_number}_"
+                f"{index}"
+            )
+
+            st.session_state[
+                checkbox_key
+            ] = inclusion in defaults
+
+
+        st.session_state[
+            signature_key
+        ] = signature
+
+
+    inclusion_columns = st.columns(2)
+
+    selected_inclusions = []
+
+
+    for index, inclusion in enumerate(
+        AVAILABLE_INCLUSIONS
+    ):
+
+        with inclusion_columns[
+            index % 2
+        ]:
+
+            checkbox_key = (
+                f"inclusion_"
+                f"{option_number}_"
+                f"{index}"
+            )
+
+            checked = st.checkbox(
+                inclusion,
+                key=checkbox_key,
+            )
+
+            if checked:
+
+                selected_inclusions.append(
+                    inclusion
+                )
+
+
+    # --------------------------------------------------------
+    # OPTIONAL LINKS
+    # --------------------------------------------------------
+
+    st.markdown(
+        """
+        <div style="
+            margin-top:20px;
+            margin-bottom:10px;
+            font-size:15px;
+            font-weight:700;
+            color:#f8fafc;
+        ">
+            Optional Links
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+    link_col1, link_col2 = st.columns(2)
+
+
+    with link_col1:
+
+        room_360_url = st.text_input(
+            "360° room view link",
+            value=ROOM_TYPES[
+                room_type
+            ].get("360_url", ""),
+            placeholder="https://...",
+            key=f"room_360_{option_number}",
         )
 
-        st.write(
-            f"✓ {file.name}"
+
+    with link_col2:
+
+        payment_url = st.text_input(
+            "Payment link",
+            placeholder="https://...",
+            key=f"payment_url_{option_number}",
         )
 
+
+    # --------------------------------------------------------
+    # ADDITIONAL SERVICE
+    # --------------------------------------------------------
+
+    additional_service = st.text_input(
+        "Additional service",
+        placeholder=(
+            "Optional. Example: "
+            "Roundtrip airport transportation"
+        ),
+        key=f"additional_service_{option_number}",
+    )
+
+
+    option_data = {
+        "room_type": room_type,
+        "plan": MEAL_PLANS[
+            plan_code
+        ]["name"],
+        "valid_until": valid_until,
+        "nightly_rate": nightly_rate,
+        "taxes_included": taxes_included,
+        "selected_inclusions": selected_inclusions,
+        "payment_url": payment_url,
+        "room_360_url": room_360_url,
+        "additional_service": additional_service,
+    }
+
+
+    all_options.append(
+        option_data
+    )
+
+
+    st.markdown(
+        "<br>",
+        unsafe_allow_html=True
+    )
+
+
+# ============================================================
+# POLÍTICAS
+# ============================================================
+
 st.markdown(
-    "</div>",
+    """
+    <div class="dark-card">
+
+        <div class="section-title">
+            Booking Policies
+        </div>
+
+        <div class="section-subtitle">
+            These policies will appear at the bottom
+            of the quotation email.
+        </div>
+
+    </div>
+    """,
     unsafe_allow_html=True
 )
 
 
-# ============================================================
-# PREPARAR HTML
-# ============================================================
-
-email_subject = (
-    "Special Quotation | Casa Dorada Los Cabos"
+policies = st.text_area(
+    "Policies",
+    value=DEFAULT_POLICIES,
+    height=150,
 )
 
-email_html = create_email_html(
+
+# ============================================================
+# GENERAR HTML
+# ============================================================
+
+email_html = build_email_html(
     guest_name=guest_name or "Guest",
     arrival=arrival,
     departure=departure,
-    nights=nights,
     adults=adults,
     children=children,
-    options=options,
-    deposit_policy=deposit_policy,
-    cancellation_policy=cancellation_policy,
+    nights=nights,
+    options=all_options,
+    policies=policies,
 )
 
 
@@ -2096,184 +2327,126 @@ email_html = create_email_html(
 # ============================================================
 
 st.markdown(
-    '<div class="card">',
+    "<br>",
     unsafe_allow_html=True
 )
 
 st.markdown(
-    '<div class="section-title">Quotation Preview</div>',
+    """
+    <div class="preview-wrapper">
+
+        <div class="preview-title">
+            Email Preview
+        </div>
+
+    </div>
+    """,
     unsafe_allow_html=True
 )
 
-st.markdown(
-    '<div class="section-subtitle">'
-    'This is how the quotation will appear in the email.'
-    '</div>',
-    unsafe_allow_html=True
-)
 
 st.components.v1.html(
     email_html,
-    height=1000,
-    scrolling=True
-)
-
-st.markdown(
-    "</div>",
-    unsafe_allow_html=True
+    height=(
+        850 +
+        (number_options * 500)
+    ),
+    scrolling=True,
 )
 
 
 # ============================================================
-# ACTIONS
+# ACCIONES
 # ============================================================
 
-st.markdown(
-    '<div class="card">',
-    unsafe_allow_html=True
+st.markdown("<br>", unsafe_allow_html=True)
+
+action_col1, action_col2 = st.columns(2)
+
+
+subject = (
+    f"Your Custom Quotation "
+    f"Casa Dorada Los Cabos"
 )
 
-st.markdown(
-    '<div class="section-title">Email Actions</div>',
-    unsafe_allow_html=True
-)
 
-col1, col2 = st.columns(2)
+with action_col1:
 
-with col1:
+    if st.button(
+        "💾 Save Draft to Gmail",
+        use_container_width=True,
+    ):
 
-    save_draft_button = st.button(
-        "Save to Gmail Drafts",
-        use_container_width=True
-    )
-
-with col2:
-
-    send_button = st.button(
-        "Send Email",
-        use_container_width=True
-    )
-
-
-# ============================================================
-# VALIDACIÓN
-# ============================================================
-
-if save_draft_button or send_button:
-
-    if not guest_email:
-
-        st.error(
-            "Please enter the guest email."
-        )
-
-        st.stop()
-
-    if "@" not in guest_email:
-
-        st.error(
-            "Please enter a valid email address."
-        )
-
-        st.stop()
-
-    if nights <= 0:
-
-        st.error(
-            "Please verify the arrival and departure dates."
-        )
-
-        st.stop()
-
-    credentials = get_credentials()
-
-    if not credentials:
-
-        st.error(
-            "Please connect your Google account first."
-        )
-
-        st.stop()
-
-    service = get_gmail_service()
-
-    if not service:
-
-        st.error(
-            "Could not connect to Gmail."
-        )
-
-        st.stop()
-
-    sender_email = get_connected_email()
-
-    if not sender_email:
-
-        st.error(
-            "Could not identify the connected Gmail account."
-        )
-
-        st.stop()
-
-    message = create_email_message(
-        sender=sender_email,
-        recipient=guest_email,
-        subject=email_subject,
-        html_body=email_html,
-        attachments=attachments
-    )
-
-    # --------------------------------------------------------
-    # SAVE DRAFT
-    # --------------------------------------------------------
-
-    if save_draft_button:
-
-        try:
-
-            result = save_gmail_draft(
-                service,
-                message
-            )
-
-            st.success(
-                "✓ Quotation saved successfully in Gmail Drafts."
-            )
-
-            st.info(
-                f"Draft created in: {sender_email}"
-            )
-
-        except Exception as e:
+        if not guest_email:
 
             st.error(
-                f"Could not save the draft: {e}"
+                "Please enter the guest email."
             )
 
-    # --------------------------------------------------------
-    # SEND
-    # --------------------------------------------------------
-
-    if send_button:
-
-        try:
-
-            result = send_gmail_message(
-                service,
-                message
-            )
-
-            st.success(
-                f"✓ Email sent successfully from {sender_email}."
-            )
-
-        except Exception as e:
+        elif not get_gmail_service():
 
             st.error(
-                f"Could not send the email: {e}"
+                "Please connect your Google Account first."
             )
 
-st.markdown(
-    "</div>",
-    unsafe_allow_html=True
-)
+        else:
+
+            try:
+
+                draft = save_gmail_draft(
+                    to_email=guest_email,
+                    subject=subject,
+                    html_body=email_html,
+                    attachments=None,
+                )
+
+                st.success(
+                    "Draft saved successfully in Gmail."
+                )
+
+            except Exception as e:
+
+                st.error(
+                    f"Could not save draft: {e}"
+                )
+
+
+with action_col2:
+
+    if st.button(
+        "📤 Send Email",
+        use_container_width=True,
+    ):
+
+        if not guest_email:
+
+            st.error(
+                "Please enter the guest email."
+            )
+
+        elif not get_gmail_service():
+
+            st.error(
+                "Please connect your Google Account first."
+            )
+
+        else:
+
+            try:
+
+                send_gmail_message(
+                    to_email=guest_email,
+                    subject=subject,
+                    html_body=email_html,
+                    attachments=None,
+                )
+
+                st.success(
+                    "Email sent successfully."
+                )
+
+            except Exception as e:
+
+                st.error(
+                    f"Could not send email: {e}"
+                )
