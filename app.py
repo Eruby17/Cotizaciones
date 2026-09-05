@@ -1,31 +1,38 @@
-import streamlit as st
 import base64
-import json
-import os
 from datetime import date
 from email.message import EmailMessage
-from email.utils import formataddr
 
-from google_auth_oauthlib.flow import Flow
-from googleapiclient.discovery import build
+import streamlit as st
+
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
+from google_auth_oauthlib.flow import Flow
+from googleapiclient.discovery import build
 
 
 # ============================================================
-# CONFIGURACIÓN
+# CONFIGURACIÓN GENERAL
 # ============================================================
 
 st.set_page_config(
     page_title="Cotizador Casa Dorada",
     page_icon="🏨",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded",
 )
 
 
 # ============================================================
-# COLORES
+# GOOGLE OAUTH
+# ============================================================
+
+SCOPES = [
+    "https://www.googleapis.com/auth/gmail.compose"
+]
+
+
+# ============================================================
+# COLORES CASA DORADA
 # ============================================================
 
 AZUL = "#071A2F"
@@ -48,429 +55,300 @@ ROJO = "#E56B6F"
 
 
 # ============================================================
-# CSS DARK MODE
+# CSS
 # ============================================================
 
 st.markdown(
     f"""
     <style>
 
-    /* ==============================
-       GLOBAL
-       ============================== */
-
     .stApp {{
-        background:
-            radial-gradient(
-                circle at top right,
-                rgba(201,162,39,0.07),
-                transparent 35%
-            ),
-            {FONDO};
+        background: {FONDO};
         color: {BLANCO};
     }}
 
     [data-testid="stHeader"] {{
-        background: transparent;
+        background: {FONDO};
     }}
 
     [data-testid="stSidebar"] {{
         background: {AZUL};
-        border-right: 1px solid rgba(255,255,255,0.08);
+        border-right: 1px solid {AZUL_3};
     }}
 
     [data-testid="stSidebar"] * {{
         color: {BLANCO};
     }}
 
-
-    /* ==============================
-       TEXTOS
-       ============================== */
-
     h1, h2, h3, h4 {{
         color: {BLANCO} !important;
     }}
 
     p, label {{
-        color: {GRIS} !important;
+        color: {GRIS};
     }}
 
-
-    /* ==============================
-       INPUTS
-       ============================== */
-
-    div[data-baseweb="input"] {{
-        background: {CARD_2};
-        border: 1px solid rgba(255,255,255,0.10);
-        border-radius: 8px;
-    }}
-
-    div[data-baseweb="input"] input {{
-        color: {BLANCO} !important;
-    }}
-
-    div[data-baseweb="textarea"] {{
-        background: {CARD_2};
-        border: 1px solid rgba(255,255,255,0.10);
-        border-radius: 8px;
-    }}
-
-    textarea {{
-        color: {BLANCO} !important;
-    }}
-
-
-    /* SELECTBOX */
-
-    div[data-baseweb="select"] > div {{
-        background: {CARD_2};
-        border: 1px solid rgba(255,255,255,0.10);
-        color: {BLANCO};
-        border-radius: 8px;
-    }}
-
-    div[data-baseweb="select"] span {{
-        color: {BLANCO} !important;
-    }}
-
-
-    /* DATE INPUT */
-
-    div[data-testid="stDateInput"] input {{
-        background: {CARD_2};
-        color: {BLANCO} !important;
-        border: 1px solid rgba(255,255,255,0.10);
-    }}
-
-
-    /* NUMBER INPUT */
-
-    div[data-testid="stNumberInput"] input {{
-        background: {CARD_2};
-        color: {BLANCO} !important;
-    }}
-
-
-    /* ==============================
-       BUTTONS
-       ============================== */
-
-    .stButton > button {{
-        width: 100%;
-        border-radius: 8px;
-        border: 1px solid {DORADO};
-        background: transparent;
-        color: {DORADO_CLARO};
-        font-weight: 600;
-        min-height: 44px;
-        transition: all 0.2s ease;
-    }}
-
-    .stButton > button:hover {{
-        background: {DORADO};
-        color: #081321;
-        border-color: {DORADO};
-    }}
-
-
-    /* ==============================
-       FILE UPLOADER
-       ============================== */
-
-    [data-testid="stFileUploader"] {{
-        background: {CARD};
-        border: 1px dashed rgba(201,162,39,0.45);
-        border-radius: 10px;
-        padding: 10px;
-    }}
-
-
-    /* ==============================
-       HEADER
-       ============================== */
-
-    .main-header {{
-        background:
-            linear-gradient(
-                135deg,
-                {AZUL_2},
-                {AZUL}
-            );
-
-        border: 1px solid rgba(201,162,39,0.20);
-        border-radius: 16px;
-
-        padding: 24px 28px;
-        margin-bottom: 24px;
-
-        box-shadow:
-            0 15px 40px rgba(0,0,0,0.25);
-    }}
-
-    .brand {{
-        font-size: 28px;
+    .main-title {{
+        font-size: 32px;
         font-weight: 700;
         color: {BLANCO};
-        letter-spacing: 0.5px;
-    }}
-
-    .brand span {{
-        color: {DORADO_CLARO};
+        margin-bottom: 4px;
     }}
 
     .subtitle {{
         color: {GRIS};
-        font-size: 14px;
-        margin-top: 4px;
+        font-size: 15px;
+        margin-bottom: 25px;
     }}
 
-
-    /* ==============================
-       SECTION TITLE
-       ============================== */
-
-    .section-title {{
-        display: flex;
-        align-items: center;
-        gap: 10px;
-
-        margin-top: 18px;
-        margin-bottom: 14px;
-
-        font-size: 18px;
-        font-weight: 700;
-
-        color: {BLANCO};
+    .top-card {{
+        background: linear-gradient(135deg, {AZUL_2}, {CARD});
+        border: 1px solid {AZUL_3};
+        border-bottom: 3px solid {DORADO};
+        border-radius: 12px;
+        padding: 22px;
+        margin-bottom: 25px;
     }}
 
-    .section-title::before {{
-        content: "";
-        width: 4px;
-        height: 22px;
-
-        background: {DORADO};
-        border-radius: 10px;
-    }}
-
-
-    /* ==============================
-       CARDS
-       ============================== */
-
-    .card {{
+    .section-card {{
         background: {CARD};
-
-        border: 1px solid rgba(255,255,255,0.07);
-        border-radius: 14px;
-
+        border: 1px solid {AZUL_3};
+        border-radius: 12px;
         padding: 20px;
-
-        margin-bottom: 18px;
-
-        box-shadow:
-            0 10px 30px rgba(0,0,0,0.18);
+        margin-bottom: 20px;
     }}
 
-    .quote-card {{
-        background:
-            linear-gradient(
-                145deg,
-                {CARD_2},
-                {CARD}
-            );
-
-        border: 1px solid rgba(201,162,39,0.22);
-        border-radius: 14px;
-
-        padding: 22px;
-
-        min-height: 220px;
-    }}
-
-    .quote-title {{
+    .gold-text {{
         color: {DORADO_CLARO};
-        font-size: 18px;
-        font-weight: 700;
     }}
 
-    .quote-price {{
-        color: {BLANCO};
-        font-size: 27px;
-        font-weight: 700;
-        margin-top: 15px;
+    .connected {{
+        background: rgba(66, 200, 138, 0.12);
+        border: 1px solid {VERDE};
+        color: {VERDE};
+        padding: 12px;
+        border-radius: 8px;
+        margin-bottom: 15px;
     }}
 
-    .quote-small {{
+    .disconnected {{
+        background: rgba(229, 107, 111, 0.10);
+        border: 1px solid {ROJO};
+        color: {ROJO};
+        padding: 12px;
+        border-radius: 8px;
+        margin-bottom: 15px;
+    }}
+
+    .metric-box {{
+        background: {CARD_2};
+        border: 1px solid {AZUL_3};
+        border-radius: 10px;
+        padding: 15px;
+        text-align: center;
+    }}
+
+    .metric-label {{
         color: {GRIS};
-        font-size: 13px;
-    }}
-
-
-    /* ==============================
-       TOTAL
-       ============================== */
-
-    .total-box {{
-        background:
-            linear-gradient(
-                135deg,
-                rgba(201,162,39,0.18),
-                rgba(201,162,39,0.05)
-            );
-
-        border: 1px solid rgba(201,162,39,0.45);
-        border-radius: 14px;
-
-        padding: 22px;
-        text-align: right;
-
-        margin-top: 20px;
-    }}
-
-    .total-label {{
-        color: {GRIS};
-        font-size: 13px;
+        font-size: 12px;
         text-transform: uppercase;
         letter-spacing: 1px;
     }}
 
-    .total {{
+    .metric-value {{
         color: {DORADO_CLARO};
-        font-size: 32px;
-        font-weight: 800;
-    }}
-
-
-    /* ==============================
-       GMAIL STATUS
-       ============================== */
-
-    .gmail-connected {{
-        background: rgba(66,200,138,0.08);
-        border: 1px solid rgba(66,200,138,0.30);
-        border-radius: 10px;
-
-        padding: 13px 16px;
-
-        color: {VERDE};
-        font-weight: 600;
-    }}
-
-    .gmail-disconnected {{
-        background: rgba(229,107,111,0.08);
-        border: 1px solid rgba(229,107,111,0.30);
-        border-radius: 10px;
-
-        padding: 13px 16px;
-
-        color: {ROJO};
-        font-weight: 600;
-    }}
-
-
-    /* ==============================
-       SIDEBAR
-       ============================== */
-
-    .sidebar-title {{
-        font-size: 20px;
+        font-size: 22px;
         font-weight: 700;
-        color: {DORADO_CLARO};
-        margin-bottom: 20px;
-    }}
-
-    .agent-box {{
-        background: rgba(255,255,255,0.04);
-        border-radius: 10px;
-        padding: 15px;
-        margin-bottom: 15px;
-    }}
-
-    .agent-label {{
-        color: {GRIS_2};
-        font-size: 12px;
-        text-transform: uppercase;
-    }}
-
-    .agent-name {{
-        color: {BLANCO};
-        font-weight: 600;
         margin-top: 4px;
     }}
 
+    .stTextInput input,
+    .stNumberInput input,
+    .stDateInput input {{
+        background: {CARD_2} !important;
+        color: {BLANCO} !important;
+        border: 1px solid {AZUL_3} !important;
+        border-radius: 8px !important;
+    }}
 
-    /* ==============================
-       ALERTS
-       ============================== */
+    .stSelectbox div[data-baseweb="select"] > div {{
+        background: {CARD_2} !important;
+        color: {BLANCO} !important;
+        border-color: {AZUL_3} !important;
+    }}
 
-    div[data-testid="stAlert"] {{
+    .stTextArea textarea {{
+        background: {CARD_2} !important;
+        color: {BLANCO} !important;
+        border: 1px solid {AZUL_3} !important;
+    }}
+
+    button[kind="primary"] {{
+        background: {DORADO} !important;
+        color: #000000 !important;
+        border: none !important;
+        font-weight: 700 !important;
+    }}
+
+    button[kind="secondary"] {{
+        background: {AZUL_2} !important;
+        color: {BLANCO} !important;
+        border: 1px solid {DORADO} !important;
+    }}
+
+    .preview-container {{
+        background: #ffffff;
         border-radius: 10px;
+        padding: 5px;
     }}
 
     </style>
     """,
-    unsafe_allow_html=True
+    unsafe_allow_html=True,
 )
 
 
 # ============================================================
-# GOOGLE OAUTH
+# FUNCIONES GOOGLE
 # ============================================================
 
-SCOPES = [
-    "https://www.googleapis.com/auth/gmail.compose"
-]
-
-
 def get_google_client_config():
-
-    client_id = st.secrets["google_oauth"]["client_id"]
-    client_secret = st.secrets["google_oauth"]["client_secret"]
+    """
+    Obtiene las credenciales desde Streamlit Secrets.
+    """
 
     return {
         "web": {
-            "client_id": client_id,
-            "client_secret": client_secret,
+            "client_id": st.secrets["google_oauth"]["client_id"],
+            "client_secret": st.secrets["google_oauth"]["client_secret"],
             "auth_uri": "https://accounts.google.com/o/oauth2/auth",
             "token_uri": "https://oauth2.googleapis.com/token",
             "redirect_uris": [
                 st.secrets["google_oauth"]["redirect_uri"]
-            ]
+            ],
         }
     }
 
 
 def create_oauth_flow():
+    """
+    Crea el flujo OAuth.
+    """
 
     config = get_google_client_config()
 
     flow = Flow.from_client_config(
         config,
-        scopes=SCOPES
+        scopes=SCOPES,
+        redirect_uri=st.secrets["google_oauth"]["redirect_uri"],
     )
-
-    flow.redirect_uri = st.secrets["google_oauth"]["redirect_uri"]
 
     return flow
 
 
-def get_credentials():
+def iniciar_google_login():
+    """
+    Genera la URL de autorización.
 
-    if "google_credentials" not in st.session_state:
+    IMPORTANTE:
+    El flow se guarda en session_state para conservar
+    el code_verifier de PKCE.
+    """
+
+    if "oauth_flow" not in st.session_state:
+
+        flow = create_oauth_flow()
+
+        authorization_url, state = flow.authorization_url(
+            access_type="offline",
+            include_granted_scopes="true",
+            prompt="consent",
+        )
+
+        st.session_state["oauth_flow"] = flow
+        st.session_state["oauth_state"] = state
+        st.session_state["oauth_url"] = authorization_url
+
+
+def procesar_callback_google():
+    """
+    Procesa el regreso de Google después del login.
+    """
+
+    code = st.query_params.get("code")
+
+    if not code:
         return None
 
-    credentials_data = st.session_state["google_credentials"]
+    flow = st.session_state.get("oauth_flow")
 
-    credentials = Credentials(
-        token=credentials_data.get("token"),
-        refresh_token=credentials_data.get("refresh_token"),
-        token_uri=credentials_data.get("token_uri"),
-        client_id=credentials_data.get("client_id"),
-        client_secret=credentials_data.get("client_secret"),
-        scopes=credentials_data.get("scopes")
+    if flow is None:
+        st.error(
+            "La sesión de Google expiró. "
+            "Haz clic nuevamente en Iniciar sesión con Google."
+        )
+
+        return None
+
+    estado_google = st.query_params.get("state")
+    estado_guardado = st.session_state.get("oauth_state")
+
+    if (
+        estado_google
+        and estado_guardado
+        and estado_google != estado_guardado
+    ):
+        st.error(
+            "No fue posible validar la sesión de Google."
+        )
+
+        return None
+
+    try:
+
+        flow.fetch_token(code=code)
+
+        credentials = flow.credentials
+
+        st.session_state["google_credentials"] = credentials
+
+        st.session_state.pop("oauth_flow", None)
+        st.session_state.pop("oauth_state", None)
+        st.session_state.pop("oauth_url", None)
+
+        st.query_params.clear()
+
+        return credentials
+
+    except Exception as e:
+
+        st.error(
+            f"No fue posible completar la conexión con Google: {e}"
+        )
+
+        return None
+
+
+def obtener_credentials():
+    """
+    Recupera las credenciales actuales.
+    """
+
+    credentials = st.session_state.get(
+        "google_credentials"
     )
+
+    if credentials is None:
+        return None
+
+    if isinstance(credentials, dict):
+
+        credentials = Credentials.from_authorized_user_info(
+            credentials,
+            SCOPES,
+        )
+
+        st.session_state["google_credentials"] = credentials
 
     if credentials.expired and credentials.refresh_token:
 
@@ -478,17 +356,9 @@ def get_credentials():
 
             credentials.refresh(Request())
 
-            st.session_state["google_credentials"] = {
-                "token": credentials.token,
-                "refresh_token": credentials.refresh_token,
-                "token_uri": credentials.token_uri,
-                "client_id": credentials.client_id,
-                "client_secret": credentials.client_secret,
-                "scopes": credentials.scopes
-            }
+            st.session_state["google_credentials"] = credentials
 
         except Exception:
-
             st.session_state.pop(
                 "google_credentials",
                 None
@@ -499,260 +369,82 @@ def get_credentials():
     return credentials
 
 
-# ============================================================
-# PROCESAR CALLBACK GOOGLE
-# ============================================================
+def obtener_gmail_service():
+    """
+    Construye el servicio Gmail API.
+    """
 
-if "code" in st.query_params:
-
-    code = st.query_params["code"]
-
-    try:
-
-        flow = create_oauth_flow()
-
-        flow.fetch_token(
-            code=code
-        )
-
-        credentials = flow.credentials
-
-        st.session_state["google_credentials"] = {
-            "token": credentials.token,
-            "refresh_token": credentials.refresh_token,
-            "token_uri": credentials.token_uri,
-            "client_id": credentials.client_id,
-            "client_secret": credentials.client_secret,
-            "scopes": credentials.scopes
-        }
-
-        st.query_params.clear()
-
-        st.rerun()
-
-    except Exception as e:
-
-        st.error(
-            f"No fue posible completar la conexión con Google: {e}"
-        )
-
-
-# ============================================================
-# GOOGLE LOGIN
-# ============================================================
-
-def google_login():
-
-    flow = create_oauth_flow()
-
-    authorization_url, state = flow.authorization_url(
-        access_type="offline",
-        include_granted_scopes="true",
-        prompt="consent"
-    )
-
-    st.session_state["oauth_state"] = state
-
-    return authorization_url
-
-
-# ============================================================
-# GMAIL SERVICE
-# ============================================================
-
-def get_gmail_service():
-
-    credentials = get_credentials()
+    credentials = obtener_credentials()
 
     if not credentials:
         return None
 
-    return build(
-        "gmail",
-        "v1",
-        credentials=credentials,
-        cache_discovery=False
-    )
+    try:
 
-
-# ============================================================
-# CREAR MENSAJE MIME
-# ============================================================
-
-def create_email(
-    sender_name,
-    sender_email,
-    guest_email,
-    subject,
-    html_body,
-    attachments
-):
-
-    message = EmailMessage()
-
-    message["From"] = formataddr(
-        (sender_name, sender_email)
-    )
-
-    message["To"] = guest_email
-
-    message["Subject"] = subject
-
-    message.set_content(
-        "Please view this email in an HTML-compatible email client."
-    )
-
-    message.add_alternative(
-        html_body,
-        subtype="html"
-    )
-
-    for attachment in attachments:
-
-        file_data = attachment.getvalue()
-
-        file_name = attachment.name
-
-        mime_type = attachment.type or "application/octet-stream"
-
-        if "/" in mime_type:
-
-            maintype, subtype = mime_type.split(
-                "/",
-                1
-            )
-
-        else:
-
-            maintype = "application"
-            subtype = "octet-stream"
-
-        message.add_attachment(
-            file_data,
-            maintype=maintype,
-            subtype=subtype,
-            filename=file_name
+        service = build(
+            "gmail",
+            "v1",
+            credentials=credentials,
         )
 
-    return message
+        return service
+
+    except Exception as e:
+
+        st.error(
+            f"No fue posible conectar con Gmail: {e}"
+        )
+
+        return None
 
 
-# ============================================================
-# GUARDAR BORRADOR
-# ============================================================
+def obtener_email_usuario():
+    """
+    Obtiene el email de la cuenta autenticada.
+    """
 
-def save_draft(
-    guest_email,
-    subject,
-    html_body,
-    sender_name,
-    sender_email,
-    attachments
-):
-
-    service = get_gmail_service()
+    service = obtener_gmail_service()
 
     if not service:
+        return None
 
-        raise Exception(
-            "Gmail no está conectado."
+    try:
+
+        profile = (
+            service.users()
+            .getProfile(userId="me")
+            .execute()
         )
 
-    message = create_email(
-        sender_name=sender_name,
-        sender_email=sender_email,
-        guest_email=guest_email,
-        subject=subject,
-        html_body=html_body,
-        attachments=attachments
-    )
+        return profile.get("emailAddress")
 
-    raw_message = base64.urlsafe_b64encode(
-        message.as_bytes()
-    ).decode()
+    except Exception as e:
 
-    body = {
-        "message": {
-            "raw": raw_message
-        }
-    }
-
-    draft = service.users().drafts().create(
-        userId="me",
-        body=body
-    ).execute()
-
-    return draft
-
-
-# ============================================================
-# ENVIAR DIRECTAMENTE
-# ============================================================
-
-def send_email(
-    guest_email,
-    subject,
-    html_body,
-    sender_name,
-    sender_email,
-    attachments
-):
-
-    service = get_gmail_service()
-
-    if not service:
-
-        raise Exception(
-            "Gmail no está conectado."
+        st.error(
+            f"No fue posible identificar la cuenta de Gmail: {e}"
         )
 
-    message = create_email(
-        sender_name=sender_name,
-        sender_email=sender_email,
-        guest_email=guest_email,
-        subject=subject,
-        html_body=html_body,
-        attachments=attachments
-    )
-
-    raw_message = base64.urlsafe_b64encode(
-        message.as_bytes()
-    ).decode()
-
-    body = {
-        "raw": raw_message
-    }
-
-    result = service.users().messages().send(
-        userId="me",
-        body=body
-    ).execute()
-
-    return result
+        return None
 
 
 # ============================================================
-# AGENTES
+# PROCESAR CALLBACK ANTES DE DIBUJAR LA APP
 # ============================================================
 
-AGENTES = {
+if "code" in st.query_params:
 
-    "Agente 1": {
-        "nombre": "Agente 1",
-        "email": "correo1@casadorada.com"
-    },
+    procesar_callback_google()
 
-    "Agente 2": {
-        "nombre": "Agente 2",
-        "email": "correo2@casadorada.com"
-    },
 
-    "Agente 3": {
-        "nombre": "Agente 3",
-        "email": "correo3@casadorada.com"
-    }
+# ============================================================
+# LOGIN AUTOMÁTICO
+# ============================================================
 
-}
+credentials = obtener_credentials()
+
+if credentials is None:
+
+    iniciar_google_login()
 
 
 # ============================================================
@@ -762,69 +454,72 @@ AGENTES = {
 with st.sidebar:
 
     st.markdown(
-        '<div class="sidebar-title">CASA DORADA</div>',
-        unsafe_allow_html=True
-    )
-
-    st.markdown(
-        "### Agente"
-    )
-
-    agente_seleccionado = st.selectbox(
-        "Seleccionar agente",
-        list(AGENTES.keys())
-    )
-
-    agente = AGENTES[
-        agente_seleccionado
-    ]
-
-    st.markdown(
         f"""
-        <div class="agent-box">
-
-            <div class="agent-label">
-                Agente
+        <div style="
+            text-align:center;
+            padding:10px 0 20px 0;
+        ">
+            <div style="
+                color:{DORADO_CLARO};
+                font-size:25px;
+                font-weight:700;
+            ">
+                CASA DORADA
             </div>
 
-            <div class="agent-name">
-                {agente["nombre"]}
+            <div style="
+                color:{GRIS};
+                font-size:12px;
+                letter-spacing:1px;
+            ">
+                LOS CABOS RESORT & SPA
             </div>
-
         </div>
         """,
-        unsafe_allow_html=True
+        unsafe_allow_html=True,
     )
 
-    st.divider()
+    st.markdown("---")
 
-    st.markdown(
-        "### Gmail"
-    )
+    st.subheader("🔐 Cuenta de Gmail")
 
-    credentials = get_credentials()
+    credentials = obtener_credentials()
 
     if credentials:
 
-        st.markdown(
-            """
-            <div class="gmail-connected">
-                ● Gmail conectado
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
+        email_usuario = obtener_email_usuario()
 
-        st.write("")
+        if email_usuario:
+
+            st.markdown(
+                f"""
+                <div class="connected">
+                    ✓ Gmail conectado<br>
+                    <strong>{email_usuario}</strong>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+        else:
+
+            st.success("✓ Gmail conectado")
 
         if st.button(
-            "Desconectar Gmail"
+            "Cerrar sesión",
+            use_container_width=True,
         ):
 
-            st.session_state.pop(
+            for key in [
                 "google_credentials",
-                None
-            )
+                "oauth_flow",
+                "oauth_state",
+                "oauth_url",
+            ]:
+                st.session_state.pop(
+                    key,
+                    None,
+                )
 
             st.rerun()
 
@@ -832,43 +527,36 @@ with st.sidebar:
 
         st.markdown(
             """
-            <div class="gmail-disconnected">
-                ● Gmail no conectado
+            <div class="disconnected">
+                Gmail no conectado
             </div>
             """,
-            unsafe_allow_html=True
+            unsafe_allow_html=True,
         )
 
-        st.write("")
+        if "oauth_url" in st.session_state:
 
-        auth_url = google_login()
+            st.link_button(
+                "🔐 Iniciar sesión con Google",
+                st.session_state["oauth_url"],
+                use_container_width=True,
+            )
 
-        st.link_button(
-            "🔐 Conectar mi Gmail",
-            auth_url,
-            use_container_width=True
-        )
+    st.markdown("---")
 
-        st.caption(
-            "Cada agente conecta su propia cuenta de Gmail."
-        )
+    st.subheader("⚙️ Configuración")
 
-    st.divider()
-
-    st.markdown(
-        "### Configuración"
-    )
-
-    moneda = st.selectbox(
+    moneda = st.radio(
         "Moneda",
-        ["USD", "MXN"]
+        ["USD", "MXN"],
+        index=0,
     )
 
     tipo_cambio = st.number_input(
-        "Tipo de cambio",
+        "Tipo de cambio USD → MXN",
         min_value=1.0,
-        value=18.50,
-        step=0.10
+        value=20.0,
+        step=0.1,
     )
 
 
@@ -878,721 +566,770 @@ with st.sidebar:
 
 st.markdown(
     """
-    <div class="main-header">
+    <div class="top-card">
 
-        <div class="brand">
-            CASA <span>DORADA</span>
+        <div class="main-title">
+            Cotizador Casa Dorada
         </div>
 
         <div class="subtitle">
-            Los Cabos Resort & Spa · Reservations
+            Crea cotizaciones profesionales y guárdalas
+            directamente en tu cuenta de Gmail.
         </div>
 
     </div>
     """,
-    unsafe_allow_html=True
+    unsafe_allow_html=True,
 )
 
 
 # ============================================================
-# DATOS DEL HUÉSPED
+# SI NO HAY LOGIN
 # ============================================================
 
-st.markdown(
-    '<div class="section-title">Datos del huésped</div>',
-    unsafe_allow_html=True
+credentials = obtener_credentials()
+
+if not credentials:
+
+    st.info(
+        "Para utilizar el cotizador debes iniciar sesión con Google."
+    )
+
+    if "oauth_url" in st.session_state:
+
+        st.link_button(
+            "🔐 Iniciar sesión con Google",
+            st.session_state["oauth_url"],
+        )
+
+    st.stop()
+
+
+# ============================================================
+# EMAIL DEL AGENTE
+# ============================================================
+
+email_usuario = obtener_email_usuario()
+
+if not email_usuario:
+
+    st.error(
+        "No fue posible identificar tu cuenta de Gmail."
+    )
+
+    st.stop()
+
+
+# ============================================================
+# COLUMNAS PRINCIPALES
+# ============================================================
+
+col_input, col_preview = st.columns(
+    [1, 1],
+    gap="large",
 )
 
-col1, col2 = st.columns(2)
 
-with col1:
+# ============================================================
+# INPUTS
+# ============================================================
 
-    guest_name = st.text_input(
+with col_input:
+
+    st.header("📝 Datos de la Cotización")
+
+    st.markdown(
+        '<div class="section-card">',
+        unsafe_allow_html=True,
+    )
+
+    nombre_huesped = st.text_input(
         "Nombre del huésped",
-        placeholder="John Smith"
+        placeholder="John Smith",
     )
 
-with col2:
-
-    guest_email = st.text_input(
-        "Correo electrónico",
-        placeholder="guest@email.com"
+    email_huesped = st.text_input(
+        "Correo del huésped",
+        placeholder="guest@email.com",
     )
 
+    col1, col2 = st.columns(2)
 
-col3, col4, col5, col6 = st.columns(4)
+    with col1:
 
-with col3:
+        fecha_checkin = st.date_input(
+            "Check in",
+            value=date.today(),
+        )
 
-    check_in = st.date_input(
-        "Check in",
-        value=date.today()
-    )
+    with col2:
 
-with col4:
+        fecha_checkout = st.date_input(
+            "Check out",
+            value=date.today(),
+        )
 
-    check_out = st.date_input(
-        "Check out",
-        value=date.today()
-    )
+    if fecha_checkout > fecha_checkin:
 
-with col5:
+        noches = (
+            fecha_checkout - fecha_checkin
+        ).days
 
-    adults = st.number_input(
-        "Adultos",
-        min_value=1,
-        value=2
-    )
+    else:
 
-with col6:
+        noches = 1
 
-    children = st.number_input(
-        "Niños",
-        min_value=0,
-        value=0
-    )
+        if fecha_checkout < fecha_checkin:
+
+            st.warning(
+                "El check out no puede ser anterior al check in."
+            )
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+
+        adultos = st.number_input(
+            "Adultos",
+            min_value=1,
+            value=2,
+            step=1,
+        )
+
+    with col2:
+
+        menores = st.number_input(
+            "Menores",
+            min_value=0,
+            value=0,
+            step=1,
+        )
+
+    st.markdown("</div>", unsafe_allow_html=True)
 
 
 # ============================================================
-# NOCHES
+# OPCIONES DE COTIZACIÓN
 # ============================================================
 
-nights = (
-    check_out - check_in
-).days
+with col_input:
 
-if nights <= 0:
-
-    st.warning(
-        "La fecha de salida debe ser posterior al check in."
+    st.markdown(
+        '<div class="section-card">',
+        unsafe_allow_html=True,
     )
 
-    nights = 0
+    st.subheader("🏨 Opciones de estancia")
 
+    # --------------------------------------------------------
+    # OPCIÓN 1
+    # --------------------------------------------------------
 
-# ============================================================
-# OPCIONES
-# ============================================================
-
-st.markdown(
-    '<div class="section-title">Opciones de cotización</div>',
-    unsafe_allow_html=True
-)
-
-
-suite_options = [
-    "Junior Suite",
-    "One Bedroom Suite",
-    "One Bedroom Plus w/ Jacuzzi",
-    "Executive Suite",
-    "Two Bedroom Suite",
-    "One Bedroom Penthouse"
-]
-
-
-plan_options = [
-    "EP",
-    "All Inclusive"
-]
-
-
-# ============================================================
-# OPCIÓN 1
-# ============================================================
-
-col1, col2, col3 = st.columns([2, 1, 1])
-
-with col1:
-
-    suite_1 = st.selectbox(
-        "Suite · Opción 1",
-        suite_options,
-        key="suite1"
+    st.markdown(
+        f"### Opción 1"
     )
 
-with col2:
+    col1, col2 = st.columns(2)
 
-    plan_1 = st.selectbox(
-        "Plan",
-        plan_options,
-        key="plan1"
-    )
+    with col1:
 
-with col3:
+        suite_1 = st.selectbox(
+            "Suite",
+            [
+                "Junior Suite",
+                "One Bedroom Suite",
+                "One Bedroom Plus w/ Jacuzzi",
+                "Executive Suite",
+                "Two Bedroom Suite",
+                "One Bedroom Penthouse",
+            ],
+            key="suite_1",
+        )
 
-    rate_1 = st.number_input(
-        "Tarifa por noche",
+    with col2:
+
+        plan_1 = st.selectbox(
+            "Plan",
+            [
+                "European Plan",
+                "All Inclusive",
+            ],
+            key="plan_1",
+        )
+
+    tarifa_1 = st.number_input(
+        "Tarifa por noche USD",
         min_value=0.0,
-        value=350.0,
+        value=320.0,
         step=10.0,
-        key="rate1"
+        key="tarifa_1",
     )
 
-
-# ============================================================
-# OPCIÓN 2
-# ============================================================
-
-col1, col2, col3 = st.columns([2, 1, 1])
-
-with col1:
-
-    suite_2 = st.selectbox(
-        "Suite · Opción 2",
-        suite_options,
-        index=1,
-        key="suite2"
+    link_1 = st.text_input(
+        "Link de reserva Opción 1",
+        value="",
+        placeholder="https://...",
+        key="link_1",
     )
 
-with col2:
+    # --------------------------------------------------------
+    # OPCIÓN 2
+    # --------------------------------------------------------
 
-    plan_2 = st.selectbox(
-        "Plan",
-        plan_options,
-        index=1,
-        key="plan2"
+    st.markdown(
+        "### Opción 2"
     )
 
-with col3:
+    col1, col2 = st.columns(2)
 
-    rate_2 = st.number_input(
-        "Tarifa por noche",
+    with col1:
+
+        suite_2 = st.selectbox(
+            "Suite",
+            [
+                "Junior Suite",
+                "One Bedroom Suite",
+                "One Bedroom Plus w/ Jacuzzi",
+                "Executive Suite",
+                "Two Bedroom Suite",
+                "One Bedroom Penthouse",
+            ],
+            key="suite_2",
+        )
+
+    with col2:
+
+        plan_2 = st.selectbox(
+            "Plan",
+            [
+                "European Plan",
+                "All Inclusive",
+            ],
+            key="plan_2",
+        )
+
+    tarifa_2 = st.number_input(
+        "Tarifa por noche USD",
         min_value=0.0,
-        value=425.0,
+        value=480.0,
         step=10.0,
-        key="rate2"
+        key="tarifa_2",
     )
 
+    link_2 = st.text_input(
+        "Link de reserva Opción 2",
+        value="",
+        placeholder="https://...",
+        key="link_2",
+    )
 
-# ============================================================
-# OPCIÓN 3
-# ============================================================
+    # --------------------------------------------------------
+    # OPCIÓN 3
+    # --------------------------------------------------------
 
-usar_opcion_3 = st.checkbox(
-    "Agregar tercera opción"
-)
+    st.markdown(
+        "### Opción 3"
 
-suite_3 = None
-plan_3 = None
-rate_3 = 0.0
+    )
 
-if usar_opcion_3:
-
-    col1, col2, col3 = st.columns([2, 1, 1])
+    col1, col2 = st.columns(2)
 
     with col1:
 
         suite_3 = st.selectbox(
-            "Suite · Opción 3",
-            suite_options,
-            index=2,
-            key="suite3"
+            "Suite",
+            [
+                "Junior Suite",
+                "One Bedroom Suite",
+                "One Bedroom Plus w/ Jacuzzi",
+                "Executive Suite",
+                "Two Bedroom Suite",
+                "One Bedroom Penthouse",
+            ],
+            key="suite_3",
         )
 
     with col2:
 
         plan_3 = st.selectbox(
             "Plan",
-            plan_options,
-            key="plan3"
+            [
+                "European Plan",
+                "All Inclusive",
+            ],
+            key="plan_3",
         )
 
-    with col3:
+    tarifa_3 = st.number_input(
+        "Tarifa por noche USD",
+        min_value=0.0,
+        value=0.0,
+        step=10.0,
+        key="tarifa_3",
+    )
 
-        rate_3 = st.number_input(
-            "Tarifa por noche",
-            min_value=0.0,
-            value=500.0,
-            step=10.0,
-            key="rate3"
-        )
+    link_3 = st.text_input(
+        "Link de reserva Opción 3",
+        value="",
+        placeholder="Opcional",
+        key="link_3",
+    )
+
+    st.markdown("</div>", unsafe_allow_html=True)
 
 
 # ============================================================
 # TRANSPORTACIÓN
 # ============================================================
 
-st.markdown(
-    '<div class="section-title">Transportación</div>',
-    unsafe_allow_html=True
-)
+with col_input:
 
-col1, col2 = st.columns([1, 3])
+    st.markdown(
+        '<div class="section-card">',
+        unsafe_allow_html=True,
+    )
 
-with col1:
+    st.subheader("🚐 Transportación")
 
     incluir_transportacion = st.checkbox(
-        "Incluir transporte"
+        "Incluir transportación aeropuerto",
+        value=False,
     )
 
-with col2:
+    if incluir_transportacion:
 
-    transportacion = st.number_input(
-        "Transportación roundtrip USD",
-        min_value=0.0,
-        value=267.0,
-        step=10.0,
-        disabled=not incluir_transportacion
-    )
+        traslado_usd = st.number_input(
+            "Roundtrip Airport Transportation USD",
+            min_value=0.0,
+            value=267.0,
+            step=1.0,
+        )
+
+    else:
+
+        traslado_usd = 0.0
+
+    st.markdown("</div>", unsafe_allow_html=True)
 
 
 # ============================================================
 # ARCHIVOS
 # ============================================================
 
-st.markdown(
-    '<div class="section-title">Archivos adjuntos</div>',
-    unsafe_allow_html=True
-)
+with col_input:
 
-attachments = st.file_uploader(
-    "Adjuntar archivos a la cotización",
-    accept_multiple_files=True
-)
+    st.markdown(
+        '<div class="section-card">',
+        unsafe_allow_html=True,
+    )
 
-if attachments is None:
-    attachments = []
+    st.subheader("📎 Archivos adjuntos")
+
+    archivos_adjuntos = st.file_uploader(
+        "Adjuntar PDF, imágenes u otros archivos",
+        accept_multiple_files=True,
+    )
+
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
+# ============================================================
+# TEXTO PERSONALIZADO
+# ============================================================
+
+with col_input:
+
+    st.markdown(
+        '<div class="section-card">',
+        unsafe_allow_html=True,
+    )
+
+    st.subheader("💬 Mensaje adicional")
+
+    mensaje_adicional = st.text_area(
+        "Opcional",
+        placeholder=(
+            "Agrega información adicional para el huésped..."
+        ),
+        height=120,
+    )
+
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
+# ============================================================
+# FUNCIONES DE FORMATO
+# ============================================================
+
+def formatear(monto_usd):
+
+    if moneda == "MXN":
+
+        return (
+            f"${monto_usd * tipo_cambio:,.2f} MXN"
+        )
+
+    return f"${monto_usd:,.2f} USD"
+
+
+def formatear_fecha_es(fecha):
+
+    meses = [
+        "enero",
+        "febrero",
+        "marzo",
+        "abril",
+        "mayo",
+        "junio",
+        "julio",
+        "agosto",
+        "septiembre",
+        "octubre",
+        "noviembre",
+        "diciembre",
+    ]
+
+    return (
+        f"{fecha.day} de "
+        f"{meses[fecha.month - 1]} de "
+        f"{fecha.year}"
+    )
 
 
 # ============================================================
 # TOTALES
 # ============================================================
 
-total_1 = rate_1 * nights
-total_2 = rate_2 * nights
-
-total_3 = 0
-
-if usar_opcion_3:
-    total_3 = rate_3 * nights
-
-
-# ============================================================
-# MOSTRAR TARJETAS
-# ============================================================
-
-cards = []
-
-cards.append(
-    f"""
-    <div class="quote-card">
-
-        <div class="quote-title">
-            {suite_1}
-        </div>
-
-        <div class="quote-small">
-            {plan_1}
-        </div>
-
-        <div class="quote-price">
-            USD ${rate_1:,.2f}
-        </div>
-
-        <div class="quote-small">
-            por noche
-        </div>
-
-        <hr style="border-color:rgba(255,255,255,0.08);">
-
-        <div class="quote-small">
-            {nights} noches
-        </div>
-
-        <div class="quote-small">
-            Total alojamiento:
-            <strong>
-                USD ${total_1:,.2f}
-            </strong>
-        </div>
-
-    </div>
-    """
-)
-
-cards.append(
-    f"""
-    <div class="quote-card">
-
-        <div class="quote-title">
-            {suite_2}
-        </div>
-
-        <div class="quote-small">
-            {plan_2}
-        </div>
-
-        <div class="quote-price">
-            USD ${rate_2:,.2f}
-        </div>
-
-        <div class="quote-small">
-            por noche
-        </div>
-
-        <hr style="border-color:rgba(255,255,255,0.08);">
-
-        <div class="quote-small">
-            {nights} noches
-        </div>
-
-        <div class="quote-small">
-            Total alojamiento:
-            <strong>
-                USD ${total_2:,.2f}
-            </strong>
-        </div>
-
-    </div>
-    """
-)
-
-if usar_opcion_3:
-
-    cards.append(
-        f"""
-        <div class="quote-card">
-
-            <div class="quote-title">
-                {suite_3}
-            </div>
-
-            <div class="quote-small">
-                {plan_3}
-            </div>
-
-            <div class="quote-price">
-                USD ${rate_3:,.2f}
-            </div>
-
-            <div class="quote-small">
-                por noche
-            </div>
-
-            <hr style="border-color:rgba(255,255,255,0.08);">
-
-            <div class="quote-small">
-                {nights} noches
-            </div>
-
-            <div class="quote-small">
-                Total alojamiento:
-                <strong>
-                    USD ${total_3:,.2f}
-                </strong>
-            </div>
-
-        </div>
-        """
-    )
-
-
-columns = st.columns(
-    len(cards)
-)
-
-for column, card in zip(
-    columns,
-    cards
-):
-
-    with column:
-
-        st.markdown(
-            card,
-            unsafe_allow_html=True
-        )
-
-
-# ============================================================
-# TOTAL TRANSPORTACIÓN
-# ============================================================
-
-st.markdown(
-    f"""
-    <div class="total-box">
-
-        <div class="total-label">
-            Transportación
-        </div>
-
-        <div class="total">
-            USD ${transportacion:,.2f}
-        </div>
-
-    </div>
-    """,
-    unsafe_allow_html=True
-)
-
+total_1 = tarifa_1 * noches
+total_2 = tarifa_2 * noches
+total_3 = tarifa_3 * noches
 
 # ============================================================
 # EMAIL HTML
 # ============================================================
 
-subject = (
-    f"Casa Dorada Los Cabos - "
-    f"Accommodation Quote for {guest_name}"
+fecha_checkin_texto = formatear_fecha_es(
+    fecha_checkin
+)
+
+fecha_checkout_texto = formatear_fecha_es(
+    fecha_checkout
 )
 
 
-transport_html = ""
-
-if incluir_transportacion:
-
-    transport_html = f"""
-        <tr>
-            <td style="padding:10px 0;">
-                Airport Transportation
-            </td>
-
-            <td style="
-                padding:10px 0;
-                text-align:right;
-                font-weight:bold;
-            ">
-                USD ${transportacion:,.2f}
-            </td>
-        </tr>
-    """
-
-
-def option_html(
+def crear_bloque_opcion(
+    numero,
     suite,
     plan,
-    rate,
-    total
+    tarifa,
+    total,
+    link,
 ):
+
+    if tarifa <= 0:
+        return ""
+
+    boton = ""
+
+    if link.strip():
+
+        boton = f"""
+        <a
+            href="{link}"
+            style="
+                display:inline-block;
+                background:#0B2545;
+                color:#ffffff;
+                text-decoration:none;
+                padding:12px 22px;
+                border-radius:6px;
+                font-weight:bold;
+                margin-top:10px;
+                border-bottom:3px solid #C9A227;
+            "
+        >
+            RESERVAR OPCIÓN {numero}
+        </a>
+        """
 
     return f"""
     <div style="
-        border:1px solid #d7dce3;
-        border-radius:10px;
-        padding:20px;
-        margin-bottom:18px;
+        border:1px solid #D9DEE5;
+        border-top:4px solid #C9A227;
+        border-radius:8px;
+        padding:22px;
+        margin-bottom:22px;
+        background:#FAFAFA;
     ">
 
-        <h2 style="
-            color:#0A2342;
-            margin-top:0;
-        ">
-            {suite}
-        </h2>
-
-        <p>
-            <strong>Plan:</strong> {plan}
-        </p>
-
-        <p>
-            <strong>Rate:</strong>
-            USD ${rate:,.2f} per night
-        </p>
-
-        <p>
-            <strong>Stay:</strong>
-            {nights} nights
-        </p>
-
-        <p style="
-            font-size:20px;
+        <div style="
+            font-size:19px;
             font-weight:bold;
-            color:#C9A227;
+            color:#0B2545;
+            margin-bottom:8px;
         ">
-            USD ${total:,.2f}
+            Opción {numero}: {plan}
+        </div>
+
+        <div style="
+            color:#555555;
+            font-size:16px;
+            margin-bottom:12px;
+        ">
+            <strong>{suite}</strong>
+        </div>
+
+        <div style="
+            color:#444444;
+            line-height:1.7;
+        ">
+
+            <strong>Estancia:</strong>
+            {fecha_checkin_texto}
+            al
+            {fecha_checkout_texto}
+            ({noches} noches)
+
+            <br>
+
+            <strong>Huéspedes:</strong>
+            {adultos} adultos
+            {f" y {menores} menores" if menores > 0 else ""}
+
+            <br>
+
+            <strong>Tarifa por noche:</strong>
+            <span style="
+                color:#B18A19;
+                font-weight:bold;
+            ">
+                {formatear(tarifa)}
+            </span>
+
+        </div>
+
+        <div style="
+            display:inline-block;
+            background:#EEF2F7;
+            color:#0B2545;
+            font-size:18px;
+            font-weight:bold;
+            padding:9px 14px;
+            margin-top:14px;
+            border-radius:5px;
+        ">
+            Total estancia: {formatear(total)}
+        </div>
+
+        <br>
+
+        {boton}
+
+    </div>
+    """
+
+
+bloques_opciones = ""
+
+bloques_opciones += crear_bloque_opcion(
+    1,
+    suite_1,
+    plan_1,
+    tarifa_1,
+    total_1,
+    link_1,
+)
+
+bloques_opciones += crear_bloque_opcion(
+    2,
+    suite_2,
+    plan_2,
+    tarifa_2,
+    total_2,
+    link_2,
+)
+
+bloques_opciones += crear_bloque_opcion(
+    3,
+    suite_3,
+    plan_3,
+    tarifa_3,
+    total_3,
+    link_3,
+)
+
+
+transportacion_html = ""
+
+if incluir_transportacion:
+
+    transportacion_html = f"""
+    <div style="
+        border-top:1px solid #D9DEE5;
+        padding-top:18px;
+        margin-top:20px;
+    ">
+
+        <strong>Servicios adicionales</strong>
+
+        <p>
+            Roundtrip Airport Transportation:
+            <strong style="color:#B18A19;">
+                {formatear(traslado_usd)}
+            </strong>
         </p>
 
     </div>
     """
 
 
-options_html = ""
+mensaje_adicional_html = ""
 
-options_html += option_html(
-    suite_1,
-    plan_1,
-    rate_1,
-    total_1
-)
+if mensaje_adicional.strip():
 
-options_html += option_html(
-    suite_2,
-    plan_2,
-    rate_2,
-    total_2
-)
-
-if usar_opcion_3:
-
-    options_html += option_html(
-        suite_3,
-        plan_3,
-        rate_3,
-        total_3
-)
+    mensaje_adicional_html = f"""
+    <div style="
+        background:#F5F5F5;
+        padding:15px;
+        border-radius:6px;
+        margin-top:20px;
+    ">
+        {mensaje_adicional}
+    </div>
+    """
 
 
-email_html = f"""
+cuerpo_html = f"""
 <!DOCTYPE html>
 
 <html>
 
+<head>
+
+<meta charset="UTF-8">
+
+<meta name="viewport"
+content="width=device-width, initial-scale=1.0">
+
+</head>
+
 <body style="
     margin:0;
-    padding:0;
-    background:#f3f5f7;
+    padding:20px;
+    background:#F4F5F7;
     font-family:Arial,Helvetica,sans-serif;
 ">
 
 <div style="
-    max-width:720px;
+    max-width:680px;
     margin:auto;
-    background:white;
+    background:#ffffff;
+    border-radius:10px;
+    overflow:hidden;
 ">
 
     <div style="
-        background:#0A2342;
+        background:#0B2545;
         padding:30px;
         text-align:center;
+        border-bottom:4px solid #C9A227;
     ">
 
-        <h1 style="
-            color:white;
-            margin:0;
-        ">
-            CASA <span style="color:#D8B85A;">
-                DORADA
-            </span>
-        </h1>
-
-        <p style="
-            color:#d8dee7;
-            margin-bottom:0;
-        ">
-            Los Cabos Resort & Spa
-        </p>
+        <img
+            src="https://casadorada.com/wp-content/uploads/2021/04/logo-casa-dorada.png"
+            alt="Casa Dorada Los Cabos Resort & Spa"
+            style="
+                max-width:220px;
+                width:100%;
+                height:auto;
+            "
+        >
 
     </div>
 
 
     <div style="
         padding:30px;
+        color:#333333;
+        line-height:1.65;
     ">
 
-        <h2 style="
-            color:#0A2342;
-        ">
-            Accommodation Quote
-        </h2>
-
-        <p>
-            Dear {guest_name},
-        </p>
-
-        <p>
-            Thank you for considering Casa Dorada Los Cabos
-            for your upcoming stay.
-        </p>
-
-        <div style="
-            background:#f5f7f9;
-            padding:18px;
-            border-radius:8px;
-            margin:20px 0;
-        ">
-
-            <strong>Stay details</strong>
-
-            <p style="margin-bottom:5px;">
-                Check in:
-                {check_in.strftime("%B %d, %Y")}
-            </p>
-
-            <p style="margin-bottom:5px;">
-                Check out:
-                {check_out.strftime("%B %d, %Y")}
-            </p>
-
-            <p style="margin-bottom:5px;">
-                Guests:
-                {adults} adults
-                {f"and {children} children" if children else ""}
-            </p>
-
-        </div>
-
-
-        <h2 style="
-            color:#0A2342;
-        ">
-            Accommodation Options
-        </h2>
-
-        {options_html}
-
-
-        {f'''
-        <table style="
-            width:100%;
-            border-collapse:collapse;
-            margin-top:20px;
-        ">
-
-            {transport_html}
-
-        </table>
-        ''' if incluir_transportacion else ""}
-
-
-        <div style="
-            margin-top:30px;
-            padding:20px;
-            background:#0A2342;
-            color:white;
-            border-radius:8px;
-        ">
-
-            <p style="
-                margin:0;
-                color:#D8B85A;
-                font-size:13px;
-            ">
-                RESERVATION
-            </p>
-
-            <p>
-                Reservation is guaranteed with first night
-                deposit.
-            </p>
-
-        </div>
-
-
         <p style="
-            margin-top:30px;
+            color:#0B2545;
+            font-size:19px;
+            font-weight:bold;
         ">
-            We look forward to welcoming you to
-            Casa Dorada Los Cabos.
+            Estimado/a {nombre_huesped},
         </p>
 
+
         <p>
-            Best regards,<br>
-            <strong>{agente["nombre"]}</strong><br>
-            Reservations<br>
-            Casa Dorada Los Cabos Resort & Spa
+            Es un verdadero placer saludarle desde
+            <strong>
+                Casa Dorada Los Cabos Resort & Spa
+            </strong>.
         </p>
+
+
+        <p>
+            A continuación, nos complace presentarle
+            nuestra propuesta personalizada para su
+            próxima estancia:
+        </p>
+
+
+        {bloques_opciones}
+
+
+        {transportacion_html}
+
+
+        {mensaje_adicional_html}
+
+
+        <div style="
+            border-top:1px solid #D9DEE5;
+            padding-top:20px;
+            margin-top:25px;
+            font-size:13px;
+            color:#666666;
+        ">
+
+            <strong>Políticas:</strong>
+
+            <br>
+
+            Reservation is guaranteed with first night deposit.
+
+            <br>
+
+            Cancelación de acuerdo con la tarifa seleccionada.
+
+        </div>
 
     </div>
 
 
     <div style="
-        background:#0A2342;
-        padding:20px;
+        background:#0B2545;
+        color:#AAB6C5;
         text-align:center;
-        color:#aab6c5;
+        padding:22px;
         font-size:12px;
+        border-top:2px solid #C9A227;
     ">
+
+        <strong style="color:#ffffff;">
+            {email_usuario}
+        </strong>
+
+        <br>
 
         Casa Dorada Los Cabos Resort & Spa
+
+        <br>
+
+        Medano Beach, Cabo San Lucas, BCS
 
     </div>
 
@@ -1605,124 +1342,330 @@ email_html = f"""
 
 
 # ============================================================
-# PREVIEW
+# VISTA PREVIA
 # ============================================================
 
-st.markdown(
-    '<div class="section-title">Vista previa del correo</div>',
-    unsafe_allow_html=True
-)
+with col_preview:
 
-with st.expander(
-    "👁 Ver correo completo"
-):
+    st.header("👁️ Vista Previa")
+
+    st.markdown(
+        f"""
+        <div class="metric-box">
+
+            <div class="metric-label">
+                Huésped
+            </div>
+
+            <div class="metric-value">
+                {nombre_huesped if nombre_huesped else "Sin nombre"}
+            </div>
+
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.write("")
 
     st.components.v1.html(
-        email_html,
+        cuerpo_html,
         height=900,
-        scrolling=True
+        scrolling=True,
     )
+
+
+# ============================================================
+# CREAR MENSAJE MIME
+# ============================================================
+
+def crear_mensaje_mime():
+
+    msg = EmailMessage()
+
+    msg["From"] = email_usuario
+
+    msg["To"] = email_huesped
+
+    msg["Subject"] = (
+        f"Cotización Especial | "
+        f"Casa Dorada Los Cabos - "
+        f"{nombre_huesped}"
+    )
+
+    msg.set_content(
+        "Por favor visualice este correo en un cliente "
+        "de correo compatible con HTML."
+    )
+
+    msg.add_alternative(
+        cuerpo_html,
+        subtype="html",
+    )
+
+    if archivos_adjuntos:
+
+        for archivo in archivos_adjuntos:
+
+            contenido = archivo.getvalue()
+
+            nombre_archivo = archivo.name
+
+            tipo_mime = archivo.type
+
+            if tipo_mime and "/" in tipo_mime:
+
+                maintype, subtype = tipo_mime.split(
+                    "/",
+                    1,
+                )
+
+            else:
+
+                maintype = "application"
+                subtype = "octet-stream"
+
+            msg.add_attachment(
+                contenido,
+                maintype=maintype,
+                subtype=subtype,
+                filename=nombre_archivo,
+            )
+
+    return msg
+
+
+# ============================================================
+# FUNCIONES GMAIL API
+# ============================================================
+
+def mensaje_raw_base64(msg):
+
+    raw_message = base64.urlsafe_b64encode(
+        msg.as_bytes()
+    ).decode()
+
+    return raw_message
+
+
+def guardar_borrador():
+
+    service = obtener_gmail_service()
+
+    if not service:
+        raise Exception(
+            "No existe conexión con Gmail."
+        )
+
+    msg = crear_mensaje_mime()
+
+    raw_message = mensaje_raw_base64(msg)
+
+    body = {
+        "message": {
+            "raw": raw_message
+        }
+    }
+
+    resultado = (
+        service.users()
+        .drafts()
+        .create(
+            userId="me",
+            body=body,
+        )
+        .execute()
+    )
+
+    return resultado
+
+
+def enviar_correo():
+
+    service = obtener_gmail_service()
+
+    if not service:
+        raise Exception(
+            "No existe conexión con Gmail."
+        )
+
+    msg = crear_mensaje_mime()
+
+    raw_message = mensaje_raw_base64(msg)
+
+    body = {
+        "raw": raw_message
+    }
+
+    resultado = (
+        service.users()
+        .messages()
+        .send(
+            userId="me",
+            body=body,
+        )
+        .execute()
+    )
+
+    return resultado
 
 
 # ============================================================
 # BOTONES
 # ============================================================
 
-st.markdown("")
+st.markdown("---")
 
-col1, col2 = st.columns(2)
+col_btn1, col_btn2 = st.columns(2)
 
 
-with col1:
+with col_btn1:
 
-    if st.button(
-        "💾 GUARDAR EN BORRADORES",
-        use_container_width=True
-    ):
+    btn_borrador = st.button(
+        "📝 Guardar en Borradores",
+        type="primary",
+        use_container_width=True,
+    )
 
-        if not credentials:
 
-            st.error(
-                "Primero debes conectar tu Gmail."
-            )
+with col_btn2:
 
-        elif not guest_email:
+    btn_enviar = st.button(
+        "🚀 Enviar Ahora",
+        use_container_width=True,
+    )
 
-            st.error(
-                "Ingresa el correo del huésped."
-            )
 
-        elif not guest_name:
+# ============================================================
+# VALIDACIONES
+# ============================================================
 
-            st.error(
-                "Ingresa el nombre del huésped."
-            )
+def validar_cotizacion():
 
-        else:
+    errores = []
+
+    if not nombre_huesped.strip():
+
+        errores.append(
+            "Ingresa el nombre del huésped."
+        )
+
+    if not email_huesped.strip():
+
+        errores.append(
+            "Ingresa el correo del huésped."
+        )
+
+    if "@" not in email_huesped:
+
+        errores.append(
+            "El correo del huésped no parece válido."
+        )
+
+    if tarifa_1 <= 0:
+
+        errores.append(
+            "La Opción 1 debe tener una tarifa."
+        )
+
+    if fecha_checkout <= fecha_checkin:
+
+        errores.append(
+            "La fecha de check out debe ser posterior "
+            "al check in."
+        )
+
+    return errores
+
+
+# ============================================================
+# GUARDAR BORRADOR
+# ============================================================
+
+if btn_borrador:
+
+    errores = validar_cotizacion()
+
+    if errores:
+
+        for error in errores:
+
+            st.error(error)
+
+    else:
+
+        with st.spinner(
+            "Guardando borrador en Gmail..."
+        ):
 
             try:
 
-                draft = save_draft(
-                    guest_email=guest_email,
-                    subject=subject,
-                    html_body=email_html,
-                    sender_name=agente["nombre"],
-                    sender_email=agente["email"],
-                    attachments=attachments
+                resultado = guardar_borrador()
+
+                draft_id = resultado.get(
+                    "id",
+                    "N/A",
                 )
 
                 st.success(
-                    "✅ Cotización guardada correctamente "
-                    "en los borradores de tu Gmail."
+                    f"✓ Borrador guardado correctamente "
+                    f"en **{email_usuario}**."
+                )
+
+                st.caption(
+                    f"Draft ID: {draft_id}"
                 )
 
             except Exception as e:
 
                 st.error(
-                    f"Error al crear el borrador: {e}"
+                    f"No fue posible guardar el borrador: {e}"
                 )
 
 
-with col2:
+# ============================================================
+# ENVIAR EMAIL
+# ============================================================
 
-    if st.button(
-        "📤 ENVIAR CORREO",
-        use_container_width=True
-    ):
+if btn_enviar:
 
-        if not credentials:
+    errores = validar_cotizacion()
 
-            st.error(
-                "Primero debes conectar tu Gmail."
-            )
+    if errores:
 
-        elif not guest_email:
+        for error in errores:
 
-            st.error(
-                "Ingresa el correo del huésped."
-            )
+            st.error(error)
 
-        else:
+    else:
+
+        with st.spinner(
+            "Enviando correo..."
+        ):
 
             try:
 
-                result = send_email(
-                    guest_email=guest_email,
-                    subject=subject,
-                    html_body=email_html,
-                    sender_name=agente["nombre"],
-                    sender_email=agente["email"],
-                    attachments=attachments
+                resultado = enviar_correo()
+
+                message_id = resultado.get(
+                    "id",
+                    "N/A",
                 )
 
                 st.success(
-                    "✅ Correo enviado correctamente."
+                    f"✓ Correo enviado correctamente "
+                    f"desde **{email_usuario}** "
+                    f"a **{email_huesped}**."
+                )
+
+                st.caption(
+                    f"Message ID: {message_id}"
                 )
 
             except Exception as e:
 
                 st.error(
-                    f"Error al enviar el correo: {e}"
+                    f"No fue posible enviar el correo: {e}"
                 )
 
 
@@ -1731,16 +1674,19 @@ with col2:
 # ============================================================
 
 st.markdown(
-    """
+    f"""
     <div style="
         text-align:center;
-        margin-top:50px;
-        padding:20px;
-        color:#6F7D8D;
-        font-size:12px;
+        color:{GRIS_2};
+        font-size:11px;
+        padding:30px 0 10px 0;
     ">
-        Casa Dorada Los Cabos · Reservations
+
+        Casa Dorada Cotizador
+        <br>
+        Gmail conectado: {email_usuario}
+
     </div>
     """,
-    unsafe_allow_html=True
+    unsafe_allow_html=True,
 )
