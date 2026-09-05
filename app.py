@@ -15,14 +15,14 @@ from googleapiclient.discovery import build
 
 
 # ============================================================
-# CONFIGURACIÓN GENERAL
+# CONFIGURACIÓN
 # ============================================================
 
 st.set_page_config(
     page_title="Cotizador Casa Dorada",
     page_icon="✉️",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded",
 )
 
 
@@ -38,7 +38,7 @@ SCOPES = [
 
 
 # ============================================================
-# CONFIGURACIÓN DE HABITACIONES
+# HABITACIONES
 # ============================================================
 
 ROOM_TYPES = {
@@ -124,9 +124,9 @@ MEAL_PLANS = {
 
 
 # ============================================================
-# LISTA CENTRAL DE BENEFICIOS
+# BENEFICIOS
 #
-# AQUÍ PUEDES AGREGAR / QUITAR BENEFICIOS
+# AGREGA O QUITA BENEFICIOS DESDE AQUÍ
 # ============================================================
 
 AVAILABLE_INCLUSIONS = [
@@ -143,8 +143,7 @@ AVAILABLE_INCLUSIONS = [
 
 # ============================================================
 # LOGO
-#
-# SOLO SE UTILIZA DENTRO DEL EMAIL
+# SOLO SE USA EN EL EMAIL
 # ============================================================
 
 EMAIL_LOGO_URL = (
@@ -168,30 +167,26 @@ All reservations are subject to hotel availability and confirmation.
 
 
 # ============================================================
-# ESTILOS DE LA APLICACIÓN
+# CSS DE LA APLICACIÓN
 # ============================================================
 
 st.markdown(
     """
     <style>
 
-    /* ======================================================
-       GLOBAL
-       ====================================================== */
+    /* ================================
+       APP
+       ================================ */
 
     .stApp {
         background:
             radial-gradient(
                 circle at top right,
-                rgba(43, 70, 100, 0.25),
+                rgba(50, 80, 115, 0.22),
                 transparent 35%
             ),
             #111827;
-        color: #f3f4f6;
-    }
-
-    .main {
-        background: transparent;
+        color: #f8fafc;
     }
 
     .block-container {
@@ -201,9 +196,9 @@ st.markdown(
     }
 
 
-    /* ======================================================
+    /* ================================
        SIDEBAR
-       ====================================================== */
+       ================================ */
 
     section[data-testid="stSidebar"] {
         background: #0b1220;
@@ -211,13 +206,13 @@ st.markdown(
     }
 
     section[data-testid="stSidebar"] * {
-        color: #f3f4f6;
+        color: #f8fafc;
     }
 
 
-    /* ======================================================
+    /* ================================
        INPUTS
-       ====================================================== */
+       ================================ */
 
     div[data-baseweb="input"] > div,
     div[data-baseweb="textarea"] > div,
@@ -241,73 +236,9 @@ st.markdown(
     }
 
 
-    /* ======================================================
-       TÍTULOS
-       ====================================================== */
-
-    h1, h2, h3, h4 {
-        color: #f8fafc !important;
-    }
-
-
-    /* ======================================================
-       CARDS
-       ====================================================== */
-
-    .dark-card {
-        background: #182235;
-        border: 1px solid #2c3a4f;
-        border-radius: 14px;
-        padding: 20px;
-        margin-bottom: 18px;
-    }
-
-    .section-title {
-        font-size: 18px;
-        font-weight: 700;
-        color: #f8fafc;
-        margin-bottom: 14px;
-    }
-
-    .section-subtitle {
-        color: #94a3b8;
-        font-size: 13px;
-        margin-bottom: 15px;
-    }
-
-
-    /* ======================================================
-       OPTION CARD
-       ====================================================== */
-
-    .option-header {
-        background: linear-gradient(
-            135deg,
-            #22324a,
-            #1b2739
-        );
-        border: 1px solid #34445c;
-        border-radius: 12px;
-        padding: 14px 18px;
-        margin-bottom: 15px;
-    }
-
-    .option-number {
-        font-size: 17px;
-        font-weight: 700;
-        color: #ffffff;
-    }
-
-    .option-description {
-        color: #94a3b8;
-        font-size: 12px;
-        margin-top: 3px;
-    }
-
-
-    /* ======================================================
+    /* ================================
        CHECKBOXES
-       ====================================================== */
+       ================================ */
 
     div[data-testid="stCheckbox"] {
         background: #141e2f;
@@ -323,9 +254,9 @@ st.markdown(
     }
 
 
-    /* ======================================================
+    /* ================================
        BUTTONS
-       ====================================================== */
+       ================================ */
 
     .stButton > button {
         border-radius: 9px;
@@ -342,9 +273,9 @@ st.markdown(
     }
 
 
-    /* ======================================================
-       STATUS
-       ====================================================== */
+    /* ================================
+       CONNECTED BOX
+       ================================ */
 
     .connected-box {
         background: rgba(22, 163, 74, 0.12);
@@ -368,28 +299,35 @@ st.markdown(
     }
 
 
-    /* ======================================================
-       PREVIEW
-       ====================================================== */
+    /* ================================
+       OPTION CONTAINER
+       ================================ */
 
-    .preview-wrapper {
+    .option-container {
+        background: #182235;
+        border: 1px solid #2c3a4f;
+        border-radius: 14px;
+        padding: 20px;
+        margin-top: 12px;
+        margin-bottom: 20px;
+    }
+
+
+    /* ================================
+       PREVIEW
+       ================================ */
+
+    .preview-container {
         background: #0b1220;
         border: 1px solid #2c3a4f;
         border-radius: 14px;
         padding: 18px;
     }
 
-    .preview-title {
-        color: #f8fafc;
-        font-weight: 700;
-        font-size: 18px;
-        margin-bottom: 12px;
-    }
 
-
-    /* ======================================================
-       DIVIDER
-       ====================================================== */
+    /* ================================
+       DIVIDERS
+       ================================ */
 
     hr {
         border-color: #293548 !important;
@@ -397,21 +335,28 @@ st.markdown(
 
     </style>
     """,
-    unsafe_allow_html=True
+    unsafe_allow_html=True,
 )
 
 
 # ============================================================
-# HELPERS OAUTH
+# OAUTH HELPERS
 # ============================================================
 
 def b64url_encode(data):
-    return base64.urlsafe_b64encode(data).decode().rstrip("=")
+
+    return base64.urlsafe_b64encode(
+        data
+    ).decode().rstrip("=")
 
 
 def b64url_decode(value):
+
     padding = "=" * (-len(value) % 4)
-    return base64.urlsafe_b64decode(value + padding)
+
+    return base64.urlsafe_b64decode(
+        value + padding
+    )
 
 
 def get_oauth_config():
@@ -427,57 +372,76 @@ def get_oauth_config():
 
 def get_state_secret():
 
-    config = get_oauth_config()
-
-    return config["client_secret"].encode("utf-8")
+    return get_oauth_config()[
+        "client_secret"
+    ].encode("utf-8")
 
 
 def sign_state(payload):
 
     payload_json = json.dumps(
         payload,
-        separators=(",", ":")
+        separators=(",", ":"),
     ).encode("utf-8")
 
-    encoded = b64url_encode(payload_json)
+    encoded = b64url_encode(
+        payload_json
+    )
 
     signature = hmac.new(
         get_state_secret(),
         encoded.encode("utf-8"),
-        hashlib.sha256
+        hashlib.sha256,
     ).digest()
 
-    return encoded + "." + b64url_encode(signature)
+    return (
+        encoded
+        + "."
+        + b64url_encode(signature)
+    )
 
 
 def verify_state(state):
 
     try:
 
-        encoded, signature = state.split(".", 1)
+        encoded, signature = state.split(
+            ".",
+            1
+        )
 
         expected = hmac.new(
             get_state_secret(),
             encoded.encode("utf-8"),
-            hashlib.sha256
+            hashlib.sha256,
         ).digest()
 
-        received = b64url_decode(signature)
+        received = b64url_decode(
+            signature
+        )
 
-        if not hmac.compare_digest(expected, received):
+        if not hmac.compare_digest(
+            expected,
+            received
+        ):
             return None
 
         payload = json.loads(
-            b64url_decode(encoded).decode("utf-8")
+            b64url_decode(
+                encoded
+            ).decode("utf-8")
         )
 
         return payload
 
     except Exception:
+
         return None
 
 
-def create_oauth_flow(code_verifier=None):
+def create_oauth_flow(
+    code_verifier=None
+):
 
     config = get_oauth_config()
 
@@ -485,8 +449,13 @@ def create_oauth_flow(code_verifier=None):
         "web": {
             "client_id": config["client_id"],
             "client_secret": config["client_secret"],
-            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-            "token_uri": "https://oauth2.googleapis.com/token",
+            "auth_uri": (
+                "https://accounts.google.com/"
+                "o/oauth2/auth"
+            ),
+            "token_uri": (
+                "https://oauth2.googleapis.com/token"
+            ),
             "redirect_uris": [
                 config["redirect_uri"]
             ],
@@ -500,6 +469,7 @@ def create_oauth_flow(code_verifier=None):
     )
 
     if code_verifier:
+
         flow.code_verifier = code_verifier
 
     return flow
@@ -513,78 +483,71 @@ def get_google_login_url():
         .replace("_", "")
     )
 
-    flow = create_oauth_flow(
-        code_verifier=code_verifier
-    )
-
-    authorization_url, state = (
-        flow.authorization_url(
-            access_type="offline",
-            include_granted_scopes="true",
-            prompt="consent",
-            code_challenge_method="S256",
-            code_challenge=(
-                hashlib.sha256(
-                    code_verifier.encode("utf-8")
-                ).digest()
-            )
-        )
+    code_challenge = b64url_encode(
+        hashlib.sha256(
+            code_verifier.encode("utf-8")
+        ).digest()
     )
 
     payload = {
-        "oauth_state": state,
         "code_verifier": code_verifier,
         "created_at": datetime.utcnow().timestamp(),
     }
 
-    signed_state = sign_state(payload)
+    signed_state = sign_state(
+        payload
+    )
 
-    parsed = authorization_url.split("?")[0]
+    config = get_oauth_config()
 
-    query = urlencode({
-        "client_id": get_oauth_config()["client_id"],
-        "redirect_uri": get_oauth_config()["redirect_uri"],
+    params = {
+        "client_id": config["client_id"],
+        "redirect_uri": config["redirect_uri"],
         "response_type": "code",
         "scope": " ".join(SCOPES),
         "access_type": "offline",
         "include_granted_scopes": "true",
         "prompt": "consent",
         "state": signed_state,
-        "code_challenge": b64url_encode(
-            hashlib.sha256(
-                code_verifier.encode("utf-8")
-            ).digest()
-        ),
+        "code_challenge": code_challenge,
         "code_challenge_method": "S256",
-    })
+    }
 
-    return parsed + "?" + query
+    return (
+        "https://accounts.google.com/o/oauth2/v2/auth?"
+        + urlencode(params)
+    )
 
 
 def process_google_callback():
 
-    query_params = st.query_params
-
-    code = query_params.get("code")
-    state = query_params.get("state")
+    code = st.query_params.get("code")
+    state = st.query_params.get("state")
 
     if not code or not state:
+
         return False
 
     payload = verify_state(state)
 
     if not payload:
+
         st.error(
             "No fue posible validar la sesión de Google."
         )
+
         return False
 
-    code_verifier = payload.get("code_verifier")
+    code_verifier = payload.get(
+        "code_verifier"
+    )
 
     if not code_verifier:
+
         st.error(
             "No se encontró el código de seguridad de OAuth."
         )
+
         return False
 
     try:
@@ -595,13 +558,15 @@ def process_google_callback():
 
         flow.fetch_token(
             code=code,
-            code_verifier=code_verifier
+            code_verifier=code_verifier,
         )
 
         credentials = flow.credentials
 
         st.session_state.google_credentials = (
-            credentials_to_dict(credentials)
+            credentials_to_dict(
+                credentials
+            )
         )
 
         st.session_state.google_connected = True
@@ -619,7 +584,9 @@ def process_google_callback():
         return False
 
 
-def credentials_to_dict(credentials):
+def credentials_to_dict(
+    credentials
+):
 
     return {
         "token": credentials.token,
@@ -633,40 +600,48 @@ def credentials_to_dict(credentials):
 
 def get_credentials():
 
-    credentials_data = st.session_state.get(
+    data = st.session_state.get(
         "google_credentials"
     )
 
-    if not credentials_data:
+    if not data:
+
         return None
 
     credentials = Credentials(
-        token=credentials_data.get("token"),
-        refresh_token=credentials_data.get(
+        token=data.get("token"),
+        refresh_token=data.get(
             "refresh_token"
         ),
-        token_uri=credentials_data.get(
+        token_uri=data.get(
             "token_uri"
         ),
-        client_id=credentials_data.get(
+        client_id=data.get(
             "client_id"
         ),
-        client_secret=credentials_data.get(
+        client_secret=data.get(
             "client_secret"
         ),
-        scopes=credentials_data.get(
+        scopes=data.get(
             "scopes"
         ),
     )
 
-    if credentials.expired and credentials.refresh_token:
+    if (
+        credentials.expired
+        and credentials.refresh_token
+    ):
 
         try:
 
-            credentials.refresh(Request())
+            credentials.refresh(
+                Request()
+            )
 
             st.session_state.google_credentials = (
-                credentials_to_dict(credentials)
+                credentials_to_dict(
+                    credentials
+                )
             )
 
         except Exception:
@@ -681,12 +656,13 @@ def get_gmail_service():
     credentials = get_credentials()
 
     if not credentials:
+
         return None
 
     return build(
         "gmail",
         "v1",
-        credentials=credentials
+        credentials=credentials,
     )
 
 
@@ -695,17 +671,22 @@ def get_connected_email():
     service = get_gmail_service()
 
     if not service:
+
         return None
 
     try:
 
         profile = (
             service.users()
-            .getProfile(userId="me")
+            .getProfile(
+                userId="me"
+            )
             .execute()
         )
 
-        return profile.get("emailAddress")
+        return profile.get(
+            "emailAddress"
+        )
 
     except Exception:
 
@@ -713,18 +694,17 @@ def get_connected_email():
 
 
 # ============================================================
-# EMAIL
+# EMAIL HELPERS
 # ============================================================
 
 def html_escape(value):
 
     if value is None:
+
         return ""
 
-    value = str(value)
-
     return (
-        value
+        str(value)
         .replace("&", "&amp;")
         .replace("<", "&lt;")
         .replace(">", "&gt;")
@@ -749,13 +729,17 @@ def money(value):
 def format_date_email(value):
 
     if not value:
+
         return ""
 
     try:
 
         if isinstance(value, date):
+
             d = value
+
         else:
+
             d = datetime.strptime(
                 str(value),
                 "%Y-%m-%d"
@@ -778,7 +762,9 @@ def calculate_total(
 
     try:
 
-        nightly = float(nightly_rate)
+        nightly = float(
+            nightly_rate
+        )
 
     except Exception:
 
@@ -786,22 +772,29 @@ def calculate_total(
 
     try:
 
-        number_nights = int(nights)
+        number_nights = int(
+            nights
+        )
 
     except Exception:
 
         number_nights = 0
 
-    total_before_taxes = (
-        nightly * number_nights
+    subtotal = (
+        nightly
+        * number_nights
     )
 
     if taxes_included:
 
-        return total_before_taxes
+        return subtotal
 
-    return total_before_taxes * 1.30
+    return subtotal * 1.30
 
+
+# ============================================================
+# OPTION HTML
+# ============================================================
 
 def build_option_html(
     option_number,
@@ -826,13 +819,15 @@ def build_option_html(
     total = calculate_total(
         nightly_rate,
         nights,
-        taxes_included
+        taxes_included,
     )
 
-    if taxes_included:
-        total_label = "Stay total"
-    else:
-        total_label = "Stay total including taxes"
+    total_label = (
+        "Stay total"
+        if taxes_included
+        else "Stay total including taxes"
+    )
+
 
     inclusions_html = ""
 
@@ -863,7 +858,9 @@ def build_option_html(
         </li>
         """
 
+
     buttons_html = ""
+
 
     if room_360_url:
 
@@ -886,6 +883,7 @@ def build_option_html(
         </a>
         """
 
+
     if payment_url:
 
         buttons_html += f"""
@@ -905,12 +903,14 @@ def build_option_html(
         </a>
         """
 
+
     additional_service_html = ""
 
     if additional_service:
 
         additional_service_html = f"""
         <tr>
+
             <td style="
                 padding:6px 0;
                 color:#555555;
@@ -927,8 +927,10 @@ def build_option_html(
             ">
                 {html_escape(additional_service)}
             </td>
+
         </tr>
         """
+
 
     return f"""
 
@@ -944,6 +946,7 @@ def build_option_html(
            ">
 
         <tr>
+
             <td style="
                 padding:20px;
             ">
@@ -957,6 +960,7 @@ def build_option_html(
                     Option {option_number}
                 </div>
 
+
                 <div style="
                     color:#333333;
                     font-size:20px;
@@ -965,6 +969,7 @@ def build_option_html(
                 ">
                     {html_escape(room_type)}
                 </div>
+
 
                 <div style="
                     color:#777777;
@@ -981,6 +986,7 @@ def build_option_html(
                        border="0">
 
                     <tr>
+
                         <td style="
                             padding:6px 0;
                             color:#555555;
@@ -999,9 +1005,12 @@ def build_option_html(
                             {money(nightly_rate)}
                             / night
                         </td>
+
                     </tr>
 
+
                     <tr>
+
                         <td style="
                             padding:6px 0;
                             color:#555555;
@@ -1018,7 +1027,9 @@ def build_option_html(
                         ">
                             {html_escape(nights)}
                         </td>
+
                     </tr>
+
 
                     {additional_service_html}
 
@@ -1035,12 +1046,15 @@ def build_option_html(
                     Included
                 </div>
 
+
                 <ul style="
                     padding-left:22px;
                     margin-top:8px;
                     margin-bottom:20px;
                 ">
+
                     {inclusions_html}
+
                 </ul>
 
 
@@ -1082,7 +1096,9 @@ def build_option_html(
                 <div style="
                     margin-top:20px;
                 ">
+
                     {buttons_html}
+
                 </div>
 
 
@@ -1091,21 +1107,30 @@ def build_option_html(
                     color:#777777;
                     font-size:12px;
                 ">
+
                     Quote valid until:
                     <strong>
                         {html_escape(
-                            format_date_email(valid_until)
+                            format_date_email(
+                                valid_until
+                            )
                         )}
                     </strong>
+
                 </div>
 
             </td>
+
         </tr>
 
     </table>
 
     """
 
+
+# ============================================================
+# EMAIL COMPLETO
+# ============================================================
 
 def build_email_html(
     guest_name,
@@ -1135,8 +1160,12 @@ def build_email_html(
             selected_inclusions=option[
                 "selected_inclusions"
             ],
-            payment_url=option["payment_url"],
-            room_360_url=option["room_360_url"],
+            payment_url=option[
+                "payment_url"
+            ],
+            room_360_url=option[
+                "room_360_url"
+            ],
             additional_service=option[
                 "additional_service"
             ],
@@ -1144,12 +1173,13 @@ def build_email_html(
         )
 
 
-    children_text = ""
+    children_html = ""
 
     if children > 0:
 
-        children_text = f"""
+        children_html = f"""
         <tr>
+
             <td style="
                 padding:5px 0;
                 color:#666666;
@@ -1166,6 +1196,7 @@ def build_email_html(
             ">
                 {html_escape(children)}
             </td>
+
         </tr>
         """
 
@@ -1215,6 +1246,7 @@ def build_email_html(
     font-family:Arial,Helvetica,sans-serif;
 ">
 
+
 <table width="100%"
        cellpadding="0"
        cellspacing="0"
@@ -1224,6 +1256,7 @@ def build_email_html(
 
 <td align="center"
     style="padding:30px 10px;">
+
 
 <table width="600"
        cellpadding="0"
@@ -1240,7 +1273,7 @@ def build_email_html(
        ">
 
 
-<!-- HEADER -->
+<!-- LOGO -->
 
 <tr>
 
@@ -1307,6 +1340,7 @@ Dear {html_escape(guest_name)},
 
 </p>
 
+
 <p style="
     color:#555555;
     font-size:14px;
@@ -1345,6 +1379,7 @@ quotation and available options.
            border-radius:6px;
            padding:15px;
        ">
+
 
 <tr>
 
@@ -1430,7 +1465,7 @@ Adults
 </tr>
 
 
-{children_text}
+{children_html}
 
 
 <tr>
@@ -1458,6 +1493,7 @@ Nights
 
 </tr>
 
+
 </table>
 
 </td>
@@ -1484,7 +1520,9 @@ Available Options
 
 </div>
 
+
 {options_html}
+
 
 </td>
 
@@ -1509,6 +1547,7 @@ Available Options
 Booking Policies
 
 </div>
+
 
 <ul style="
     margin:0;
@@ -1545,6 +1584,7 @@ Casa Dorada Los Cabos Resort & Spa
 
 </div>
 
+
 <div style="
     color:#dbeafe;
     font-size:12px;
@@ -1562,11 +1602,13 @@ Medano Beach, Cabo San Lucas, Mexico
 
 </table>
 
+
 </td>
 
 </tr>
 
 </table>
+
 
 </body>
 
@@ -1575,7 +1617,7 @@ Medano Beach, Cabo San Lucas, Mexico
 
 
 # ============================================================
-# GMAIL MESSAGE
+# GMAIL
 # ============================================================
 
 def create_gmail_message(
@@ -1596,25 +1638,29 @@ def create_gmail_message(
 
     message.add_alternative(
         html_body,
-        subtype="html"
+        subtype="html",
     )
+
 
     if attachments:
 
         for attachment in attachments:
 
             file_name = attachment.name
-
             file_bytes = attachment.getvalue()
 
-            mime_type = attachment.type or (
-                "application/octet-stream"
+            mime_type = (
+                attachment.type
+                or "application/octet-stream"
             )
 
             if "/" in mime_type:
 
                 maintype, subtype = (
-                    mime_type.split("/", 1)
+                    mime_type.split(
+                        "/",
+                        1
+                    )
                 )
 
             else:
@@ -1629,9 +1675,13 @@ def create_gmail_message(
                 filename=file_name,
             )
 
-    encoded_message = base64.urlsafe_b64encode(
-        message.as_bytes()
-    ).decode()
+
+    encoded_message = (
+        base64.urlsafe_b64encode(
+            message.as_bytes()
+        )
+        .decode()
+    )
 
     return {
         "raw": encoded_message
@@ -1648,6 +1698,7 @@ def save_gmail_draft(
     service = get_gmail_service()
 
     if not service:
+
         raise Exception(
             "No hay una cuenta de Gmail conectada."
         )
@@ -1668,7 +1719,7 @@ def save_gmail_draft(
         .drafts()
         .create(
             userId="me",
-            body=draft
+            body=draft,
         )
         .execute()
     )
@@ -1684,6 +1735,7 @@ def send_gmail_message(
     service = get_gmail_service()
 
     if not service:
+
         raise Exception(
             "No hay una cuenta de Gmail conectada."
         )
@@ -1700,7 +1752,7 @@ def send_gmail_message(
         .messages()
         .send(
             userId="me",
-            body=message
+            body=message,
         )
         .execute()
     )
@@ -1721,10 +1773,13 @@ if "google_credentials" not in st.session_state:
 
 
 # ============================================================
-# PROCESAR CALLBACK DE GOOGLE
+# CALLBACK GOOGLE
 # ============================================================
 
-if "code" in st.query_params and "state" in st.query_params:
+if (
+    "code" in st.query_params
+    and "state" in st.query_params
+):
 
     process_google_callback()
 
@@ -1736,17 +1791,7 @@ if "code" in st.query_params and "state" in st.query_params:
 with st.sidebar:
 
     st.markdown(
-        """
-        <div style="
-            font-size:20px;
-            font-weight:700;
-            margin-bottom:18px;
-            color:#f8fafc;
-        ">
-            Gmail
-        </div>
-        """,
-        unsafe_allow_html=True
+        "## Gmail"
     )
 
 
@@ -1769,7 +1814,7 @@ with st.sidebar:
 
             </div>
             """,
-            unsafe_allow_html=True
+            unsafe_allow_html=True,
         )
 
     else:
@@ -1792,12 +1837,12 @@ with st.sidebar:
                    padding:12px 10px;
                    border-radius:9px;
                    font-weight:600;
-                   margin-bottom:15px;
+                   margin-bottom:12px;
                ">
                Connect Google Account
             </a>
             """,
-            unsafe_allow_html=True
+            unsafe_allow_html=True,
         )
 
         st.caption(
@@ -1809,17 +1854,7 @@ with st.sidebar:
 
 
     st.markdown(
-        """
-        <div style="
-            font-size:16px;
-            font-weight:700;
-            color:#f8fafc;
-            margin-bottom:12px;
-        ">
-            Quote Settings
-        </div>
-        """,
-        unsafe_allow_html=True
+        "### Quote Settings"
     )
 
 
@@ -1833,105 +1868,82 @@ with st.sidebar:
     st.divider()
 
 
-    st.markdown(
-        """
-        <div style="
-            color:#94a3b8;
-            font-size:12px;
-            line-height:1.5;
-        ">
-        Cada opción puede tener habitación,
-        tarifa, beneficios, link de pago y
-        vista 360° diferentes.
-        </div>
-        """,
-        unsafe_allow_html=True
+    st.caption(
+        "Cada opción puede tener habitación, "
+        "tarifa, beneficios, link de pago y "
+        "vista 360° diferentes."
     )
 
 
 # ============================================================
-# TÍTULO PRINCIPAL
+# TÍTULO
 # ============================================================
 
-st.markdown(
-    """
-    <h1 style="
-        margin-bottom:5px;
-        font-size:28px;
-    ">
-        Create Quotation
-    </h1>
+st.title(
+    "Create Quotation"
+)
 
-    <div style="
-        color:#94a3b8;
-        font-size:14px;
-        margin-bottom:25px;
-    ">
-        Create a professional quotation and
-        save it directly to your Casa Dorada Gmail.
-    </div>
-    """,
-    unsafe_allow_html=True
+st.caption(
+    "Create a professional quotation and "
+    "save it directly to your Casa Dorada Gmail."
 )
 
 
 # ============================================================
-# DATOS DEL HUÉSPED
+# GUEST INFORMATION
 # ============================================================
 
 st.markdown(
-    """
-    <div class="dark-card">
+    "## Guest Information"
+)
 
-        <div class="section-title">
-            Guest Information
-        </div>
-
-        <div class="section-subtitle">
-            Basic information for the quotation.
-        </div>
-
-    </div>
-    """,
-    unsafe_allow_html=True
+st.caption(
+    "Basic information for the quotation."
 )
 
 
 guest_col1, guest_col2 = st.columns(2)
 
+
 with guest_col1:
 
     guest_name = st.text_input(
         "Guest name",
-        placeholder="John Smith"
+        placeholder="John Smith",
     )
+
 
 with guest_col2:
 
     guest_email = st.text_input(
         "Guest email",
-        placeholder="guest@email.com"
+        placeholder="guest@email.com",
     )
 
 
 guest_col3, guest_col4 = st.columns(2)
 
+
 with guest_col3:
 
     arrival = st.date_input(
         "Arrival",
-        value=date.today()
+        value=date.today(),
     )
+
 
 with guest_col4:
 
     departure = st.date_input(
         "Departure",
-        value=date.today()
+        value=date.today(),
     )
 
 
-guest_col5, guest_col6, guest_col7 = st.columns(3)
+guest_col5, guest_col6, guest_col7 = (
+    st.columns(3)
+)
+
 
 with guest_col5:
 
@@ -1940,8 +1952,9 @@ with guest_col5:
         min_value=1,
         max_value=20,
         value=2,
-        step=1
+        step=1,
     )
+
 
 with guest_col6:
 
@@ -1950,8 +1963,9 @@ with guest_col6:
         min_value=0,
         max_value=20,
         value=0,
-        step=1
+        step=1,
     )
+
 
 with guest_col7:
 
@@ -1960,6 +1974,7 @@ with guest_col7:
     ).days
 
     if calculated_nights < 1:
+
         calculated_nights = 1
 
     nights = st.number_input(
@@ -1967,15 +1982,15 @@ with guest_col7:
         min_value=1,
         max_value=365,
         value=calculated_nights,
-        step=1
+        step=1,
     )
 
 
-st.markdown("<br>", unsafe_allow_html=True)
+st.divider()
 
 
 # ============================================================
-# OPCIONES DE COTIZACIÓN
+# OPCIONES
 # ============================================================
 
 all_options = []
@@ -1983,36 +1998,24 @@ all_options = []
 
 for option_number in range(
     1,
-    number_options + 1
+    number_options + 1,
 ):
 
     st.markdown(
-        f"""
-        <div class="dark-card">
+        f"## Quotation Option {option_number}"
+    )
 
-            <div class="option-header">
-
-                <div class="option-number">
-                    Quotation Option {option_number}
-                </div>
-
-                <div class="option-description">
-                    Configure this option independently.
-                </div>
-
-            </div>
-
-        </div>
-        """,
-        unsafe_allow_html=True
+    st.caption(
+        "Configure this option independently."
     )
 
 
     # --------------------------------------------------------
-    # ROOM + PLAN
+    # HABITACIÓN / PLAN
     # --------------------------------------------------------
 
     col1, col2 = st.columns(2)
+
 
     with col1:
 
@@ -2039,7 +2042,7 @@ for option_number in range(
 
 
     # --------------------------------------------------------
-    # RATE
+    # TARIFA
     # --------------------------------------------------------
 
     rate_col1, rate_col2, rate_col3 = (
@@ -2078,31 +2081,16 @@ for option_number in range(
 
 
     # --------------------------------------------------------
-    # INCLUSIONS
+    # BENEFICIOS
     # --------------------------------------------------------
 
     st.markdown(
-        """
-        <div style="
-            margin-top:18px;
-            margin-bottom:8px;
-            font-size:15px;
-            font-weight:700;
-            color:#f8fafc;
-        ">
-            Included Benefits
-        </div>
+        "### Included Benefits"
+    )
 
-        <div style="
-            color:#94a3b8;
-            font-size:12px;
-            margin-bottom:12px;
-        ">
-            Select independently what is included
-            in this quotation option.
-        </div>
-        """,
-        unsafe_allow_html=True
+    st.caption(
+        "Select independently what is included "
+        "in this quotation option."
     )
 
 
@@ -2112,13 +2100,16 @@ for option_number in range(
         ]
     )
 
+
     for inclusion in MEAL_PLANS[
         plan_code
     ]["default_inclusions"]:
 
         if inclusion not in defaults:
 
-            defaults.append(inclusion)
+            defaults.append(
+                inclusion
+            )
 
 
     signature = (
@@ -2134,8 +2125,10 @@ for option_number in range(
     )
 
 
-    previous_signature = st.session_state.get(
-        signature_key
+    previous_signature = (
+        st.session_state.get(
+            signature_key
+        )
     )
 
 
@@ -2153,7 +2146,9 @@ for option_number in range(
 
             st.session_state[
                 checkbox_key
-            ] = inclusion in defaults
+            ] = (
+                inclusion in defaults
+            )
 
 
         st.session_state[
@@ -2193,22 +2188,11 @@ for option_number in range(
 
 
     # --------------------------------------------------------
-    # OPTIONAL LINKS
+    # LINKS
     # --------------------------------------------------------
 
     st.markdown(
-        """
-        <div style="
-            margin-top:20px;
-            margin-bottom:10px;
-            font-size:15px;
-            font-weight:700;
-            color:#f8fafc;
-        ">
-            Optional Links
-        </div>
-        """,
-        unsafe_allow_html=True
+        "### Optional Links"
     )
 
 
@@ -2221,7 +2205,10 @@ for option_number in range(
             "360° room view link",
             value=ROOM_TYPES[
                 room_type
-            ].get("360_url", ""),
+            ].get(
+                "360_url",
+                ""
+            ),
             placeholder="https://...",
             key=f"room_360_{option_number}",
         )
@@ -2237,7 +2224,7 @@ for option_number in range(
 
 
     # --------------------------------------------------------
-    # ADDITIONAL SERVICE
+    # SERVICIO ADICIONAL
     # --------------------------------------------------------
 
     additional_service = st.text_input(
@@ -2270,10 +2257,7 @@ for option_number in range(
     )
 
 
-    st.markdown(
-        "<br>",
-        unsafe_allow_html=True
-    )
+    st.divider()
 
 
 # ============================================================
@@ -2281,21 +2265,12 @@ for option_number in range(
 # ============================================================
 
 st.markdown(
-    """
-    <div class="dark-card">
+    "## Booking Policies"
+)
 
-        <div class="section-title">
-            Booking Policies
-        </div>
-
-        <div class="section-subtitle">
-            These policies will appear at the bottom
-            of the quotation email.
-        </div>
-
-    </div>
-    """,
-    unsafe_allow_html=True
+st.caption(
+    "These policies will appear at the bottom "
+    "of the quotation email."
 )
 
 
@@ -2307,7 +2282,7 @@ policies = st.text_area(
 
 
 # ============================================================
-# GENERAR HTML
+# CREAR EMAIL
 # ============================================================
 
 email_html = build_email_html(
@@ -2327,29 +2302,19 @@ email_html = build_email_html(
 # ============================================================
 
 st.markdown(
-    "<br>",
-    unsafe_allow_html=True
+    "## Email Preview"
 )
 
-st.markdown(
-    """
-    <div class="preview-wrapper">
-
-        <div class="preview-title">
-            Email Preview
-        </div>
-
-    </div>
-    """,
-    unsafe_allow_html=True
+st.caption(
+    "This is how the quotation will appear in the email."
 )
 
 
 st.components.v1.html(
     email_html,
     height=(
-        850 +
-        (number_options * 500)
+        850
+        + number_options * 500
     ),
     scrolling=True,
 )
@@ -2359,16 +2324,23 @@ st.components.v1.html(
 # ACCIONES
 # ============================================================
 
-st.markdown("<br>", unsafe_allow_html=True)
+st.markdown(
+    "## Actions"
+)
+
 
 action_col1, action_col2 = st.columns(2)
 
 
 subject = (
-    f"Your Custom Quotation "
-    f"Casa Dorada Los Cabos"
+    "Your Custom Quotation "
+    "Casa Dorada Los Cabos"
 )
 
+
+# ============================================================
+# SAVE DRAFT
+# ============================================================
 
 with action_col1:
 
@@ -2393,7 +2365,7 @@ with action_col1:
 
             try:
 
-                draft = save_gmail_draft(
+                save_gmail_draft(
                     to_email=guest_email,
                     subject=subject,
                     html_body=email_html,
@@ -2410,6 +2382,10 @@ with action_col1:
                     f"Could not save draft: {e}"
                 )
 
+
+# ============================================================
+# SEND
+# ============================================================
 
 with action_col2:
 
