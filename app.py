@@ -15,11 +15,11 @@ from googleapiclient.discovery import build
 
 
 # ============================================================
-# CONFIGURACIÓN
+# CONFIGURACIÓN GENERAL
 # ============================================================
 
 st.set_page_config(
-    page_title="Cotizador Casa Dorada",
+    page_title="Casa Dorada Quotation",
     page_icon="✉️",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -27,7 +27,7 @@ st.set_page_config(
 
 
 # ============================================================
-# GOOGLE OAUTH
+# CONFIGURACIÓN DE GOOGLE
 # ============================================================
 
 SCOPES = [
@@ -38,60 +38,71 @@ SCOPES = [
 
 
 # ============================================================
-# HABITACIONES
+# IMPUESTOS
+# ============================================================
+
+TAX_RATE = 0.30
+
+
+# ============================================================
+# LOGO
+# SOLO SE UTILIZA EN EL EMAIL
+# ============================================================
+
+EMAIL_LOGO_URL = (
+    "https://umutu.com/wp-content/uploads/2021/02/Logo-2-3.png"
+)
+
+
+# ============================================================
+# TIPOS DE HABITACIÓN
 # ============================================================
 
 ROOM_TYPES = {
     "Junior Suite": {
         "default_inclusions": [
-            "Accommodation",
-            "Daily breakfast",
-            "WiFi",
+            "Free Wi-Fi",
+            "Free Breakfast Buffet at Maydan Restaurant",
         ],
         "360_url": "",
     },
 
     "One Bedroom Suite": {
         "default_inclusions": [
-            "Accommodation",
-            "Daily breakfast",
-            "WiFi",
+            "Free Wi-Fi",
+            "Free Breakfast Buffet at Maydan Restaurant",
         ],
         "360_url": "",
     },
 
     "One Bedroom Plus w/ Jacuzzi": {
         "default_inclusions": [
-            "Accommodation",
-            "Daily breakfast",
-            "WiFi",
+            "Free Wi-Fi",
+            "Free Breakfast Buffet at Maydan Restaurant",
         ],
         "360_url": "",
     },
 
     "Executive Suite": {
         "default_inclusions": [
-            "Accommodation",
-            "Daily breakfast",
-            "WiFi",
+            "Free Wi-Fi",
+            "Free Breakfast Buffet at Maydan Restaurant",
         ],
         "360_url": "",
     },
 
     "Two Bedroom Suite": {
         "default_inclusions": [
-            "Accommodation",
-            "Daily breakfast",
-            "WiFi",
+            "Free Wi-Fi",
+            "Free Breakfast Buffet at Maydan Restaurant",
         ],
         "360_url": "",
     },
 
     "One Bedroom Penthouse": {
         "default_inclusions": [
-            "Accommodation",
-            "Daily breakfast",
-            "WiFi",
+            "Free Wi-Fi",
+            "Free Breakfast Buffet at Maydan Restaurant",
         ],
         "360_url": "",
     },
@@ -105,19 +116,13 @@ ROOM_TYPES = {
 MEAL_PLANS = {
     "EP": {
         "name": "European Plan",
-        "default_inclusions": [
-            "Accommodation",
-            "Daily breakfast",
-        ],
+        "default_inclusions": [],
     },
 
     "AI": {
         "name": "All Inclusive",
         "default_inclusions": [
-            "Accommodation",
-            "All Inclusive",
-            "Food and beverages",
-            "Domestic beverages",
+            "All Inclusive Package",
         ],
     },
 }
@@ -126,44 +131,118 @@ MEAL_PLANS = {
 # ============================================================
 # BENEFICIOS
 #
-# AGREGA O QUITA BENEFICIOS DESDE AQUÍ
+# PUEDES AGREGAR O QUITAR BENEFICIOS AQUÍ
 # ============================================================
 
 AVAILABLE_INCLUSIONS = [
-    "Accommodation",
-    "Daily breakfast",
-    "All Inclusive",
-    "Food and beverages",
-    "Domestic beverages",
-    "WiFi",
-    "Airport transportation",
-    "Welcome amenity",
+    "Free Wi-Fi",
+
+    "Free Valet Parking",
+
+    "Free Breakfast Buffet at Maydan Restaurant",
+
+    "30% discount on food and beverages "
+    "(does not apply to room service, minibar, or other promotions)",
+
+    "25% discount on food and beverages "
+    "(does not apply to room service, minibar, or other promotions)",
+
+    "25% discount at Saltwater Spa "
+    "(50 and 80 minute massages)",
+
+    "30% discount at Saltwater Spa "
+    "(50 and 80 minute massages)",
+
+    "All Inclusive Package",
+
+    "30% Discount for Room Service",
+
+    "Free Spa Access (Wet Areas)",
+
+    "20% discount at Saltwater Spa "
+    "(No Salon Services)",
+
+    "Buy one Full Body Massage 80 minutes at Saltwater Spa "
+    "and the second is free",
+
+    "USD $100.00 Food and Beverage Credit "
+    "(This credit is non-transferable and non-redeemable "
+    "for cash, credits are non-cumulative, per reservation)",
+
+    "USD $100.00 Dining Credit "
+    "(This credit is non-transferable and non-redeemable "
+    "for cash, credits are non-cumulative, per reservation)",
+
+    "$100.00 USD Dinner Credit at 12 Tribes "
+    "(This credit is non-transferable and non-redeemable "
+    "for cash, credits are non-cumulative, per reservation)",
+
+    "Round Trip Transportation",
+
+    "One Way Transportation",
+
+    "Romantic Three-Course Dinner on the Beach",
+
+    "1 Seasonal Fruit Amenity per Stay",
+
+    "12 drinks included per day "
+    "(4 beers, 4 soft drinks and 4 bottles of water)",
+
+    "1 bottle of house wine upon arrival per stay "
+    "(bottle available in stock)",
 ]
 
 
 # ============================================================
-# LOGO
-# SOLO SE USA EN EL EMAIL
+# SERVICIOS ADICIONALES
+#
+# LOS PRECIOS SON EN USD
 # ============================================================
 
-EMAIL_LOGO_URL = (
-    "https://umutu.com/wp-content/uploads/2021/02/Logo-2-3.png"
-)
+ADDITIONAL_SERVICES = {
+    "Round Trip Transportation": 267.00,
+    "One Way Transportation": 149.00,
+    "Early Check In": 130.00,
+    "Late Check Out": 130.00,
+}
 
 
 # ============================================================
-# POLÍTICAS
+# DEPOSIT POLICIES
 # ============================================================
 
-DEFAULT_POLICIES = """
-Reservation is guaranteed with first night deposit.
+DEPOSIT_POLICIES = [
+    "The deposit for the whole stay with taxes included "
+    "is required upon booking.",
 
-The remaining balance is due 45 days prior to arrival.
+    "The deposit for the first night with taxes included "
+    "is required upon booking.",
+]
 
-Non refundable rates cannot be cancelled or modified.
 
-All reservations are subject to hotel availability and confirmation.
-"""
+# ============================================================
+# CANCELLATION POLICIES
+# ============================================================
+
+CANCELLATION_POLICIES = [
+
+    "Non-refundable, no modifications are allowed. "
+    "In case of early departure or no show, "
+    "no reimbursement will apply.",
+
+    "Reservations can be canceled 4 days before arrival "
+    "free of charge. 1 night stay (tax included) penalty "
+    "charge if canceled less than 4 days before arrival.",
+
+    "Reservations can be canceled 14 days before arrival "
+    "free of charge. 1 night stay (tax included) penalty "
+    "charge if canceled less than 14 days before arrival.",
+
+    "Reservations can be cancelled 45 days prior to arrival "
+    "without charge. Full stay (tax included) charges "
+    "penalty if cancelled less than 45 days prior to arrival. "
+    "Time is based on the property's local time.",
+]
 
 
 # ============================================================
@@ -174,18 +253,14 @@ st.markdown(
     """
     <style>
 
-    /* ================================
-       APP
-       ================================ */
-
     .stApp {
         background:
             radial-gradient(
                 circle at top right,
-                rgba(50, 80, 115, 0.22),
+                rgba(47, 73, 105, 0.25),
                 transparent 35%
             ),
-            #111827;
+            #101827;
         color: #f8fafc;
     }
 
@@ -196,13 +271,11 @@ st.markdown(
     }
 
 
-    /* ================================
-       SIDEBAR
-       ================================ */
+    /* SIDEBAR */
 
     section[data-testid="stSidebar"] {
-        background: #0b1220;
-        border-right: 1px solid #263244;
+        background: #0a1220;
+        border-right: 1px solid #273449;
     }
 
     section[data-testid="stSidebar"] * {
@@ -210,9 +283,7 @@ st.markdown(
     }
 
 
-    /* ================================
-       INPUTS
-       ================================ */
+    /* INPUTS */
 
     div[data-baseweb="input"] > div,
     div[data-baseweb="textarea"] > div,
@@ -236,16 +307,14 @@ st.markdown(
     }
 
 
-    /* ================================
-       CHECKBOXES
-       ================================ */
+    /* CHECKBOXES */
 
     div[data-testid="stCheckbox"] {
-        background: #141e2f;
-        border: 1px solid #27364b;
+        background: #151f30;
+        border: 1px solid #2b394d;
         border-radius: 8px;
         padding: 6px 10px;
-        margin-bottom: 5px;
+        margin-bottom: 6px;
     }
 
     div[data-testid="stCheckbox"]:hover {
@@ -254,9 +323,7 @@ st.markdown(
     }
 
 
-    /* ================================
-       BUTTONS
-       ================================ */
+    /* BUTTONS */
 
     .stButton > button {
         border-radius: 9px;
@@ -269,13 +336,11 @@ st.markdown(
 
     .stButton > button:hover {
         border-color: #94a3b8;
-        color: #ffffff;
+        color: white;
     }
 
 
-    /* ================================
-       CONNECTED BOX
-       ================================ */
+    /* CONNECTION */
 
     .connected-box {
         background: rgba(22, 163, 74, 0.12);
@@ -299,35 +364,28 @@ st.markdown(
     }
 
 
-    /* ================================
-       OPTION CONTAINER
-       ================================ */
+    /* OPTION */
 
-    .option-container {
+    .option-card {
         background: #182235;
-        border: 1px solid #2c3a4f;
+        border: 1px solid #2d3b50;
         border-radius: 14px;
         padding: 20px;
-        margin-top: 12px;
+        margin-top: 10px;
         margin-bottom: 20px;
     }
 
 
-    /* ================================
-       PREVIEW
-       ================================ */
+    /* PREVIEW */
 
-    .preview-container {
+    .preview-header {
         background: #0b1220;
-        border: 1px solid #2c3a4f;
+        border: 1px solid #2d3b50;
         border-radius: 14px;
-        padding: 18px;
+        padding: 16px;
+        margin-bottom: 10px;
     }
 
-
-    /* ================================
-       DIVIDERS
-       ================================ */
 
     hr {
         border-color: #293548 !important;
@@ -340,23 +398,16 @@ st.markdown(
 
 
 # ============================================================
-# OAUTH HELPERS
+# FUNCIONES OAUTH
 # ============================================================
 
 def b64url_encode(data):
-
-    return base64.urlsafe_b64encode(
-        data
-    ).decode().rstrip("=")
+    return base64.urlsafe_b64encode(data).decode().rstrip("=")
 
 
 def b64url_decode(value):
-
     padding = "=" * (-len(value) % 4)
-
-    return base64.urlsafe_b64decode(
-        value + padding
-    )
+    return base64.urlsafe_b64decode(value + padding)
 
 
 def get_oauth_config():
@@ -407,7 +458,7 @@ def verify_state(state):
 
         encoded, signature = state.split(
             ".",
-            1
+            1,
         )
 
         expected = hmac.new(
@@ -422,17 +473,15 @@ def verify_state(state):
 
         if not hmac.compare_digest(
             expected,
-            received
+            received,
         ):
             return None
 
-        payload = json.loads(
+        return json.loads(
             b64url_decode(
                 encoded
             ).decode("utf-8")
         )
-
-        return payload
 
     except Exception:
 
@@ -451,7 +500,7 @@ def create_oauth_flow(
             "client_secret": config["client_secret"],
             "auth_uri": (
                 "https://accounts.google.com/"
-                "o/oauth2/auth"
+                "o/oauth2/v2/auth"
             ),
             "token_uri": (
                 "https://oauth2.googleapis.com/token"
@@ -584,9 +633,7 @@ def process_google_callback():
         return False
 
 
-def credentials_to_dict(
-    credentials
-):
+def credentials_to_dict(credentials):
 
     return {
         "token": credentials.token,
@@ -694,8 +741,79 @@ def get_connected_email():
 
 
 # ============================================================
-# EMAIL HELPERS
+# FUNCIONES DE CÁLCULO
 # ============================================================
+
+def calculate_rate_values(
+    stay_total_tax_included,
+    nights,
+):
+
+    try:
+
+        total_with_tax = float(
+            stay_total_tax_included
+        )
+
+    except Exception:
+
+        total_with_tax = 0.0
+
+    try:
+
+        number_nights = int(
+            nights
+        )
+
+    except Exception:
+
+        number_nights = 1
+
+    if number_nights <= 0:
+
+        number_nights = 1
+
+    total_before_tax = (
+        total_with_tax
+        / (1 + TAX_RATE)
+    )
+
+    taxes = (
+        total_with_tax
+        - total_before_tax
+    )
+
+    nightly_with_tax = (
+        total_with_tax
+        / number_nights
+    )
+
+    nightly_before_tax = (
+        total_before_tax
+        / number_nights
+    )
+
+    return {
+        "total_with_tax": total_with_tax,
+        "total_before_tax": total_before_tax,
+        "taxes": taxes,
+        "nightly_with_tax": nightly_with_tax,
+        "nightly_before_tax": nightly_before_tax,
+    }
+
+
+def money(value):
+
+    try:
+
+        return "${:,.2f} USD".format(
+            float(value)
+        )
+
+    except Exception:
+
+        return "$0.00 USD"
+
 
 def html_escape(value):
 
@@ -711,19 +829,6 @@ def html_escape(value):
         .replace('"', "&quot;")
         .replace("'", "&#039;")
     )
-
-
-def money(value):
-
-    try:
-
-        return "${:,.2f} USD".format(
-            float(value)
-        )
-
-    except Exception:
-
-        return "$0.00 USD"
 
 
 def format_date_email(value):
@@ -754,46 +859,8 @@ def format_date_email(value):
         return str(value)
 
 
-def calculate_total(
-    nightly_rate,
-    nights,
-    taxes_included
-):
-
-    try:
-
-        nightly = float(
-            nightly_rate
-        )
-
-    except Exception:
-
-        nightly = 0
-
-    try:
-
-        number_nights = int(
-            nights
-        )
-
-    except Exception:
-
-        number_nights = 0
-
-    subtotal = (
-        nightly
-        * number_nights
-    )
-
-    if taxes_included:
-
-        return subtotal
-
-    return subtotal * 1.30
-
-
 # ============================================================
-# OPTION HTML
+# EMAIL OPTION
 # ============================================================
 
 def build_option_html(
@@ -801,56 +868,66 @@ def build_option_html(
     room_type,
     plan,
     valid_until,
-    nightly_rate,
-    taxes_included,
+    nights,
+    stay_total_tax_included,
     selected_inclusions,
+    selected_services,
+    deposit_policy,
+    cancellation_policy,
     payment_url,
     room_360_url,
-    additional_service,
-    nights,
 ):
 
-    rate_label = (
-        "Rate taxes included"
-        if taxes_included
-        else "Rate before taxes"
-    )
-
-    total = calculate_total(
-        nightly_rate,
+    calculations = calculate_rate_values(
+        stay_total_tax_included,
         nights,
-        taxes_included,
     )
 
-    total_label = (
-        "Stay total"
-        if taxes_included
-        else "Stay total including taxes"
-    )
+    total_with_tax = calculations[
+        "total_with_tax"
+    ]
 
+    total_before_tax = calculations[
+        "total_before_tax"
+    ]
+
+    taxes = calculations[
+        "taxes"
+    ]
+
+    nightly_with_tax = calculations[
+        "nightly_with_tax"
+    ]
+
+    nightly_before_tax = calculations[
+        "nightly_before_tax"
+    ]
+
+
+    # --------------------------------------------------------
+    # BENEFICIOS
+    # --------------------------------------------------------
 
     inclusions_html = ""
 
-    if selected_inclusions:
+    for inclusion in selected_inclusions:
 
-        for inclusion in selected_inclusions:
+        inclusions_html += f"""
+        <li style="
+            margin-bottom:7px;
+            color:#444444;
+            font-size:14px;
+            line-height:1.4;
+        ">
+            {html_escape(inclusion)}
+        </li>
+        """
 
-            inclusions_html += f"""
-            <li style="
-                margin-bottom:7px;
-                color:#444444;
-                font-size:14px;
-                line-height:1.4;
-            ">
-                {html_escape(inclusion)}
-            </li>
-            """
 
-    else:
+    if not inclusions_html:
 
         inclusions_html = """
         <li style="
-            margin-bottom:7px;
             color:#777777;
             font-size:14px;
         ">
@@ -858,6 +935,75 @@ def build_option_html(
         </li>
         """
 
+
+    # --------------------------------------------------------
+    # SERVICIOS
+    # --------------------------------------------------------
+
+    services_html = ""
+
+    additional_services_total = 0.0
+
+
+    for service in selected_services:
+
+        price = ADDITIONAL_SERVICES[
+            service
+        ]
+
+        additional_services_total += price
+
+        services_html += f"""
+        <tr>
+
+            <td style="
+                padding:6px 0;
+                color:#555555;
+                font-size:14px;
+            ">
+                {html_escape(service)}
+            </td>
+
+            <td style="
+                padding:6px 0;
+                color:#222222;
+                font-size:14px;
+                text-align:right;
+            ">
+                {money(price)}
+            </td>
+
+        </tr>
+        """
+
+
+    if not services_html:
+
+        services_html = """
+        <tr>
+
+            <td colspan="2"
+                style="
+                    padding:6px 0;
+                    color:#777777;
+                    font-size:14px;
+                ">
+                No additional services
+            </td>
+
+        </tr>
+        """
+
+
+    final_total = (
+        total_with_tax
+        + additional_services_total
+    )
+
+
+    # --------------------------------------------------------
+    # BOTONES
+    # --------------------------------------------------------
 
     buttons_html = ""
 
@@ -904,33 +1050,9 @@ def build_option_html(
         """
 
 
-    additional_service_html = ""
-
-    if additional_service:
-
-        additional_service_html = f"""
-        <tr>
-
-            <td style="
-                padding:6px 0;
-                color:#555555;
-                font-size:14px;
-            ">
-                Additional services
-            </td>
-
-            <td style="
-                padding:6px 0;
-                color:#222222;
-                font-size:14px;
-                text-align:right;
-            ">
-                {html_escape(additional_service)}
-            </td>
-
-        </tr>
-        """
-
+    # --------------------------------------------------------
+    # HTML
+    # --------------------------------------------------------
 
     return f"""
 
@@ -951,6 +1073,7 @@ def build_option_html(
                 padding:20px;
             ">
 
+
                 <div style="
                     color:#1f4f78;
                     font-size:18px;
@@ -965,7 +1088,7 @@ def build_option_html(
                     color:#333333;
                     font-size:20px;
                     font-weight:bold;
-                    margin-bottom:3px;
+                    margin-bottom:4px;
                 ">
                     {html_escape(room_type)}
                 </div>
@@ -980,10 +1103,13 @@ def build_option_html(
                 </div>
 
 
+                <!-- RATES -->
+
                 <table width="100%"
                        cellpadding="0"
                        cellspacing="0"
                        border="0">
+
 
                     <tr>
 
@@ -992,7 +1118,29 @@ def build_option_html(
                             color:#555555;
                             font-size:14px;
                         ">
-                            {html_escape(rate_label)}
+                            Rate per night before taxes
+                        </td>
+
+                        <td style="
+                            padding:6px 0;
+                            color:#222222;
+                            font-size:14px;
+                            text-align:right;
+                        ">
+                            {money(nightly_before_tax)}
+                        </td>
+
+                    </tr>
+
+
+                    <tr>
+
+                        <td style="
+                            padding:6px 0;
+                            color:#555555;
+                            font-size:14px;
+                        ">
+                            Rate per night taxes included
                         </td>
 
                         <td style="
@@ -1002,8 +1150,7 @@ def build_option_html(
                             text-align:right;
                             font-weight:bold;
                         ">
-                            {money(nightly_rate)}
-                            / night
+                            {money(nightly_with_tax)}
                         </td>
 
                     </tr>
@@ -1031,10 +1178,78 @@ def build_option_html(
                     </tr>
 
 
-                    {additional_service_html}
+                    <tr>
+
+                        <td style="
+                            padding:6px 0;
+                            color:#555555;
+                            font-size:14px;
+                        ">
+                            Stay total before taxes
+                        </td>
+
+                        <td style="
+                            padding:6px 0;
+                            color:#222222;
+                            font-size:14px;
+                            text-align:right;
+                        ">
+                            {money(total_before_tax)}
+                        </td>
+
+                    </tr>
+
+
+                    <tr>
+
+                        <td style="
+                            padding:6px 0;
+                            color:#555555;
+                            font-size:14px;
+                        ">
+                            Taxes
+                        </td>
+
+                        <td style="
+                            padding:6px 0;
+                            color:#222222;
+                            font-size:14px;
+                            text-align:right;
+                        ">
+                            {money(taxes)}
+                        </td>
+
+                    </tr>
+
+
+                    <tr>
+
+                        <td style="
+                            padding:8px 0;
+                            color:#1f4f78;
+                            font-size:15px;
+                            font-weight:bold;
+                        ">
+                            Stay total taxes included
+                        </td>
+
+                        <td style="
+                            padding:8px 0;
+                            color:#1f4f78;
+                            font-size:16px;
+                            text-align:right;
+                            font-weight:bold;
+                        ">
+                            {money(total_with_tax)}
+                        </td>
+
+                    </tr>
+
 
                 </table>
 
+
+                <!-- INCLUDED -->
 
                 <div style="
                     margin-top:20px;
@@ -1058,9 +1273,62 @@ def build_option_html(
                 </ul>
 
 
+                <!-- ADDITIONAL SERVICES -->
+
                 <div style="
-                    border-top:1px solid #eeeeee;
-                    padding-top:15px;
+                    margin-top:20px;
+                    margin-bottom:8px;
+                    color:#1f4f78;
+                    font-size:15px;
+                    font-weight:bold;
+                ">
+                    Additional Services
+                </div>
+
+
+                <table width="100%"
+                       cellpadding="0"
+                       cellspacing="0"
+                       border="0">
+
+                    {services_html}
+
+
+                    <tr>
+
+                        <td style="
+                            border-top:1px solid #eeeeee;
+                            padding-top:10px;
+                            color:#555555;
+                            font-size:14px;
+                            font-weight:bold;
+                        ">
+                            Additional services total
+                        </td>
+
+                        <td style="
+                            border-top:1px solid #eeeeee;
+                            padding-top:10px;
+                            color:#222222;
+                            font-size:14px;
+                            text-align:right;
+                            font-weight:bold;
+                        ">
+                            {money(additional_services_total)}
+                        </td>
+
+                    </tr>
+
+                </table>
+
+
+                <!-- FINAL TOTAL -->
+
+                <div style="
+                    margin-top:18px;
+                    padding:15px;
+                    background:#f5f7fa;
+                    border-radius:6px;
                 ">
 
                     <table width="100%"
@@ -1071,19 +1339,20 @@ def build_option_html(
                         <tr>
 
                             <td style="
-                                color:#555555;
-                                font-size:14px;
+                                color:#1f4f78;
+                                font-size:17px;
+                                font-weight:bold;
                             ">
-                                {html_escape(total_label)}
+                                TOTAL AMOUNT
                             </td>
 
                             <td style="
-                                color:#222222;
-                                font-size:17px;
+                                color:#1f4f78;
+                                font-size:20px;
                                 font-weight:bold;
                                 text-align:right;
                             ">
-                                {money(total)}
+                                {money(final_total)}
                             </td>
 
                         </tr>
@@ -1093,6 +1362,55 @@ def build_option_html(
                 </div>
 
 
+                <!-- POLICIES -->
+
+                <div style="
+                    margin-top:20px;
+                    padding-top:15px;
+                    border-top:1px solid #eeeeee;
+                ">
+
+                    <div style="
+                        color:#1f4f78;
+                        font-size:14px;
+                        font-weight:bold;
+                        margin-bottom:6px;
+                    ">
+                        Deposit Policy
+                    </div>
+
+                    <div style="
+                        color:#555555;
+                        font-size:13px;
+                        line-height:1.5;
+                    ">
+                        {html_escape(deposit_policy)}
+                    </div>
+
+
+                    <div style="
+                        color:#1f4f78;
+                        font-size:14px;
+                        font-weight:bold;
+                        margin-top:15px;
+                        margin-bottom:6px;
+                    ">
+                        Cancellation Policy
+                    </div>
+
+                    <div style="
+                        color:#555555;
+                        font-size:13px;
+                        line-height:1.5;
+                    ">
+                        {html_escape(cancellation_policy)}
+                    </div>
+
+                </div>
+
+
+                <!-- BUTTONS -->
+
                 <div style="
                     margin-top:20px;
                 ">
@@ -1101,6 +1419,8 @@ def build_option_html(
 
                 </div>
 
+
+                <!-- VALID UNTIL -->
 
                 <div style="
                     margin-top:16px;
@@ -1118,6 +1438,7 @@ def build_option_html(
                     </strong>
 
                 </div>
+
 
             </td>
 
@@ -1140,14 +1461,14 @@ def build_email_html(
     children,
     nights,
     options,
-    policies,
 ):
 
     options_html = ""
 
+
     for index, option in enumerate(
         options,
-        start=1
+        start=1,
     ):
 
         options_html += build_option_html(
@@ -1155,10 +1476,21 @@ def build_email_html(
             room_type=option["room_type"],
             plan=option["plan"],
             valid_until=option["valid_until"],
-            nightly_rate=option["nightly_rate"],
-            taxes_included=option["taxes_included"],
+            nights=nights,
+            stay_total_tax_included=option[
+                "stay_total_tax_included"
+            ],
             selected_inclusions=option[
                 "selected_inclusions"
+            ],
+            selected_services=option[
+                "selected_services"
+            ],
+            deposit_policy=option[
+                "deposit_policy"
+            ],
+            cancellation_policy=option[
+                "cancellation_policy"
             ],
             payment_url=option[
                 "payment_url"
@@ -1166,14 +1498,11 @@ def build_email_html(
             room_360_url=option[
                 "room_360_url"
             ],
-            additional_service=option[
-                "additional_service"
-            ],
-            nights=nights,
         )
 
 
     children_html = ""
+
 
     if children > 0:
 
@@ -1201,26 +1530,6 @@ def build_email_html(
         """
 
 
-    policies_html = ""
-
-    for line in policies.splitlines():
-
-        line = line.strip()
-
-        if line:
-
-            policies_html += f"""
-            <li style="
-                margin-bottom:8px;
-                color:#555555;
-                font-size:13px;
-                line-height:1.5;
-            ">
-                {html_escape(line)}
-            </li>
-            """
-
-
     return f"""
 <!DOCTYPE html>
 
@@ -1231,8 +1540,7 @@ def build_email_html(
 <meta charset="UTF-8">
 
 <meta name="viewport"
-      content="width=device-width,
-               initial-scale=1.0">
+      content="width=device-width, initial-scale=1.0">
 
 <title>Your Custom Quotation</title>
 
@@ -1377,7 +1685,6 @@ quotation and available options.
        style="
            background:#f7f7f7;
            border-radius:6px;
-           padding:15px;
        ">
 
 
@@ -1529,40 +1836,6 @@ Available Options
 </tr>
 
 
-<!-- POLICIES -->
-
-<tr>
-
-<td style="
-    padding:10px 35px 30px 35px;
-">
-
-<div style="
-    color:#1f4f78;
-    font-size:18px;
-    font-weight:bold;
-    margin-bottom:10px;
-">
-
-Booking Policies
-
-</div>
-
-
-<ul style="
-    margin:0;
-    padding-left:20px;
-">
-
-{policies_html}
-
-</ul>
-
-</td>
-
-</tr>
-
-
 <!-- FOOTER -->
 
 <tr>
@@ -1617,7 +1890,7 @@ Medano Beach, Cabo San Lucas, Mexico
 
 
 # ============================================================
-# GMAIL
+# GMAIL MESSAGE
 # ============================================================
 
 def create_gmail_message(
@@ -1659,7 +1932,7 @@ def create_gmail_message(
                 maintype, subtype = (
                     mime_type.split(
                         "/",
-                        1
+                        1,
                     )
                 )
 
@@ -1710,16 +1983,14 @@ def save_gmail_draft(
         attachments=attachments,
     )
 
-    draft = {
-        "message": message
-    }
-
     return (
         service.users()
         .drafts()
         .create(
             userId="me",
-            body=draft,
+            body={
+                "message": message
+            },
         )
         .execute()
     )
@@ -1833,11 +2104,11 @@ with st.sidebar:
                    text-align:center;
                    text-decoration:none;
                    background:#2563eb;
-                   color:white;
+                   color:#ffffff;
                    padding:12px 10px;
                    border-radius:9px;
                    font-weight:600;
-                   margin-bottom:12px;
+                   margin-bottom:10px;
                ">
                Connect Google Account
             </a>
@@ -1860,7 +2131,7 @@ with st.sidebar:
 
     number_options = st.selectbox(
         "Number of quotation options",
-        options=[1, 2, 3],
+        [1, 2, 3],
         index=0,
     )
 
@@ -1869,14 +2140,14 @@ with st.sidebar:
 
 
     st.caption(
-        "Cada opción puede tener habitación, "
-        "tarifa, beneficios, link de pago y "
-        "vista 360° diferentes."
+        "Cada opción es independiente y puede "
+        "tener diferente habitación, tarifa, "
+        "beneficios, servicios y políticas."
     )
 
 
 # ============================================================
-# TÍTULO
+# TÍTULO PRINCIPAL
 # ============================================================
 
 st.title(
@@ -1884,8 +2155,8 @@ st.title(
 )
 
 st.caption(
-    "Create a professional quotation and "
-    "save it directly to your Casa Dorada Gmail."
+    "Create a professional quotation "
+    "for your guest."
 )
 
 
@@ -1945,6 +2216,16 @@ guest_col5, guest_col6, guest_col7 = (
 )
 
 
+calculated_nights = (
+    departure - arrival
+).days
+
+
+if calculated_nights < 1:
+
+    calculated_nights = 1
+
+
 with guest_col5:
 
     adults = st.number_input(
@@ -1969,14 +2250,6 @@ with guest_col6:
 
 with guest_col7:
 
-    calculated_nights = (
-        departure - arrival
-    ).days
-
-    if calculated_nights < 1:
-
-        calculated_nights = 1
-
     nights = st.number_input(
         "Nights",
         min_value=1,
@@ -1986,11 +2259,25 @@ with guest_col7:
     )
 
 
+# ============================================================
+# ATTACHMENTS
+# ============================================================
+
+st.markdown(
+    "### Attachments"
+)
+
+attachments = st.file_uploader(
+    "Optional files to attach to the email",
+    accept_multiple_files=True,
+)
+
+
 st.divider()
 
 
 # ============================================================
-# OPCIONES
+# COTIZACIONES
 # ============================================================
 
 all_options = []
@@ -2006,12 +2293,12 @@ for option_number in range(
     )
 
     st.caption(
-        "Configure this option independently."
+        "Configure this quotation option independently."
     )
 
 
     # --------------------------------------------------------
-    # HABITACIÓN / PLAN
+    # HABITACIÓN Y PLAN
     # --------------------------------------------------------
 
     col1, col2 = st.columns(2)
@@ -2021,7 +2308,7 @@ for option_number in range(
 
         room_type = st.selectbox(
             "Room type",
-            options=list(
+            list(
                 ROOM_TYPES.keys()
             ),
             key=f"room_type_{option_number}",
@@ -2032,51 +2319,115 @@ for option_number in range(
 
         plan_code = st.selectbox(
             "Meal plan",
-            options=list(
+            list(
                 MEAL_PLANS.keys()
             ),
             format_func=lambda x:
                 MEAL_PLANS[x]["name"],
-            key=f"plan_{option_number}",
+            key=f"meal_plan_{option_number}",
         )
 
 
     # --------------------------------------------------------
-    # TARIFA
+    # TOTAL DE ESTANCIA
     # --------------------------------------------------------
 
-    rate_col1, rate_col2, rate_col3 = (
-        st.columns(3)
+    st.markdown(
+        "### Rate"
     )
+
+    st.caption(
+        "Enter the total stay amount with taxes included. "
+        "The system will calculate all rates automatically."
+    )
+
+
+    rate_col1, rate_col2 = st.columns(2)
 
 
     with rate_col1:
 
-        nightly_rate = st.number_input(
-            "Nightly rate (USD)",
-            min_value=0.0,
-            value=0.0,
-            step=10.0,
+        stay_total_tax_included = st.number_input(
+            "Stay Total Taxes Included (USD)",
+            min_value=0.00,
+            value=0.00,
+            step=100.00,
             format="%.2f",
-            key=f"nightly_rate_{option_number}",
+            key=(
+                f"stay_total_tax_included_"
+                f"{option_number}"
+            ),
         )
 
 
     with rate_col2:
 
-        taxes_included = st.checkbox(
-            "Rate includes taxes",
-            value=True,
-            key=f"taxes_included_{option_number}",
+        valid_until = st.date_input(
+            "Quote valid until",
+            value=date.today(),
+            key=(
+                f"valid_until_"
+                f"{option_number}"
+            ),
         )
+
+
+    calculations = calculate_rate_values(
+        stay_total_tax_included,
+        nights,
+    )
+
+
+    rate_col3, rate_col4, rate_col5, rate_col6 = (
+        st.columns(4)
+    )
 
 
     with rate_col3:
 
-        valid_until = st.date_input(
-            "Quote valid until",
-            value=date.today(),
-            key=f"valid_until_{option_number}",
+        st.metric(
+            "Nightly Before Taxes",
+            money(
+                calculations[
+                    "nightly_before_tax"
+                ]
+            ),
+        )
+
+
+    with rate_col4:
+
+        st.metric(
+            "Nightly Taxes Included",
+            money(
+                calculations[
+                    "nightly_with_tax"
+                ]
+            ),
+        )
+
+
+    with rate_col5:
+
+        st.metric(
+            "Stay Before Taxes",
+            money(
+                calculations[
+                    "total_before_tax"
+                ]
+            ),
+        )
+
+
+    with rate_col6:
+
+        st.metric(
+            "Taxes 30%",
+            money(
+                calculations[
+                    "taxes"
+                ]
+            ),
         )
 
 
@@ -2089,13 +2440,15 @@ for option_number in range(
     )
 
     st.caption(
-        "Select independently what is included "
+        "Select independently the benefits included "
         "in this quotation option."
     )
 
 
     defaults = list(
-        ROOM_TYPES[room_type][
+        ROOM_TYPES[
+            room_type
+        ][
             "default_inclusions"
         ]
     )
@@ -2103,7 +2456,9 @@ for option_number in range(
 
     for inclusion in MEAL_PLANS[
         plan_code
-    ]["default_inclusions"]:
+    ][
+        "default_inclusions"
+    ]:
 
         if inclusion not in defaults:
 
@@ -2112,27 +2467,29 @@ for option_number in range(
             )
 
 
-    signature = (
-        f"{room_type}|"
-        f"{plan_code}|"
-        f"{'|'.join(AVAILABLE_INCLUSIONS)}"
-    )
-
-
-    signature_key = (
-        f"inclusion_signature_"
-        f"{option_number}"
-    )
-
-
-    previous_signature = (
-        st.session_state.get(
-            signature_key
+    inclusion_signature = (
+        room_type
+        + "|"
+        + plan_code
+        + "|"
+        + "|".join(
+            AVAILABLE_INCLUSIONS
         )
     )
 
 
-    if previous_signature != signature:
+    signature_key = (
+        "inclusion_signature_"
+        + str(option_number)
+    )
+
+
+    old_signature = st.session_state.get(
+        signature_key
+    )
+
+
+    if old_signature != inclusion_signature:
 
         for index, inclusion in enumerate(
             AVAILABLE_INCLUSIONS
@@ -2153,10 +2510,11 @@ for option_number in range(
 
         st.session_state[
             signature_key
-        ] = signature
+        ] = inclusion_signature
 
 
     inclusion_columns = st.columns(2)
+
 
     selected_inclusions = []
 
@@ -2188,6 +2546,115 @@ for option_number in range(
 
 
     # --------------------------------------------------------
+    # SERVICIOS ADICIONALES
+    # --------------------------------------------------------
+
+    st.markdown(
+        "### Additional Services"
+    )
+
+    st.caption(
+        "Select any additional services. "
+        "Their prices will be added automatically."
+    )
+
+
+    service_columns = st.columns(2)
+
+
+    selected_services = []
+
+
+    for index, (
+        service,
+        price
+    ) in enumerate(
+        ADDITIONAL_SERVICES.items()
+    ):
+
+        with service_columns[
+            index % 2
+        ]:
+
+            service_key = (
+                f"service_"
+                f"{option_number}_"
+                f"{index}"
+            )
+
+            selected = st.checkbox(
+                f"{service} — {money(price)}",
+                key=service_key,
+            )
+
+            if selected:
+
+                selected_services.append(
+                    service
+                )
+
+
+    services_total = sum(
+        ADDITIONAL_SERVICES[
+            service
+        ]
+        for service in selected_services
+    )
+
+
+    final_total = (
+        calculations[
+            "total_with_tax"
+        ]
+        + services_total
+    )
+
+
+    st.metric(
+        "Total Amount",
+        money(final_total),
+    )
+
+
+    # --------------------------------------------------------
+    # DEPOSIT POLICY
+    # --------------------------------------------------------
+
+    st.markdown(
+        "### Deposit Policy"
+    )
+
+
+    deposit_policy = st.selectbox(
+        "Select deposit policy",
+        DEPOSIT_POLICIES,
+        key=(
+            f"deposit_policy_"
+            f"{option_number}"
+        ),
+    )
+
+
+    # --------------------------------------------------------
+    # CANCELLATION POLICY
+    # --------------------------------------------------------
+
+    st.markdown(
+        "### Cancellation Policy"
+    )
+
+
+    cancellation_policy = st.selectbox(
+        "Select cancellation policy",
+        CANCELLATION_POLICIES,
+        key=(
+            f"cancellation_policy_"
+            f"{option_number}"
+        ),
+    )
+
+
+    # --------------------------------------------------------
     # LINKS
     # --------------------------------------------------------
 
@@ -2201,54 +2668,66 @@ for option_number in range(
 
     with link_col1:
 
+        default_360 = ROOM_TYPES[
+            room_type
+        ].get(
+            "360_url",
+            ""
+        )
+
+
         room_360_url = st.text_input(
-            "360° room view link",
-            value=ROOM_TYPES[
-                room_type
-            ].get(
-                "360_url",
-                ""
-            ),
+            "360° Room View Link",
+            value=default_360,
             placeholder="https://...",
-            key=f"room_360_{option_number}",
+            key=(
+                f"room_360_url_"
+                f"{option_number}"
+            ),
         )
 
 
     with link_col2:
 
         payment_url = st.text_input(
-            "Payment link",
+            "Payment Link",
             placeholder="https://...",
-            key=f"payment_url_{option_number}",
+            key=(
+                f"payment_url_"
+                f"{option_number}"
+            ),
         )
-
-
-    # --------------------------------------------------------
-    # SERVICIO ADICIONAL
-    # --------------------------------------------------------
-
-    additional_service = st.text_input(
-        "Additional service",
-        placeholder=(
-            "Optional. Example: "
-            "Roundtrip airport transportation"
-        ),
-        key=f"additional_service_{option_number}",
-    )
 
 
     option_data = {
         "room_type": room_type,
+
         "plan": MEAL_PLANS[
             plan_code
         ]["name"],
+
         "valid_until": valid_until,
-        "nightly_rate": nightly_rate,
-        "taxes_included": taxes_included,
-        "selected_inclusions": selected_inclusions,
-        "payment_url": payment_url,
-        "room_360_url": room_360_url,
-        "additional_service": additional_service,
+
+        "stay_total_tax_included":
+            stay_total_tax_included,
+
+        "selected_inclusions":
+            selected_inclusions,
+
+        "selected_services":
+            selected_services,
+
+        "deposit_policy":
+            deposit_policy,
+
+        "cancellation_policy":
+            cancellation_policy,
+
+        "payment_url":
+            payment_url,
+
+        "room_360_url":
+            room_360_url,
     }
 
 
@@ -2261,28 +2740,7 @@ for option_number in range(
 
 
 # ============================================================
-# POLÍTICAS
-# ============================================================
-
-st.markdown(
-    "## Booking Policies"
-)
-
-st.caption(
-    "These policies will appear at the bottom "
-    "of the quotation email."
-)
-
-
-policies = st.text_area(
-    "Policies",
-    value=DEFAULT_POLICIES,
-    height=150,
-)
-
-
-# ============================================================
-# CREAR EMAIL
+# GENERAR EMAIL
 # ============================================================
 
 email_html = build_email_html(
@@ -2293,7 +2751,6 @@ email_html = build_email_html(
     children=children,
     nights=nights,
     options=all_options,
-    policies=policies,
 )
 
 
@@ -2306,7 +2763,7 @@ st.markdown(
 )
 
 st.caption(
-    "This is how the quotation will appear in the email."
+    "This preview simulates the actual email your guest will receive."
 )
 
 
@@ -2314,7 +2771,7 @@ st.components.v1.html(
     email_html,
     height=(
         850
-        + number_options * 500
+        + number_options * 750
     ),
     scrolling=True,
 )
@@ -2369,7 +2826,7 @@ with action_col1:
                     to_email=guest_email,
                     subject=subject,
                     html_body=email_html,
-                    attachments=None,
+                    attachments=attachments,
                 )
 
                 st.success(
@@ -2384,7 +2841,7 @@ with action_col1:
 
 
 # ============================================================
-# SEND
+# SEND EMAIL
 # ============================================================
 
 with action_col2:
@@ -2414,7 +2871,7 @@ with action_col2:
                     to_email=guest_email,
                     subject=subject,
                     html_body=email_html,
-                    attachments=None,
+                    attachments=attachments,
                 )
 
                 st.success(
