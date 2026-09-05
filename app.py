@@ -27,7 +27,7 @@ st.set_page_config(
 
 
 # ============================================================
-# CONFIGURACIÓN DE GOOGLE
+# GOOGLE OAUTH
 # ============================================================
 
 SCOPES = [
@@ -46,7 +46,7 @@ TAX_RATE = 0.30
 
 # ============================================================
 # LOGO
-# SOLO SE UTILIZA EN EL EMAIL
+# SOLO APARECE EN EL EMAIL
 # ============================================================
 
 EMAIL_LOGO_URL = (
@@ -55,7 +55,7 @@ EMAIL_LOGO_URL = (
 
 
 # ============================================================
-# TIPOS DE HABITACIÓN
+# ROOM TYPES
 # ============================================================
 
 ROOM_TYPES = {
@@ -110,7 +110,7 @@ ROOM_TYPES = {
 
 
 # ============================================================
-# PLANES
+# MEAL PLANS
 # ============================================================
 
 MEAL_PLANS = {
@@ -131,10 +131,11 @@ MEAL_PLANS = {
 # ============================================================
 # BENEFICIOS
 #
-# PUEDES AGREGAR O QUITAR BENEFICIOS AQUÍ
+# PUEDES AGREGAR O ELIMINAR BENEFICIOS AQUÍ
 # ============================================================
 
 AVAILABLE_INCLUSIONS = [
+
     "Free Wi-Fi",
 
     "Free Valet Parking",
@@ -195,15 +196,18 @@ AVAILABLE_INCLUSIONS = [
 
 # ============================================================
 # SERVICIOS ADICIONALES
-#
-# LOS PRECIOS SON EN USD
 # ============================================================
 
 ADDITIONAL_SERVICES = {
+
     "Round Trip Transportation": 267.00,
+
     "One Way Transportation": 149.00,
+
     "Early Check In": 130.00,
+
     "Late Check Out": 130.00,
+
 }
 
 
@@ -212,11 +216,13 @@ ADDITIONAL_SERVICES = {
 # ============================================================
 
 DEPOSIT_POLICIES = [
+
     "The deposit for the whole stay with taxes included "
     "is required upon booking.",
 
     "The deposit for the first night with taxes included "
     "is required upon booking.",
+
 ]
 
 
@@ -242,11 +248,12 @@ CANCELLATION_POLICIES = [
     "without charge. Full stay (tax included) charges "
     "penalty if cancelled less than 45 days prior to arrival. "
     "Time is based on the property's local time.",
+
 ]
 
 
 # ============================================================
-# CSS DE LA APLICACIÓN
+# CSS APP
 # ============================================================
 
 st.markdown(
@@ -270,9 +277,6 @@ st.markdown(
         max-width: 1450px;
     }
 
-
-    /* SIDEBAR */
-
     section[data-testid="stSidebar"] {
         background: #0a1220;
         border-right: 1px solid #273449;
@@ -281,9 +285,6 @@ st.markdown(
     section[data-testid="stSidebar"] * {
         color: #f8fafc;
     }
-
-
-    /* INPUTS */
 
     div[data-baseweb="input"] > div,
     div[data-baseweb="textarea"] > div,
@@ -306,9 +307,6 @@ st.markdown(
         font-weight: 500 !important;
     }
 
-
-    /* CHECKBOXES */
-
     div[data-testid="stCheckbox"] {
         background: #151f30;
         border: 1px solid #2b394d;
@@ -321,9 +319,6 @@ st.markdown(
         border-color: #64748b;
         background: #1b293d;
     }
-
-
-    /* BUTTONS */
 
     .stButton > button {
         border-radius: 9px;
@@ -338,9 +333,6 @@ st.markdown(
         border-color: #94a3b8;
         color: white;
     }
-
-
-    /* CONNECTION */
 
     .connected-box {
         background: rgba(22, 163, 74, 0.12);
@@ -363,30 +355,6 @@ st.markdown(
         word-break: break-all;
     }
 
-
-    /* OPTION */
-
-    .option-card {
-        background: #182235;
-        border: 1px solid #2d3b50;
-        border-radius: 14px;
-        padding: 20px;
-        margin-top: 10px;
-        margin-bottom: 20px;
-    }
-
-
-    /* PREVIEW */
-
-    .preview-header {
-        background: #0b1220;
-        border: 1px solid #2d3b50;
-        border-radius: 14px;
-        padding: 16px;
-        margin-bottom: 10px;
-    }
-
-
     hr {
         border-color: #293548 !important;
     }
@@ -398,16 +366,23 @@ st.markdown(
 
 
 # ============================================================
-# FUNCIONES OAUTH
+# OAUTH FUNCTIONS
 # ============================================================
 
 def b64url_encode(data):
-    return base64.urlsafe_b64encode(data).decode().rstrip("=")
+
+    return base64.urlsafe_b64encode(
+        data
+    ).decode().rstrip("=")
 
 
 def b64url_decode(value):
+
     padding = "=" * (-len(value) % 4)
-    return base64.urlsafe_b64decode(value + padding)
+
+    return base64.urlsafe_b64decode(
+        value + padding
+    )
 
 
 def get_oauth_config():
@@ -570,14 +545,21 @@ def get_google_login_url():
 
 def process_google_callback():
 
-    code = st.query_params.get("code")
-    state = st.query_params.get("state")
+    code = st.query_params.get(
+        "code"
+    )
+
+    state = st.query_params.get(
+        "state"
+    )
 
     if not code or not state:
 
         return False
 
-    payload = verify_state(state)
+    payload = verify_state(
+        state
+    )
 
     if not payload:
 
@@ -741,7 +723,7 @@ def get_connected_email():
 
 
 # ============================================================
-# FUNCIONES DE CÁLCULO
+# CÁLCULOS
 # ============================================================
 
 def calculate_rate_values(
@@ -860,7 +842,7 @@ def format_date_email(value):
 
 
 # ============================================================
-# EMAIL OPTION
+# HTML DE CADA OPCIÓN
 # ============================================================
 
 def build_option_html(
@@ -1051,7 +1033,7 @@ def build_option_html(
 
 
     # --------------------------------------------------------
-    # HTML
+    # HTML OPTION
     # --------------------------------------------------------
 
     return f"""
@@ -1071,6 +1053,7 @@ def build_option_html(
 
             <td style="
                 padding:20px;
+                text-align:left;
             ">
 
 
@@ -1079,6 +1062,7 @@ def build_option_html(
                     font-size:18px;
                     font-weight:bold;
                     margin-bottom:5px;
+                    text-align:left;
                 ">
                     Option {option_number}
                 </div>
@@ -1089,6 +1073,7 @@ def build_option_html(
                     font-size:20px;
                     font-weight:bold;
                     margin-bottom:4px;
+                    text-align:left;
                 ">
                     {html_escape(room_type)}
                 </div>
@@ -1098,12 +1083,24 @@ def build_option_html(
                     color:#777777;
                     font-size:13px;
                     margin-bottom:18px;
+                    text-align:left;
                 ">
                     {html_escape(plan)}
                 </div>
 
 
                 <!-- RATES -->
+
+                <div style="
+                    color:#1f4f78;
+                    font-size:15px;
+                    font-weight:bold;
+                    margin-bottom:8px;
+                    text-align:left;
+                ">
+                    Rate Details
+                </div>
+
 
                 <table width="100%"
                        cellpadding="0"
@@ -1117,6 +1114,7 @@ def build_option_html(
                             padding:6px 0;
                             color:#555555;
                             font-size:14px;
+                            text-align:left;
                         ">
                             Rate per night before taxes
                         </td>
@@ -1139,6 +1137,7 @@ def build_option_html(
                             padding:6px 0;
                             color:#555555;
                             font-size:14px;
+                            text-align:left;
                         ">
                             Rate per night taxes included
                         </td>
@@ -1162,6 +1161,7 @@ def build_option_html(
                             padding:6px 0;
                             color:#555555;
                             font-size:14px;
+                            text-align:left;
                         ">
                             Number of nights
                         </td>
@@ -1184,6 +1184,7 @@ def build_option_html(
                             padding:6px 0;
                             color:#555555;
                             font-size:14px;
+                            text-align:left;
                         ">
                             Stay total before taxes
                         </td>
@@ -1206,6 +1207,7 @@ def build_option_html(
                             padding:6px 0;
                             color:#555555;
                             font-size:14px;
+                            text-align:left;
                         ">
                             Taxes
                         </td>
@@ -1225,16 +1227,19 @@ def build_option_html(
                     <tr>
 
                         <td style="
-                            padding:8px 0;
+                            border-top:1px solid #eeeeee;
+                            padding:10px 0 6px 0;
                             color:#1f4f78;
                             font-size:15px;
                             font-weight:bold;
+                            text-align:left;
                         ">
                             Stay total taxes included
                         </td>
 
                         <td style="
-                            padding:8px 0;
+                            border-top:1px solid #eeeeee;
+                            padding:10px 0 6px 0;
                             color:#1f4f78;
                             font-size:16px;
                             text-align:right;
@@ -1257,6 +1262,7 @@ def build_option_html(
                     color:#1f4f78;
                     font-size:15px;
                     font-weight:bold;
+                    text-align:left;
                 ">
                     Included
                 </div>
@@ -1266,6 +1272,7 @@ def build_option_html(
                     padding-left:22px;
                     margin-top:8px;
                     margin-bottom:20px;
+                    text-align:left;
                 ">
 
                     {inclusions_html}
@@ -1281,6 +1288,7 @@ def build_option_html(
                     color:#1f4f78;
                     font-size:15px;
                     font-weight:bold;
+                    text-align:left;
                 ">
                     Additional Services
                 </div>
@@ -1302,6 +1310,7 @@ def build_option_html(
                             color:#555555;
                             font-size:14px;
                             font-weight:bold;
+                            text-align:left;
                         ">
                             Additional services total
                         </td>
@@ -1342,6 +1351,7 @@ def build_option_html(
                                 color:#1f4f78;
                                 font-size:17px;
                                 font-weight:bold;
+                                text-align:left;
                             ">
                                 TOTAL AMOUNT
                             </td>
@@ -1368,6 +1378,7 @@ def build_option_html(
                     margin-top:20px;
                     padding-top:15px;
                     border-top:1px solid #eeeeee;
+                    text-align:left;
                 ">
 
                     <div style="
@@ -1375,6 +1386,7 @@ def build_option_html(
                         font-size:14px;
                         font-weight:bold;
                         margin-bottom:6px;
+                        text-align:left;
                     ">
                         Deposit Policy
                     </div>
@@ -1383,6 +1395,7 @@ def build_option_html(
                         color:#555555;
                         font-size:13px;
                         line-height:1.5;
+                        text-align:left;
                     ">
                         {html_escape(deposit_policy)}
                     </div>
@@ -1394,6 +1407,7 @@ def build_option_html(
                         font-weight:bold;
                         margin-top:15px;
                         margin-bottom:6px;
+                        text-align:left;
                     ">
                         Cancellation Policy
                     </div>
@@ -1402,6 +1416,7 @@ def build_option_html(
                         color:#555555;
                         font-size:13px;
                         line-height:1.5;
+                        text-align:left;
                     ">
                         {html_escape(cancellation_policy)}
                     </div>
@@ -1413,6 +1428,7 @@ def build_option_html(
 
                 <div style="
                     margin-top:20px;
+                    text-align:left;
                 ">
 
                     {buttons_html}
@@ -1426,6 +1442,7 @@ def build_option_html(
                     margin-top:16px;
                     color:#777777;
                     font-size:12px;
+                    text-align:left;
                 ">
 
                     Quote valid until:
@@ -1501,33 +1518,17 @@ def build_email_html(
         )
 
 
-    children_html = ""
-
-
     if children > 0:
 
-        children_html = f"""
-        <tr>
+        guest_summary = (
+            f"{adults} Adults + {children} Children"
+        )
 
-            <td style="
-                padding:5px 0;
-                color:#666666;
-                font-size:14px;
-            ">
-                Children
-            </td>
+    else:
 
-            <td style="
-                padding:5px 0;
-                color:#222222;
-                font-size:14px;
-                text-align:right;
-            ">
-                {html_escape(children)}
-            </td>
-
-        </tr>
-        """
+        guest_summary = (
+            f"{adults} Adults"
+        )
 
 
     return f"""
@@ -1585,10 +1586,10 @@ def build_email_html(
 
 <tr>
 
-<td align="center"
+<td align="left"
     style="
         background:#ffffff;
-        padding:25px 25px 15px 25px;
+        padding:25px 35px 15px 35px;
     ">
 
 <img src="{EMAIL_LOGO_URL}"
@@ -1611,13 +1612,14 @@ def build_email_html(
 
 <td style="
     padding:15px 35px 5px 35px;
-    text-align:center;
+    text-align:left;
 ">
 
 <div style="
     color:#1f4f78;
     font-size:25px;
     font-weight:bold;
+    text-align:left;
 ">
 
 Your Custom Quotation
@@ -1635,6 +1637,7 @@ Your Custom Quotation
 
 <td style="
     padding:15px 35px 10px 35px;
+    text-align:left;
 ">
 
 <p style="
@@ -1642,6 +1645,7 @@ Your Custom Quotation
     font-size:15px;
     line-height:1.6;
     margin:0 0 12px 0;
+    text-align:left;
 ">
 
 Dear {html_escape(guest_name)},
@@ -1654,6 +1658,7 @@ Dear {html_escape(guest_name)},
     font-size:14px;
     line-height:1.6;
     margin:0;
+    text-align:left;
 ">
 
 Thank you for considering
@@ -1670,136 +1675,174 @@ quotation and available options.
 </tr>
 
 
-<!-- STAY DETAILS -->
+<!-- YOUR STAY -->
 
 <tr>
 
 <td style="
-    padding:15px 35px;
+    padding:20px 35px 15px 35px;
+    text-align:left;
 ">
+
+<div style="
+    color:#1f4f78;
+    font-size:19px;
+    font-weight:bold;
+    margin-bottom:14px;
+    text-align:left;
+">
+    Your Stay
+</div>
+
 
 <table width="100%"
        cellpadding="0"
        cellspacing="0"
        border="0"
        style="
-           background:#f7f7f7;
-           border-radius:6px;
+           background:#f7f8fa;
+           border:1px solid #e5e7eb;
+           border-radius:8px;
        ">
 
-
 <tr>
 
+
+<!-- GUESTS -->
+
 <td style="
-    padding:5px 0;
-    color:#666666;
-    font-size:14px;
+    padding:16px 12px;
+    width:25%;
+    border-right:1px solid #e5e7eb;
+    text-align:left;
 ">
 
-Arrival
+<div style="
+    color:#777777;
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:0.5px;
+    margin-bottom:5px;
+    text-align:left;
+">
+    Guests
+</div>
 
-</td>
-
-<td style="
-    padding:5px 0;
-    color:#222222;
+<div style="
+    color:#1f2937;
     font-size:14px;
-    text-align:right;
     font-weight:bold;
+    text-align:left;
 ">
-
-{html_escape(
-    format_date_email(arrival)
-)}
+    {html_escape(guest_summary)}
+</div>
 
 </td>
 
-</tr>
 
-
-<tr>
+<!-- NIGHTS -->
 
 <td style="
-    padding:5px 0;
-    color:#666666;
-    font-size:14px;
+    padding:16px 12px;
+    width:25%;
+    border-right:1px solid #e5e7eb;
+    text-align:left;
 ">
 
-Departure
+<div style="
+    color:#777777;
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:0.5px;
+    margin-bottom:5px;
+    text-align:left;
+">
+    Nights
+</div>
 
-</td>
-
-<td style="
-    padding:5px 0;
-    color:#222222;
-    font-size:14px;
-    text-align:right;
+<div style="
+    color:#1f2937;
+    font-size:15px;
     font-weight:bold;
+    text-align:left;
 ">
-
-{html_escape(
-    format_date_email(departure)
-)}
+    {html_escape(nights)}
+    {" Night" if nights == 1 else " Nights"}
+</div>
 
 </td>
+
+
+<!-- ARRIVAL -->
+
+<td style="
+    padding:16px 12px;
+    width:25%;
+    border-right:1px solid #e5e7eb;
+    text-align:left;
+">
+
+<div style="
+    color:#777777;
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:0.5px;
+    margin-bottom:5px;
+    text-align:left;
+">
+    Arrival
+</div>
+
+<div style="
+    color:#1f2937;
+    font-size:13px;
+    font-weight:bold;
+    line-height:1.3;
+    text-align:left;
+">
+    {html_escape(
+        format_date_email(arrival)
+    )}
+</div>
+
+</td>
+
+
+<!-- DEPARTURE -->
+
+<td style="
+    padding:16px 12px;
+    width:25%;
+    text-align:left;
+">
+
+<div style="
+    color:#777777;
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:0.5px;
+    margin-bottom:5px;
+    text-align:left;
+">
+    Departure
+</div>
+
+<div style="
+    color:#1f2937;
+    font-size:13px;
+    font-weight:bold;
+    line-height:1.3;
+    text-align:left;
+">
+    {html_escape(
+        format_date_email(departure)
+    )}
+</div>
+
+</td>
+
 
 </tr>
-
-
-<tr>
-
-<td style="
-    padding:5px 0;
-    color:#666666;
-    font-size:14px;
-">
-
-Adults
-
-</td>
-
-<td style="
-    padding:5px 0;
-    color:#222222;
-    font-size:14px;
-    text-align:right;
-">
-
-{html_escape(adults)}
-
-</td>
-
-</tr>
-
-
-{children_html}
-
-
-<tr>
-
-<td style="
-    padding:5px 0;
-    color:#666666;
-    font-size:14px;
-">
-
-Nights
-
-</td>
-
-<td style="
-    padding:5px 0;
-    color:#222222;
-    font-size:14px;
-    text-align:right;
-">
-
-{html_escape(nights)}
-
-</td>
-
-</tr>
-
 
 </table>
 
@@ -1814,6 +1857,7 @@ Nights
 
 <td style="
     padding:15px 35px 5px 35px;
+    text-align:left;
 ">
 
 <div style="
@@ -1821,6 +1865,7 @@ Nights
     font-size:19px;
     font-weight:bold;
     margin-bottom:15px;
+    text-align:left;
 ">
 
 Available Options
@@ -2044,7 +2089,7 @@ if "google_credentials" not in st.session_state:
 
 
 # ============================================================
-# CALLBACK GOOGLE
+# GOOGLE CALLBACK
 # ============================================================
 
 if (
@@ -2147,7 +2192,7 @@ with st.sidebar:
 
 
 # ============================================================
-# TÍTULO PRINCIPAL
+# MAIN TITLE
 # ============================================================
 
 st.title(
@@ -2277,7 +2322,7 @@ st.divider()
 
 
 # ============================================================
-# COTIZACIONES
+# QUOTATION OPTIONS
 # ============================================================
 
 all_options = []
@@ -2298,7 +2343,7 @@ for option_number in range(
 
 
     # --------------------------------------------------------
-    # HABITACIÓN Y PLAN
+    # ROOM / PLAN
     # --------------------------------------------------------
 
     col1, col2 = st.columns(2)
@@ -2329,7 +2374,7 @@ for option_number in range(
 
 
     # --------------------------------------------------------
-    # TOTAL DE ESTANCIA
+    # RATE
     # --------------------------------------------------------
 
     st.markdown(
@@ -2432,7 +2477,7 @@ for option_number in range(
 
 
     # --------------------------------------------------------
-    # BENEFICIOS
+    # INCLUDED BENEFITS
     # --------------------------------------------------------
 
     st.markdown(
@@ -2546,7 +2591,7 @@ for option_number in range(
 
 
     # --------------------------------------------------------
-    # SERVICIOS ADICIONALES
+    # ADDITIONAL SERVICES
     # --------------------------------------------------------
 
     st.markdown(
@@ -2655,7 +2700,7 @@ for option_number in range(
 
 
     # --------------------------------------------------------
-    # LINKS
+    # OPTIONAL LINKS
     # --------------------------------------------------------
 
     st.markdown(
@@ -2700,6 +2745,7 @@ for option_number in range(
 
 
     option_data = {
+
         "room_type": room_type,
 
         "plan": MEAL_PLANS[
@@ -2728,6 +2774,7 @@ for option_number in range(
 
         "room_360_url":
             room_360_url,
+
     }
 
 
@@ -2740,7 +2787,7 @@ for option_number in range(
 
 
 # ============================================================
-# GENERAR EMAIL
+# BUILD EMAIL
 # ============================================================
 
 email_html = build_email_html(
@@ -2755,7 +2802,7 @@ email_html = build_email_html(
 
 
 # ============================================================
-# PREVIEW
+# EMAIL PREVIEW
 # ============================================================
 
 st.markdown(
@@ -2778,7 +2825,7 @@ st.components.v1.html(
 
 
 # ============================================================
-# ACCIONES
+# ACTIONS
 # ============================================================
 
 st.markdown(
