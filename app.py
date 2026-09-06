@@ -12,7 +12,6 @@ from urllib.parse import urlencode
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 
 
@@ -30,22 +29,6 @@ st.set_page_config(
 
 # ============================================================
 # GMAIL OAUTH SCOPES
-# ============================================================
-#
-# IMPORTANTE:
-#
-# La identidad del empleado la maneja Streamlit OIDC.
-#
-# Gmail OAuth solamente solicita permiso para Gmail Compose.
-#
-# NO agregamos:
-# openid
-# userinfo.email
-# userinfo.profile
-#
-# Esto evita el conflicto:
-# "Scope has changed..."
-#
 # ============================================================
 
 GMAIL_SCOPES = [
@@ -533,7 +516,6 @@ def get_saved_refresh_token(email):
         data = response.json()
 
         if not data:
-
             return None
 
         return data[0].get(
@@ -733,59 +715,12 @@ def verify_state(state):
 
 
 # ============================================================
-# CREATE OAUTH FLOW
-# ============================================================
-
-def create_oauth_flow(
-    code_verifier=None
-):
-
-    config = get_oauth_config()
-
-    client_config = {
-
-        "web": {
-
-            "client_id":
-                config["client_id"],
-
-            "client_secret":
-                config["client_secret"],
-
-            "auth_uri":
-                "https://accounts.google.com/"
-                "o/oauth2/v2/auth",
-
-            "token_uri":
-                "https://oauth2.googleapis.com/token",
-
-            "redirect_uris": [
-                config["redirect_uri"]
-            ],
-        }
-    }
-
-    flow = Flow.from_client_config(
-
-        client_config,
-
-        scopes=GMAIL_SCOPES,
-
-        redirect_uri=config["redirect_uri"],
-    )
-
-    if code_verifier:
-
-        flow.code_verifier = code_verifier
-
-    return flow
-
-
-# ============================================================
 # GOOGLE GMAIL LOGIN URL
 # ============================================================
 
-def get_google_login_url():
+def get_google_login_url(
+    action="draft"
+):
 
     code_verifier = (
         secrets.token_urlsafe(64)
@@ -799,6 +734,8 @@ def get_google_login_url():
         ).digest()
     )
 
+    logged_email = get_logged_in_email()
+
     payload = {
 
         "code_verifier":
@@ -806,6 +743,12 @@ def get_google_login_url():
 
         "created_at":
             datetime.utcnow().timestamp(),
+
+        "action":
+            action,
+
+        "employee_email":
+            logged_email,
     }
 
     signed_state = sign_state(
@@ -825,19 +768,17 @@ def get_google_login_url():
         "response_type":
             "code",
 
-        # ====================================================
         # SOLO GMAIL COMPOSE
-        # ====================================================
-
         "scope":
             " ".join(GMAIL_SCOPES),
 
         "access_type":
             "offline",
 
-        "include_granted_scopes":
-            "true",
-
+        # IMPORTANTE:
+        # NO usamos include_granted_scopes=true
+        # porque el mismo OAuth Client también
+        # maneja OIDC.
         "prompt":
             "consent",
 
@@ -859,31 +800,68 @@ def get_google_login_url():
 
 
 # ============================================================
-# CREDENTIALS TO DICT
+# INTERCAMBIO DIRECTO DEL CODE
+#
+# Esto evita el error de google-auth-oauthlib:
+#
+# Scope has changed from ...
+#
+# Google puede devolver scopes OIDC adicionales
+# porque el mismo OAuth Client también es utilizado
+# por Streamlit OIDC.
 # ============================================================
 
-def credentials_to_dict(credentials):
+def exchange_google_code(
+    code,
+    code_verifier,
+):
 
-    return {
+    config = get_oauth_config()
 
-        "token":
-            credentials.token,
+    token_url = (
+        "https://oauth2.googleapis.com/token"
+    )
 
-        "refresh_token":
-            credentials.refresh_token,
+    payload = {
 
-        "token_uri":
-            credentials.token_uri,
+        "code":
+            code,
 
         "client_id":
-            credentials.client_id,
+            config["client_id"],
 
         "client_secret":
-            credentials.client_secret,
+            config["client_secret"],
 
-        "scopes":
-            credentials.scopes,
+        "redirect_uri":
+            config["redirect_uri"],
+
+        "grant_type":
+            "authorization_code",
+
+        "code_verifier":
+            code_verifier,
     }
+
+    response = requests.post(
+        token_url,
+        data=payload,
+        timeout=20,
+    )
+
+    if response.status_code != 200:
+
+        try:
+            detail = response.json()
+        except Exception:
+            detail = response.text
+
+        raise Exception(
+            f"Google token exchange failed: "
+            f"{detail}"
+        )
+
+    return response.json()
 
 
 # ============================================================
@@ -930,60 +908,6 @@ def process_google_callback():
 
     try:
 
-        flow = create_oauth_flow(
-            code_verifier=code_verifier
-        )
-
-        flow.fetch_token(
-            code=code,
-            code_verifier=code_verifier,
-        )
-
-        credentials = flow.credentials
-
-        service = build(
-            "gmail",
-            "v1",
-            credentials=credentials,
-        )
-
-        profile = (
-            service.users()
-            .getProfile(
-                userId="me"
-            )
-            .execute()
-        )
-
-        email = profile.get(
-            "emailAddress"
-        )
-
-        if not email:
-
-            raise Exception(
-                "No fue posible obtener el email de Gmail."
-            )
-
-        email = email.lower().strip()
-
-        # ----------------------------------------------------
-        # VALIDAR DOMINIO
-        # ----------------------------------------------------
-
-        if not email.endswith(
-            "@casadorada.com"
-        ):
-
-            st.error(
-                "The Gmail account must be a "
-                "@casadorada.com account."
-            )
-
-            st.query_params.clear()
-
-            return False
-
         # ----------------------------------------------------
         # VALIDAR USUARIO OIDC
         # ----------------------------------------------------
@@ -1001,7 +925,128 @@ def process_google_callback():
 
             return False
 
-        if email != logged_email:
+        # ----------------------------------------------------
+        # INTERCAMBIAR CODE POR TOKEN
+        # ----------------------------------------------------
+
+        token_data = exchange_google_code(
+            code=code,
+            code_verifier=code_verifier,
+        )
+
+        access_token = token_data.get(
+            "access_token"
+        )
+
+        refresh_token = token_data.get(
+            "refresh_token"
+        )
+
+        if not access_token:
+
+            raise Exception(
+                "Google did not return an access token."
+            )
+
+        if not refresh_token:
+
+            # Si ya se había autorizado previamente,
+            # Google puede no devolver otro refresh token.
+            # En ese caso intentamos utilizar el guardado.
+            refresh_token = get_saved_refresh_token(
+                logged_email
+            )
+
+        if not refresh_token:
+
+            raise Exception(
+                "Google did not return a refresh token. "
+                "Please authorize Gmail again."
+            )
+
+        # ----------------------------------------------------
+        # CREAR CREDENTIALS
+        # ----------------------------------------------------
+
+        config = get_oauth_config()
+
+        credentials = Credentials(
+
+            token=access_token,
+
+            refresh_token=refresh_token,
+
+            token_uri=(
+                "https://oauth2.googleapis.com/token"
+            ),
+
+            client_id=config[
+                "client_id"
+            ],
+
+            client_secret=config[
+                "client_secret"
+            ],
+
+            scopes=GMAIL_SCOPES,
+        )
+
+        # ----------------------------------------------------
+        # VERIFICAR GMAIL
+        # ----------------------------------------------------
+
+        service = build(
+            "gmail",
+            "v1",
+            credentials=credentials,
+        )
+
+        profile = (
+            service.users()
+            .getProfile(
+                userId="me"
+            )
+            .execute()
+        )
+
+        gmail_email = profile.get(
+            "emailAddress"
+        )
+
+        if not gmail_email:
+
+            raise Exception(
+                "No fue posible obtener el email de Gmail."
+            )
+
+        gmail_email = (
+            gmail_email
+            .lower()
+            .strip()
+        )
+
+        # ----------------------------------------------------
+        # VALIDAR DOMINIO
+        # ----------------------------------------------------
+
+        if not gmail_email.endswith(
+            "@casadorada.com"
+        ):
+
+            st.error(
+                "The Gmail account must be a "
+                "@casadorada.com account."
+            )
+
+            st.query_params.clear()
+
+            return False
+
+        # ----------------------------------------------------
+        # VALIDAR QUE SEA EL MISMO EMPLEADO
+        # ----------------------------------------------------
+
+        if gmail_email != logged_email:
 
             st.error(
                 "The Gmail account must match "
@@ -1013,31 +1058,12 @@ def process_google_callback():
             return False
 
         # ----------------------------------------------------
-        # REFRESH TOKEN
-        # ----------------------------------------------------
-
-        refresh_token = (
-            credentials.refresh_token
-        )
-
-        if not refresh_token:
-
-            st.error(
-                "Google did not return a refresh token. "
-                "Please authorize Gmail again."
-            )
-
-            st.query_params.clear()
-
-            return False
-
-        # ----------------------------------------------------
-        # GUARDAR EN SUPABASE
+        # GUARDAR TOKEN
         # ----------------------------------------------------
 
         saved = save_refresh_token(
 
-            email=email,
+            email=gmail_email,
 
             refresh_token=refresh_token,
         )
@@ -1073,19 +1099,41 @@ def process_google_callback():
         # SESSION
         # ----------------------------------------------------
 
-        st.session_state.google_credentials = (
-            credentials_to_dict(
-                credentials
-            )
-        )
+        st.session_state.google_credentials = {
 
-        st.session_state.google_email = email
+            "token":
+                credentials.token,
+
+            "refresh_token":
+                credentials.refresh_token,
+
+            "token_uri":
+                credentials.token_uri,
+
+            "client_id":
+                credentials.client_id,
+
+            "client_secret":
+                credentials.client_secret,
+
+            "scopes":
+                GMAIL_SCOPES,
+        }
+
+        st.session_state.google_email = (
+            gmail_email
+        )
 
         st.session_state.google_connected = True
 
         st.session_state.gmail_auth_error = None
 
         st.session_state.supabase_get_error = None
+
+        # Guardar la acción que originó el OAuth.
+        st.session_state.gmail_pending_action = (
+            payload.get("action")
+        )
 
         st.query_params.clear()
 
@@ -1103,14 +1151,40 @@ def process_google_callback():
 
 
 # ============================================================
+# CREDENTIALS TO DICT
+# ============================================================
+
+def credentials_to_dict(
+    credentials
+):
+
+    return {
+
+        "token":
+            credentials.token,
+
+        "refresh_token":
+            credentials.refresh_token,
+
+        "token_uri":
+            credentials.token_uri,
+
+        "client_id":
+            credentials.client_id,
+
+        "client_secret":
+            credentials.client_secret,
+
+        "scopes":
+            GMAIL_SCOPES,
+    }
+
+
+# ============================================================
 # GET CREDENTIALS
 # ============================================================
 
 def get_credentials():
-
-    # --------------------------------------------------------
-    # 1. IDENTIDAD OIDC
-    # --------------------------------------------------------
 
     logged_email = get_logged_in_email()
 
@@ -1125,7 +1199,7 @@ def get_credentials():
     )
 
     # --------------------------------------------------------
-    # 2. CREDENCIALES EN SESSION
+    # SESSION
     # --------------------------------------------------------
 
     data = st.session_state.get(
@@ -1156,22 +1230,12 @@ def get_credentials():
                 "client_secret"
             ),
 
-            scopes=data.get(
-                "scopes"
-            ),
+            scopes=GMAIL_SCOPES,
         )
-
-        # ----------------------------------------------------
-        # TOKEN VÁLIDO
-        # ----------------------------------------------------
 
         if credentials.valid:
 
             return credentials
-
-        # ----------------------------------------------------
-        # TOKEN EXPIRADO
-        # ----------------------------------------------------
 
         if (
             credentials.expired
@@ -1205,16 +1269,12 @@ def get_credentials():
                 )
 
     # --------------------------------------------------------
-    # 3. EMAIL OIDC
+    # SUPABASE
     # --------------------------------------------------------
 
     st.session_state.google_email = (
         logged_email
     )
-
-    # --------------------------------------------------------
-    # 4. BUSCAR REFRESH TOKEN
-    # --------------------------------------------------------
 
     refresh_token = (
         get_saved_refresh_token(
@@ -1225,10 +1285,6 @@ def get_credentials():
     if not refresh_token:
 
         return None
-
-    # --------------------------------------------------------
-    # 5. CONFIGURACIÓN
-    # --------------------------------------------------------
 
     config = get_oauth_config()
 
@@ -1252,10 +1308,6 @@ def get_credentials():
 
         scopes=GMAIL_SCOPES,
     )
-
-    # --------------------------------------------------------
-    # 6. RENOVAR TOKEN
-    # --------------------------------------------------------
 
     try:
 
@@ -1312,10 +1364,6 @@ def get_gmail_service():
             credentials=credentials,
         )
 
-        # ----------------------------------------------------
-        # VERIFICAR ACCESO REAL A GMAIL
-        # ----------------------------------------------------
-
         service.users().getProfile(
             userId="me"
         ).execute()
@@ -1369,7 +1417,11 @@ def get_connected_email():
 
             return None
 
-        email = email.lower().strip()
+        email = (
+            email
+            .lower()
+            .strip()
+        )
 
         if not email.endswith(
             "@casadorada.com"
@@ -1627,7 +1679,6 @@ def build_option_html(
 
         services_html += f"""
         <tr>
-
             <td style="
                 padding:6px 0;
                 color:#555555;
@@ -1645,7 +1696,6 @@ def build_option_html(
             ">
                 {money(price)}
             </td>
-
         </tr>
         """
 
@@ -1653,7 +1703,6 @@ def build_option_html(
 
         services_html = """
         <tr>
-
             <td colspan="2"
                 style="
                     padding:6px 0;
@@ -1663,7 +1712,6 @@ def build_option_html(
                 ">
                 No additional services
             </td>
-
         </tr>
         """
 
@@ -1727,7 +1775,6 @@ def build_option_html(
            ">
 
         <tr>
-
             <td style="
                 padding:20px;
                 text-align:left;
@@ -1769,7 +1816,6 @@ def build_option_html(
                        border="0">
 
                     <tr>
-
                         <td style="
                             padding:6px 0;
                             color:#555555;
@@ -1787,11 +1833,9 @@ def build_option_html(
                         ">
                             {money(nightly_before_tax)}
                         </td>
-
                     </tr>
 
                     <tr>
-
                         <td style="
                             padding:6px 0;
                             color:#555555;
@@ -1810,11 +1854,9 @@ def build_option_html(
                         ">
                             {money(nightly_with_tax)}
                         </td>
-
                     </tr>
 
                     <tr>
-
                         <td style="
                             padding:6px 0;
                             color:#555555;
@@ -1832,11 +1874,9 @@ def build_option_html(
                         ">
                             {html_escape(nights)}
                         </td>
-
                     </tr>
 
                     <tr>
-
                         <td style="
                             padding:6px 0;
                             color:#555555;
@@ -1854,11 +1894,9 @@ def build_option_html(
                         ">
                             {money(total_before_tax)}
                         </td>
-
                     </tr>
 
                     <tr>
-
                         <td style="
                             padding:6px 0;
                             color:#555555;
@@ -1876,11 +1914,9 @@ def build_option_html(
                         ">
                             {money(taxes)}
                         </td>
-
                     </tr>
 
                     <tr>
-
                         <td style="
                             border-top:1px solid #eeeeee;
                             padding:10px 0 6px 0;
@@ -1902,7 +1938,6 @@ def build_option_html(
                         ">
                             {money(total_with_tax)}
                         </td>
-
                     </tr>
 
                 </table>
@@ -1924,9 +1959,7 @@ def build_option_html(
                     margin-bottom:20px;
                     text-align:left;
                 ">
-
                     {inclusions_html}
-
                 </ul>
 
                 <div style="
@@ -1948,7 +1981,6 @@ def build_option_html(
                     {services_html}
 
                     <tr>
-
                         <td style="
                             border-top:1px solid #eeeeee;
                             padding-top:10px;
@@ -1970,7 +2002,6 @@ def build_option_html(
                         ">
                             {money(additional_services_total)}
                         </td>
-
                     </tr>
 
                 </table>
@@ -2064,9 +2095,7 @@ def build_option_html(
                     margin-top:20px;
                     text-align:left;
                 ">
-
                     {buttons_html}
-
                 </div>
 
                 <div style="
@@ -2075,7 +2104,6 @@ def build_option_html(
                     font-size:12px;
                     text-align:left;
                 ">
-
                     Quote valid until:
                     <strong>
                         {html_escape(
@@ -2084,11 +2112,9 @@ def build_option_html(
                             )
                         )}
                     </strong>
-
                 </div>
 
             </td>
-
         </tr>
 
     </table>
@@ -2971,6 +2997,11 @@ if "supabase_get_error" not in st.session_state:
     st.session_state.supabase_get_error = None
 
 
+if "gmail_pending_action" not in st.session_state:
+
+    st.session_state.gmail_pending_action = None
+
+
 # ============================================================
 # VALIDAR USUARIO OIDC
 # ============================================================
@@ -2982,12 +3013,14 @@ validate_logged_in_user()
 # GMAIL CALLBACK
 # ============================================================
 
+callback_processed = False
+
 if (
     "code" in st.query_params
     and "state" in st.query_params
 ):
 
-    process_google_callback()
+    callback_processed = process_google_callback()
 
 
 # ============================================================
@@ -3063,20 +3096,12 @@ with st.sidebar:
             user_logged_in = False
 
 
-        # ----------------------------------------------------
-        # LOGIN OIDC
-        # ----------------------------------------------------
-
         if not user_logged_in:
 
             if st.button(
                 "Connect Google Account",
                 use_container_width=True,
             ):
-
-                # IMPORTANTE:
-                # No pasar "google" aquí.
-                # Usa el provider definido en [auth].
 
                 st.login()
 
@@ -3085,43 +3110,12 @@ with st.sidebar:
                 "@casadorada.com."
             )
 
-        # ----------------------------------------------------
-        # GMAIL OAUTH
-        # ----------------------------------------------------
-
         else:
 
-            login_url = (
-                get_google_login_url()
-            )
-
-            st.markdown(
-                f"""
-                <a href="{login_url}"
-                   target="_blank"
-                   rel="noopener noreferrer"
-                   style="
-                       display:block;
-                       width:100%;
-                       box-sizing:border-box;
-                       text-align:center;
-                       text-decoration:none;
-                       background:#2563eb;
-                       color:#ffffff;
-                       padding:12px 10px;
-                       border-radius:9px;
-                       font-weight:600;
-                       margin-bottom:10px;
-                   ">
-                   Connect Gmail
-                </a>
-                """,
-                unsafe_allow_html=True,
-            )
-
-            st.caption(
-                "Autoriza Gmail una sola vez. "
-                "La conexión quedará guardada."
+            st.info(
+                "Gmail se autorizará automáticamente "
+                "cuando guardes un borrador o envíes "
+                "un correo."
             )
 
             gmail_error = (
@@ -3342,10 +3336,6 @@ for option_number in range(
     )
 
 
-    # --------------------------------------------------------
-    # ROOM
-    # --------------------------------------------------------
-
     room_type = st.selectbox(
 
         "Room type",
@@ -3360,10 +3350,6 @@ for option_number in range(
         ),
     )
 
-
-    # --------------------------------------------------------
-    # RATE
-    # --------------------------------------------------------
 
     st.markdown(
         "### Rate"
@@ -3477,10 +3463,6 @@ for option_number in range(
         )
 
 
-    # --------------------------------------------------------
-    # INCLUDED BENEFITS
-    # --------------------------------------------------------
-
     st.markdown(
         "### Included Benefits"
     )
@@ -3580,10 +3562,6 @@ for option_number in range(
                 )
 
 
-    # --------------------------------------------------------
-    # ADDITIONAL SERVICES
-    # --------------------------------------------------------
-
     st.markdown(
         "### Additional Services"
     )
@@ -3657,10 +3635,6 @@ for option_number in range(
     )
 
 
-    # --------------------------------------------------------
-    # DEPOSIT POLICY
-    # --------------------------------------------------------
-
     st.markdown(
         "### Deposit Policy"
     )
@@ -3679,10 +3653,6 @@ for option_number in range(
     )
 
 
-    # --------------------------------------------------------
-    # CANCELLATION POLICY
-    # --------------------------------------------------------
-
     st.markdown(
         "### Cancellation Policy"
     )
@@ -3700,10 +3670,6 @@ for option_number in range(
         ),
     )
 
-
-    # --------------------------------------------------------
-    # OPTIONAL LINKS
-    # --------------------------------------------------------
 
     st.markdown(
         "### Optional Links"
@@ -3893,9 +3859,7 @@ subject = (
 with action_col1:
 
     if st.button(
-
         "💾 Save Draft to Gmail",
-
         use_container_width=True,
     ):
 
@@ -3909,49 +3873,58 @@ with action_col1:
 
             gmail_service = get_gmail_service()
 
+            # ------------------------------------------------
+            # SI NO HAY GMAIL AUTORIZADO
+            # ------------------------------------------------
+
             if not gmail_service:
 
-                st.error(
-                    "Please connect your Gmail account first."
+                logged_email = (
+                    get_logged_in_email()
                 )
 
-                gmail_error = (
-                    st.session_state.get(
-                        "gmail_auth_error"
+                if not logged_email:
+
+                    st.error(
+                        "Please sign in with your "
+                        "@casadorada.com account first."
                     )
-                )
 
-                supabase_error = (
-                    st.session_state.get(
-                        "supabase_get_error"
+                else:
+
+                    st.session_state.gmail_pending_action = (
+                        "draft"
                     )
-                )
 
-                if gmail_error or supabase_error:
+                    login_url = (
+                        get_google_login_url(
+                            action="draft"
+                        )
+                    )
 
-                    with st.expander(
-                        "Why is Gmail not connected?"
-                    ):
+                    st.warning(
+                        "You need to authorize Gmail "
+                        "before creating the draft."
+                    )
 
-                        if gmail_error:
-
-                            st.write(
-                                "Gmail:"
-                            )
-
-                            st.code(
-                                gmail_error
-                            )
-
-                        if supabase_error:
-
-                            st.write(
-                                "Supabase:"
-                            )
-
-                            st.code(
-                                supabase_error
-                            )
+                    st.markdown(
+                        f"""
+                        <a href="{login_url}"
+                           style="
+                               display:inline-block;
+                               background:#2563eb;
+                               color:#ffffff;
+                               text-decoration:none;
+                               padding:12px 20px;
+                               border-radius:9px;
+                               font-weight:600;
+                               margin-top:5px;
+                           ">
+                           Continue with Google
+                        </a>
+                        """,
+                        unsafe_allow_html=True,
+                    )
 
             else:
 
@@ -3990,9 +3963,7 @@ with action_col1:
 with action_col2:
 
     if st.button(
-
         "📤 Send Email",
-
         use_container_width=True,
     ):
 
@@ -4006,49 +3977,58 @@ with action_col2:
 
             gmail_service = get_gmail_service()
 
+            # ------------------------------------------------
+            # SI NO HAY GMAIL AUTORIZADO
+            # ------------------------------------------------
+
             if not gmail_service:
 
-                st.error(
-                    "Please connect your Gmail account first."
+                logged_email = (
+                    get_logged_in_email()
                 )
 
-                gmail_error = (
-                    st.session_state.get(
-                        "gmail_auth_error"
+                if not logged_email:
+
+                    st.error(
+                        "Please sign in with your "
+                        "@casadorada.com account first."
                     )
-                )
 
-                supabase_error = (
-                    st.session_state.get(
-                        "supabase_get_error"
+                else:
+
+                    st.session_state.gmail_pending_action = (
+                        "send"
                     )
-                )
 
-                if gmail_error or supabase_error:
+                    login_url = (
+                        get_google_login_url(
+                            action="send"
+                        )
+                    )
 
-                    with st.expander(
-                        "Why is Gmail not connected?"
-                    ):
+                    st.warning(
+                        "You need to authorize Gmail "
+                        "before sending the email."
+                    )
 
-                        if gmail_error:
-
-                            st.write(
-                                "Gmail:"
-                            )
-
-                            st.code(
-                                gmail_error
-                            )
-
-                        if supabase_error:
-
-                            st.write(
-                                "Supabase:"
-                            )
-
-                            st.code(
-                                supabase_error
-                            )
+                    st.markdown(
+                        f"""
+                        <a href="{login_url}"
+                           style="
+                               display:inline-block;
+                               background:#2563eb;
+                               color:#ffffff;
+                               text-decoration:none;
+                               padding:12px 20px;
+                               border-radius:9px;
+                               font-weight:600;
+                               margin-top:5px;
+                           ">
+                           Continue with Google
+                        </a>
+                        """,
+                        unsafe_allow_html=True,
+                    )
 
             else:
 
