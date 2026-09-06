@@ -431,10 +431,13 @@ def save_refresh_token(
         ),
     }
 
+    now = datetime.utcnow().isoformat()
+
     payload = {
         "email": email.lower().strip(),
         "refresh_token": refresh_token,
-        "updated_at": datetime.utcnow().isoformat(),
+        "created_at": now,
+        "updated_at": now,
     }
 
     try:
@@ -527,7 +530,61 @@ def get_logged_in_email():
 
             if email:
 
-                return email.lower().strip()
+                email = email.lower().strip()
+
+                if not email.endswith(
+                    "@casadorada.com"
+                ):
+                    return None
+
+                return email
+
+    except Exception:
+
+        pass
+
+    return None
+
+
+# ============================================================
+# VALIDACIÓN DE DOMINIO
+# ============================================================
+
+def validate_logged_in_user():
+
+    try:
+
+        if (
+            hasattr(st, "user")
+            and st.user.is_logged_in
+        ):
+
+            authenticated_email = (
+                st.user.email
+            )
+
+            if authenticated_email:
+
+                authenticated_email = (
+                    authenticated_email
+                    .lower()
+                    .strip()
+                )
+
+                if not authenticated_email.endswith(
+                    "@casadorada.com"
+                ):
+
+                    st.error(
+                        "This account is not authorized. "
+                        "Please use your @casadorada.com account."
+                    )
+
+                    st.logout()
+
+                    st.stop()
+
+                return authenticated_email
 
     except Exception:
 
@@ -866,6 +923,43 @@ def process_google_callback():
 
         email = email.lower().strip()
 
+        # ----------------------------------------------------
+        # VALIDAR QUE EL GMAIL TAMBIÉN SEA CASADORADA.COM
+        # ----------------------------------------------------
+
+        if not email.endswith(
+            "@casadorada.com"
+        ):
+
+            st.error(
+                "The Gmail account must be a "
+                "@casadorada.com account."
+            )
+
+            st.query_params.clear()
+
+            return False
+
+        # ----------------------------------------------------
+        # VALIDAR QUE COINCIDA CON EL USUARIO OIDC
+        # ----------------------------------------------------
+
+        logged_email = get_logged_in_email()
+
+        if (
+            logged_email
+            and email != logged_email
+        ):
+
+            st.error(
+                "The Gmail account must match "
+                "your authenticated @casadorada.com account."
+            )
+
+            st.query_params.clear()
+
+            return False
+
         refresh_token = (
             credentials.refresh_token
         )
@@ -1131,6 +1225,12 @@ def get_connected_email():
         if email:
 
             email = email.lower().strip()
+
+            if not email.endswith(
+                "@casadorada.com"
+            ):
+
+                return None
 
             st.session_state.google_email = (
                 email
@@ -2035,9 +2135,11 @@ def build_plain_text(
         )
 
         lines.append("")
+
         lines.append(
             "----------------------------------------"
         )
+
         lines.append("")
 
     lines.append(
@@ -2691,6 +2793,13 @@ if "google_email" not in st.session_state:
 
 
 # ============================================================
+# VALIDAR USUARIO OIDC
+# ============================================================
+
+validate_logged_in_user()
+
+
+# ============================================================
 # GMAIL CALLBACK
 # ============================================================
 
@@ -2777,11 +2886,12 @@ with st.sidebar:
 
         if not user_logged_in:
 
-            st.button(
+            if st.button(
                 "Connect Google Account",
                 use_container_width=True,
-                on_click=lambda: st.login("google"),
-            )
+            ):
+
+                st.login()
 
             st.caption(
                 "Inicia sesión con tu cuenta "
