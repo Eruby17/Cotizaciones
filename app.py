@@ -29,7 +29,7 @@ st.set_page_config(
 
 
 # ============================================================
-# GOOGLE OAUTH
+# GOOGLE GMAIL OAUTH
 # ============================================================
 
 SCOPES = [
@@ -48,7 +48,6 @@ TAX_RATE = 0.30
 
 # ============================================================
 # LOGO
-# SOLO APARECE EN EL EMAIL
 # ============================================================
 
 EMAIL_LOGO_URL = (
@@ -61,6 +60,7 @@ EMAIL_LOGO_URL = (
 # ============================================================
 
 ROOM_TYPES = {
+
     "Junior Suite": {
         "default_inclusions": [
             "Free Wi-Fi",
@@ -113,8 +113,6 @@ ROOM_TYPES = {
 
 # ============================================================
 # BENEFICIOS
-#
-# PUEDES AGREGAR O ELIMINAR BENEFICIOS AQUÍ
 # ============================================================
 
 AVAILABLE_INCLUSIONS = [
@@ -236,7 +234,7 @@ CANCELLATION_POLICIES = [
 
 
 # ============================================================
-# CSS APP
+# CSS
 # ============================================================
 
 st.markdown(
@@ -362,7 +360,7 @@ st.markdown(
 
 
 # ============================================================
-# OAUTH CONFIG
+# GOOGLE OAUTH CONFIG
 # ============================================================
 
 def get_oauth_config():
@@ -396,7 +394,7 @@ def get_supabase_config():
 
     return {
         "url": config["url"].rstrip("/"),
-        "key": config["key"],
+        "key": config["service_role_key"],
     }
 
 
@@ -404,7 +402,10 @@ def get_supabase_config():
 # SUPABASE TOKEN STORAGE
 # ============================================================
 
-def save_refresh_token(email, refresh_token):
+def save_refresh_token(
+    email,
+    refresh_token,
+):
 
     if not email or not refresh_token:
         return False
@@ -415,14 +416,19 @@ def save_refresh_token(email, refresh_token):
         return False
 
     endpoint = (
-        f"{config['url']}/rest/v1/gmail_tokens"
+        f"{config['url']}/rest/v1/google_tokens"
     )
 
     headers = {
         "apikey": config["key"],
-        "Authorization": f"Bearer {config['key']}",
+        "Authorization": (
+            f"Bearer {config['key']}"
+        ),
         "Content-Type": "application/json",
-        "Prefer": "resolution=merge-duplicates",
+        "Prefer": (
+            "resolution=merge-duplicates,"
+            "return=minimal"
+        ),
     }
 
     payload = {
@@ -440,12 +446,14 @@ def save_refresh_token(email, refresh_token):
             timeout=15,
         )
 
-        if response.status_code in [200, 201, 204]:
-            return True
-
-        return False
+        return response.status_code in [
+            200,
+            201,
+            204,
+        ]
 
     except Exception:
+
         return False
 
 
@@ -460,12 +468,14 @@ def get_saved_refresh_token(email):
         return None
 
     endpoint = (
-        f"{config['url']}/rest/v1/gmail_tokens"
+        f"{config['url']}/rest/v1/google_tokens"
     )
 
     headers = {
         "apikey": config["key"],
-        "Authorization": f"Bearer {config['key']}",
+        "Authorization": (
+            f"Bearer {config['key']}"
+        ),
     }
 
     params = {
@@ -496,7 +506,34 @@ def get_saved_refresh_token(email):
         )
 
     except Exception:
+
         return None
+
+
+# ============================================================
+# IDENTIDAD DEL USUARIO
+# ============================================================
+
+def get_logged_in_email():
+
+    try:
+
+        if (
+            hasattr(st, "user")
+            and st.user.is_logged_in
+        ):
+
+            email = st.user.email
+
+            if email:
+
+                return email.lower().strip()
+
+    except Exception:
+
+        pass
+
+    return None
 
 
 # ============================================================
@@ -583,7 +620,9 @@ def verify_state(state):
             0,
         )
 
-        current_time = datetime.utcnow().timestamp()
+        current_time = (
+            datetime.utcnow().timestamp()
+        )
 
         if (
             current_time
@@ -600,7 +639,7 @@ def verify_state(state):
 
 
 # ============================================================
-# CREATE OAUTH FLOW
+# CREATE GMAIL OAUTH FLOW
 # ============================================================
 
 def create_oauth_flow(
@@ -646,7 +685,7 @@ def create_oauth_flow(
 
 
 # ============================================================
-# GOOGLE LOGIN URL
+# GOOGLE GMAIL LOGIN URL
 # ============================================================
 
 def get_google_login_url():
@@ -747,7 +786,7 @@ def credentials_to_dict(credentials):
 
 
 # ============================================================
-# PROCESS GOOGLE CALLBACK
+# PROCESS GOOGLE GMAIL CALLBACK
 # ============================================================
 
 def process_google_callback():
@@ -801,18 +840,6 @@ def process_google_callback():
 
         credentials = flow.credentials
 
-        st.session_state.google_credentials = (
-            credentials_to_dict(
-                credentials
-            )
-        )
-
-        st.session_state.google_connected = True
-
-        # ----------------------------------------------------
-        # OBTENER EMAIL DE LA CUENTA
-        # ----------------------------------------------------
-
         service = build(
             "gmail",
             "v1",
@@ -831,22 +858,41 @@ def process_google_callback():
             "emailAddress"
         )
 
-        st.session_state.google_email = email
+        if not email:
 
-        # ----------------------------------------------------
-        # GUARDAR REFRESH TOKEN
-        # ----------------------------------------------------
+            raise Exception(
+                "No fue posible obtener el email de Gmail."
+            )
+
+        email = email.lower().strip()
 
         refresh_token = (
             credentials.refresh_token
         )
 
-        if refresh_token and email:
+        if refresh_token:
 
-            save_refresh_token(
+            saved = save_refresh_token(
                 email=email,
                 refresh_token=refresh_token,
             )
+
+            if not saved:
+
+                st.warning(
+                    "Gmail se conectó, pero no fue posible "
+                    "guardar la conexión permanente."
+                )
+
+        st.session_state.google_credentials = (
+            credentials_to_dict(
+                credentials
+            )
+        )
+
+        st.session_state.google_email = email
+
+        st.session_state.google_connected = True
 
         st.query_params.clear()
 
@@ -867,13 +913,13 @@ def process_google_callback():
 
 def get_credentials():
 
+    # --------------------------------------------------------
+    # 1. SESSION STATE
+    # --------------------------------------------------------
+
     data = st.session_state.get(
         "google_credentials"
     )
-
-    # --------------------------------------------------------
-    # SI YA EXISTE EN SESSION
-    # --------------------------------------------------------
 
     if data:
 
@@ -928,16 +974,30 @@ def get_credentials():
         return credentials
 
     # --------------------------------------------------------
-    # RECUPERAR DESDE STORAGE PERSISTENTE
+    # 2. EMAIL DEL USUARIO AUTENTICADO
     # --------------------------------------------------------
 
-    saved_email = st.session_state.get(
-        "google_email"
+    logged_email = get_logged_in_email()
+
+    if logged_email:
+
+        st.session_state.google_email = (
+            logged_email
+        )
+
+    saved_email = (
+        st.session_state.get(
+            "google_email"
+        )
     )
 
     if not saved_email:
 
         return None
+
+    # --------------------------------------------------------
+    # 3. BUSCAR REFRESH TOKEN EN SUPABASE
+    # --------------------------------------------------------
 
     refresh_token = (
         get_saved_refresh_token(
@@ -1024,6 +1084,14 @@ def get_gmail_service():
 
 def get_connected_email():
 
+    logged_email = get_logged_in_email()
+
+    if logged_email:
+
+        st.session_state.google_email = (
+            logged_email
+        )
+
     session_email = (
         st.session_state.get(
             "google_email"
@@ -1033,6 +1101,12 @@ def get_connected_email():
     if session_email:
 
         return session_email
+
+    credentials = get_credentials()
+
+    if not credentials:
+
+        return None
 
     service = get_gmail_service()
 
@@ -1055,6 +1129,8 @@ def get_connected_email():
         )
 
         if email:
+
+            email = email.lower().strip()
 
             st.session_state.google_email = (
                 email
@@ -1251,10 +1327,6 @@ def build_option_html(
         "nightly_before_tax"
     ]
 
-    # --------------------------------------------------------
-    # BENEFITS
-    # --------------------------------------------------------
-
     inclusions_html = ""
 
     for inclusion in selected_inclusions:
@@ -1280,10 +1352,6 @@ def build_option_html(
             No inclusions selected
         </li>
         """
-
-    # --------------------------------------------------------
-    # SERVICES
-    # --------------------------------------------------------
 
     services_html = ""
 
@@ -1344,10 +1412,6 @@ def build_option_html(
         + additional_services_total
     )
 
-    # --------------------------------------------------------
-    # BUTTONS
-    # --------------------------------------------------------
-
     buttons_html = ""
 
     if room_360_url:
@@ -1390,10 +1454,6 @@ def build_option_html(
         </a>
         """
 
-    # --------------------------------------------------------
-    # OPTION
-    # --------------------------------------------------------
-
     return f"""
 
     <table width="100%"
@@ -1432,9 +1492,6 @@ def build_option_html(
                 ">
                     {html_escape(room_type)}
                 </div>
-
-
-                <!-- RATE DETAILS -->
 
                 <div style="
                     color:#1f4f78;
@@ -1590,9 +1647,6 @@ def build_option_html(
 
                 </table>
 
-
-                <!-- INCLUDED -->
-
                 <div style="
                     margin-top:20px;
                     margin-bottom:8px;
@@ -1614,9 +1668,6 @@ def build_option_html(
                     {inclusions_html}
 
                 </ul>
-
-
-                <!-- ADDITIONAL SERVICES -->
 
                 <div style="
                     margin-top:20px;
@@ -1664,9 +1715,6 @@ def build_option_html(
 
                 </table>
 
-
-                <!-- FINAL TOTAL -->
-
                 <div style="
                     margin-top:18px;
                     padding:15px;
@@ -1704,9 +1752,6 @@ def build_option_html(
 
                 </div>
 
-
-                <!-- POLICIES -->
-
                 <div style="
                     margin-top:20px;
                     padding-top:15px;
@@ -1733,7 +1778,6 @@ def build_option_html(
                         {html_escape(deposit_policy)}
                     </div>
 
-
                     <div style="
                         color:#1f4f78;
                         font-size:14px;
@@ -1756,9 +1800,6 @@ def build_option_html(
 
                 </div>
 
-
-                <!-- BUTTONS -->
-
                 <div style="
                     margin-top:20px;
                     text-align:left;
@@ -1767,9 +1808,6 @@ def build_option_html(
                     {buttons_html}
 
                 </div>
-
-
-                <!-- VALID UNTIL -->
 
                 <div style="
                     margin-top:16px;
@@ -1799,7 +1837,7 @@ def build_option_html(
 
 
 # ============================================================
-# PLAIN TEXT VERSION
+# PLAIN TEXT EMAIL
 # ============================================================
 
 def build_plain_text(
@@ -2082,10 +2120,6 @@ def build_email_html(
             ],
         )
 
-    # --------------------------------------------------------
-    # GUEST SUMMARY
-    # --------------------------------------------------------
-
     guest_summary = (
         f"{adults} Adults"
     )
@@ -2111,7 +2145,6 @@ def build_email_html(
 <title>Your Custom Quotation</title>
 
 </head>
-
 
 <body style="
     margin:0;
@@ -2140,9 +2173,6 @@ def build_email_html(
            background:#ffffff;
        ">
 
-
-<!-- LOGO -->
-
 <tr>
 
 <td align="left"
@@ -2163,9 +2193,6 @@ def build_email_html(
 </td>
 
 </tr>
-
-
-<!-- TITLE -->
 
 <tr>
 
@@ -2189,9 +2216,6 @@ Your Custom Quotation
 
 </tr>
 
-
-<!-- GREETING -->
-
 <tr>
 
 <td style="
@@ -2210,7 +2234,6 @@ Your Custom Quotation
 Dear {html_escape(guest_name)},
 
 </p>
-
 
 <p style="
     color:#555555;
@@ -2233,9 +2256,6 @@ quotation and available options.
 
 </tr>
 
-
-<!-- YOUR STAY -->
-
 <tr>
 
 <td style="
@@ -2254,7 +2274,6 @@ quotation and available options.
 Your Stay
 
 </div>
-
 
 <table width="100%"
        cellpadding="0"
@@ -2296,7 +2315,6 @@ Guests
 
 </tr>
 
-
 <tr>
 
 <td style="
@@ -2327,7 +2345,6 @@ Nights
 </td>
 
 </tr>
-
 
 <tr>
 
@@ -2360,7 +2377,6 @@ Arrival
 </td>
 
 </tr>
-
 
 <tr>
 
@@ -2398,9 +2414,6 @@ Departure
 
 </tr>
 
-
-<!-- OPTIONS -->
-
 <tr>
 
 <td style="
@@ -2426,9 +2439,6 @@ Available Options
 
 </tr>
 
-
-<!-- FOOTER -->
-
 <tr>
 
 <td style="
@@ -2449,7 +2459,6 @@ Casa Dorada Los Cabos Resort & Spa
 
 </div>
 
-
 <div style="
     color:#dbeafe;
     font-size:12px;
@@ -2461,7 +2470,6 @@ Av. del Pescador s/n,
 Cabo San Lucas, B.C.S.
 
 </div>
-
 
 <div style="
     color:#dbeafe;
@@ -2484,7 +2492,6 @@ US:
 </td>
 
 </tr>
-
 
 </table>
 
@@ -2684,7 +2691,7 @@ if "google_email" not in st.session_state:
 
 
 # ============================================================
-# GOOGLE CALLBACK
+# GMAIL CALLBACK
 # ============================================================
 
 if (
@@ -2693,6 +2700,23 @@ if (
 ):
 
     process_google_callback()
+
+
+# ============================================================
+# RESTORE GOOGLE CONNECTION
+# ============================================================
+
+logged_email = get_logged_in_email()
+
+if logged_email:
+
+    st.session_state.google_email = logged_email
+
+    restored_credentials = get_credentials()
+
+    if restored_credentials:
+
+        st.session_state.google_connected = True
 
 
 # ============================================================
@@ -2728,39 +2752,76 @@ with st.sidebar:
             unsafe_allow_html=True,
         )
 
+        st.caption(
+            "Tu conexión de Gmail se guarda de forma "
+            "segura y puede recuperarse después de "
+            "actualizar la página."
+        )
+
     else:
 
-        login_url = (
-            get_google_login_url()
-        )
+        # ----------------------------------------------------
+        # LOGIN DE IDENTIDAD STREAMLIT
+        # ----------------------------------------------------
 
-        st.markdown(
-            f"""
-            <a href="{login_url}"
-               target="_blank"
-               rel="noopener noreferrer"
-               style="
-                   display:block;
-                   width:100%;
-                   box-sizing:border-box;
-                   text-align:center;
-                   text-decoration:none;
-                   background:#2563eb;
-                   color:#ffffff;
-                   padding:12px 10px;
-                   border-radius:9px;
-                   font-weight:600;
-                   margin-bottom:10px;
-               ">
-               Connect Google Account
-            </a>
-            """,
-            unsafe_allow_html=True,
-        )
+        try:
 
-        st.caption(
-            "Google se abrirá en una nueva pestaña."
-        )
+            user_logged_in = (
+                st.user.is_logged_in
+            )
+
+        except Exception:
+
+            user_logged_in = False
+
+
+        if not user_logged_in:
+
+            st.button(
+                "Connect Google Account",
+                use_container_width=True,
+                on_click=lambda: st.login("google"),
+            )
+
+            st.caption(
+                "Inicia sesión con tu cuenta "
+                "@casadorada.com."
+            )
+
+        else:
+
+            login_url = (
+                get_google_login_url()
+            )
+
+            st.markdown(
+                f"""
+                <a href="{login_url}"
+                   target="_blank"
+                   rel="noopener noreferrer"
+                   style="
+                       display:block;
+                       width:100%;
+                       box-sizing:border-box;
+                       text-align:center;
+                       text-decoration:none;
+                       background:#2563eb;
+                       color:#ffffff;
+                       padding:12px 10px;
+                       border-radius:9px;
+                       font-weight:600;
+                       margin-bottom:10px;
+                   ">
+                   Connect Gmail
+                </a>
+                """,
+                unsafe_allow_html=True,
+            )
+
+            st.caption(
+                "Autoriza Gmail una sola vez. "
+                "La conexión quedará guardada."
+            )
 
 
     st.divider()
