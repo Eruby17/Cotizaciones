@@ -3271,7 +3271,7 @@ with st.sidebar:
 
         "Number of quotation options",
 
-        [1, 2, 3],
+        [1, 2, 3, 4, 5],
 
         index=0,
     )
