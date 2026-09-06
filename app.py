@@ -3122,12 +3122,12 @@ def build_email_html(
 <td align="left"
     style="padding:30px 10px;">
 
-<table width="600"
+<table width="750"
        cellpadding="0"
        cellspacing="0"
        border="0"
        style="
-           width:600px;
+           width:750px;
            max-width:100%;
            background:#ffffff;
        ">
@@ -3594,7 +3594,7 @@ def build_confirmation_email_html(
 <table width="100%" cellpadding="0" cellspacing="0" border="0">
 <tr>
 <td align="left" style="padding:30px 10px;">
-<table width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px; max-width:100%; background:#ffffff;">
+<table width="750" cellpadding="0" cellspacing="0" border="0" style="width:750px; max-width:100%; background:#ffffff;">
 <tr>
 <td align="left" style="background:#ffffff; padding:25px 35px 15px 35px;">
 <img src="{EMAIL_LOGO_URL}" alt="Casa Dorada" style="max-width:220px; width:100%; height:auto; display:block;">
