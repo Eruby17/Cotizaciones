@@ -252,7 +252,11 @@ st.markdown(
     .block-container {
         padding-top: 1.5rem;
         padding-bottom: 3rem;
+        padding-left: 2rem;
+        padding-right: 2rem;
         max-width: 1450px;
+        margin-left: 0 !important;
+        margin-right: auto !important;
     }
 
     section[data-testid="stSidebar"] {
@@ -283,6 +287,7 @@ st.markdown(
     label {
         color: #cbd5e1 !important;
         font-weight: 500 !important;
+        text-align: left !important;
     }
 
     div[data-testid="stCheckbox"] {
@@ -291,6 +296,7 @@ st.markdown(
         border-radius: 8px;
         padding: 6px 10px;
         margin-bottom: 6px;
+        text-align: left !important;
     }
 
     div[data-testid="stCheckbox"]:hover {
@@ -348,6 +354,13 @@ st.markdown(
 
     hr {
         border-color: #293548 !important;
+    }
+
+    h1, h2, h3, h4, h5, h6,
+    p,
+    div,
+    span {
+        text-align: left;
     }
 
     </style>
@@ -516,6 +529,7 @@ def get_saved_refresh_token(email):
         data = response.json()
 
         if not data:
+
             return None
 
         return data[0].get(
@@ -718,9 +732,7 @@ def verify_state(state):
 # GOOGLE GMAIL LOGIN URL
 # ============================================================
 
-def get_google_login_url(
-    action="draft"
-):
+def get_google_login_url():
 
     code_verifier = (
         secrets.token_urlsafe(64)
@@ -734,8 +746,6 @@ def get_google_login_url(
         ).digest()
     )
 
-    logged_email = get_logged_in_email()
-
     payload = {
 
         "code_verifier":
@@ -743,12 +753,6 @@ def get_google_login_url(
 
         "created_at":
             datetime.utcnow().timestamp(),
-
-        "action":
-            action,
-
-        "employee_email":
-            logged_email,
     }
 
     signed_state = sign_state(
@@ -768,7 +772,6 @@ def get_google_login_url(
         "response_type":
             "code",
 
-        # SOLO GMAIL COMPOSE
         "scope":
             " ".join(GMAIL_SCOPES),
 
@@ -776,9 +779,12 @@ def get_google_login_url(
             "offline",
 
         # IMPORTANTE:
-        # NO usamos include_granted_scopes=true
-        # porque el mismo OAuth Client también
-        # maneja OIDC.
+        # No pedir la unión automática de scopes
+        # del login OIDC.
+
+        "include_granted_scopes":
+            "false",
+
         "prompt":
             "consent",
 
@@ -800,68 +806,31 @@ def get_google_login_url(
 
 
 # ============================================================
-# INTERCAMBIO DIRECTO DEL CODE
-#
-# Esto evita el error de google-auth-oauthlib:
-#
-# Scope has changed from ...
-#
-# Google puede devolver scopes OIDC adicionales
-# porque el mismo OAuth Client también es utilizado
-# por Streamlit OIDC.
+# CREDENTIALS TO DICT
 # ============================================================
 
-def exchange_google_code(
-    code,
-    code_verifier,
-):
+def credentials_to_dict(credentials):
 
-    config = get_oauth_config()
+    return {
 
-    token_url = (
-        "https://oauth2.googleapis.com/token"
-    )
+        "token":
+            credentials.token,
 
-    payload = {
+        "refresh_token":
+            credentials.refresh_token,
 
-        "code":
-            code,
+        "token_uri":
+            credentials.token_uri,
 
         "client_id":
-            config["client_id"],
+            credentials.client_id,
 
         "client_secret":
-            config["client_secret"],
+            credentials.client_secret,
 
-        "redirect_uri":
-            config["redirect_uri"],
-
-        "grant_type":
-            "authorization_code",
-
-        "code_verifier":
-            code_verifier,
+        "scopes":
+            credentials.scopes,
     }
-
-    response = requests.post(
-        token_url,
-        data=payload,
-        timeout=20,
-    )
-
-    if response.status_code != 200:
-
-        try:
-            detail = response.json()
-        except Exception:
-            detail = response.text
-
-        raise Exception(
-            f"Google token exchange failed: "
-            f"{detail}"
-        )
-
-    return response.json()
 
 
 # ============================================================
@@ -908,38 +877,69 @@ def process_google_callback():
 
     try:
 
-        # ----------------------------------------------------
-        # VALIDAR USUARIO OIDC
-        # ----------------------------------------------------
+        config = get_oauth_config()
 
-        logged_email = get_logged_in_email()
+        # ====================================================
+        # INTERCAMBIO DIRECTO CON GOOGLE
+        #
+        # Esto evita el error:
+        #
+        # Scope has changed...
+        #
+        # causado por usar el mismo OAuth Client para
+        # Streamlit OIDC y Gmail OAuth.
+        # ====================================================
 
-        if not logged_email:
+        token_response = requests.post(
 
-            st.error(
-                "Please sign in with your "
-                "@casadorada.com account first."
+            "https://oauth2.googleapis.com/token",
+
+            data={
+
+                "code":
+                    code,
+
+                "client_id":
+                    config["client_id"],
+
+                "client_secret":
+                    config["client_secret"],
+
+                "redirect_uri":
+                    config["redirect_uri"],
+
+                "grant_type":
+                    "authorization_code",
+
+                "code_verifier":
+                    code_verifier,
+            },
+
+            timeout=20,
+        )
+
+        if token_response.status_code != 200:
+
+            raise Exception(
+                "Google token exchange failed "
+                f"(HTTP {token_response.status_code}): "
+                f"{token_response.text}"
             )
 
-            st.query_params.clear()
-
-            return False
-
-        # ----------------------------------------------------
-        # INTERCAMBIAR CODE POR TOKEN
-        # ----------------------------------------------------
-
-        token_data = exchange_google_code(
-            code=code,
-            code_verifier=code_verifier,
+        token_data = (
+            token_response.json()
         )
 
-        access_token = token_data.get(
-            "access_token"
+        access_token = (
+            token_data.get(
+                "access_token"
+            )
         )
 
-        refresh_token = token_data.get(
-            "refresh_token"
+        refresh_token = (
+            token_data.get(
+                "refresh_token"
+            )
         )
 
         if not access_token:
@@ -950,25 +950,14 @@ def process_google_callback():
 
         if not refresh_token:
 
-            # Si ya se había autorizado previamente,
-            # Google puede no devolver otro refresh token.
-            # En ese caso intentamos utilizar el guardado.
-            refresh_token = get_saved_refresh_token(
-                logged_email
-            )
-
-        if not refresh_token:
-
             raise Exception(
                 "Google did not return a refresh token. "
                 "Please authorize Gmail again."
             )
 
-        # ----------------------------------------------------
+        # ====================================================
         # CREAR CREDENTIALS
-        # ----------------------------------------------------
-
-        config = get_oauth_config()
+        # ====================================================
 
         credentials = Credentials(
 
@@ -991,11 +980,12 @@ def process_google_callback():
             scopes=GMAIL_SCOPES,
         )
 
-        # ----------------------------------------------------
+        # ====================================================
         # VERIFICAR GMAIL
-        # ----------------------------------------------------
+        # ====================================================
 
         service = build(
+
             "gmail",
             "v1",
             credentials=credentials,
@@ -1009,27 +999,23 @@ def process_google_callback():
             .execute()
         )
 
-        gmail_email = profile.get(
+        email = profile.get(
             "emailAddress"
         )
 
-        if not gmail_email:
+        if not email:
 
             raise Exception(
                 "No fue posible obtener el email de Gmail."
             )
 
-        gmail_email = (
-            gmail_email
-            .lower()
-            .strip()
-        )
+        email = email.lower().strip()
 
-        # ----------------------------------------------------
+        # ====================================================
         # VALIDAR DOMINIO
-        # ----------------------------------------------------
+        # ====================================================
 
-        if not gmail_email.endswith(
+        if not email.endswith(
             "@casadorada.com"
         ):
 
@@ -1042,11 +1028,24 @@ def process_google_callback():
 
             return False
 
-        # ----------------------------------------------------
-        # VALIDAR QUE SEA EL MISMO EMPLEADO
-        # ----------------------------------------------------
+        # ====================================================
+        # VALIDAR USUARIO OIDC
+        # ====================================================
 
-        if gmail_email != logged_email:
+        logged_email = get_logged_in_email()
+
+        if not logged_email:
+
+            st.error(
+                "Please sign in with your "
+                "@casadorada.com account first."
+            )
+
+            st.query_params.clear()
+
+            return False
+
+        if email != logged_email:
 
             st.error(
                 "The Gmail account must match "
@@ -1057,13 +1056,13 @@ def process_google_callback():
 
             return False
 
-        # ----------------------------------------------------
-        # GUARDAR TOKEN
-        # ----------------------------------------------------
+        # ====================================================
+        # GUARDAR REFRESH TOKEN
+        # ====================================================
 
         saved = save_refresh_token(
 
-            email=gmail_email,
+            email=email,
 
             refresh_token=refresh_token,
         )
@@ -1095,34 +1094,17 @@ def process_google_callback():
 
             return False
 
-        # ----------------------------------------------------
-        # SESSION
-        # ----------------------------------------------------
+        # ====================================================
+        # GUARDAR EN SESSION
+        # ====================================================
 
-        st.session_state.google_credentials = {
-
-            "token":
-                credentials.token,
-
-            "refresh_token":
-                credentials.refresh_token,
-
-            "token_uri":
-                credentials.token_uri,
-
-            "client_id":
-                credentials.client_id,
-
-            "client_secret":
-                credentials.client_secret,
-
-            "scopes":
-                GMAIL_SCOPES,
-        }
-
-        st.session_state.google_email = (
-            gmail_email
+        st.session_state.google_credentials = (
+            credentials_to_dict(
+                credentials
+            )
         )
+
+        st.session_state.google_email = email
 
         st.session_state.google_connected = True
 
@@ -1130,12 +1112,100 @@ def process_google_callback():
 
         st.session_state.supabase_get_error = None
 
-        # Guardar la acción que originó el OAuth.
-        st.session_state.gmail_pending_action = (
-            payload.get("action")
+        st.query_params.clear()
+
+        # ====================================================
+        # VERIFICAR SI EXISTE COTIZACIÓN PENDIENTE
+        # ====================================================
+
+        pending_quote = (
+            st.session_state.get(
+                "pending_quote"
+            )
         )
 
-        st.query_params.clear()
+        pending_action = (
+            st.session_state.get(
+                "pending_action"
+            )
+        )
+
+        if (
+            pending_quote
+            and pending_action
+        ):
+
+            try:
+
+                if pending_action == "draft":
+
+                    save_gmail_draft(
+
+                        to_email=
+                            pending_quote[
+                                "guest_email"
+                            ],
+
+                        subject=
+                            pending_quote[
+                                "subject"
+                            ],
+
+                        html_body=
+                            pending_quote[
+                                "email_html"
+                            ],
+
+                        plain_text_body=
+                            pending_quote[
+                                "plain_text_email"
+                            ],
+                    )
+
+                    st.session_state.pending_quote = None
+
+                    st.session_state.pending_action = None
+
+                    st.session_state.auto_draft_success = True
+
+                elif pending_action == "send":
+
+                    send_gmail_message(
+
+                        to_email=
+                            pending_quote[
+                                "guest_email"
+                            ],
+
+                        subject=
+                            pending_quote[
+                                "subject"
+                            ],
+
+                        html_body=
+                            pending_quote[
+                                "email_html"
+                            ],
+
+                        plain_text_body=
+                            pending_quote[
+                                "plain_text_email"
+                            ],
+                    )
+
+                    st.session_state.pending_quote = None
+
+                    st.session_state.pending_action = None
+
+                    st.session_state.auto_send_success = True
+
+            except Exception as e:
+
+                st.session_state.pending_action_error = str(e)
+
+                st.session_state.pending_quote = None
+
+                st.session_state.pending_action = None
 
         return True
 
@@ -1148,36 +1218,6 @@ def process_google_callback():
         )
 
         return False
-
-
-# ============================================================
-# CREDENTIALS TO DICT
-# ============================================================
-
-def credentials_to_dict(
-    credentials
-):
-
-    return {
-
-        "token":
-            credentials.token,
-
-        "refresh_token":
-            credentials.refresh_token,
-
-        "token_uri":
-            credentials.token_uri,
-
-        "client_id":
-            credentials.client_id,
-
-        "client_secret":
-            credentials.client_secret,
-
-        "scopes":
-            GMAIL_SCOPES,
-    }
 
 
 # ============================================================
@@ -1198,9 +1238,9 @@ def get_credentials():
         .strip()
     )
 
-    # --------------------------------------------------------
+    # ========================================================
     # SESSION
-    # --------------------------------------------------------
+    # ========================================================
 
     data = st.session_state.get(
         "google_credentials"
@@ -1230,7 +1270,9 @@ def get_credentials():
                 "client_secret"
             ),
 
-            scopes=GMAIL_SCOPES,
+            scopes=data.get(
+                "scopes"
+            ),
         )
 
         if credentials.valid:
@@ -1268,13 +1310,9 @@ def get_credentials():
                     str(e)
                 )
 
-    # --------------------------------------------------------
-    # SUPABASE
-    # --------------------------------------------------------
-
-    st.session_state.google_email = (
-        logged_email
-    )
+    # ========================================================
+    # REFRESH TOKEN DESDE SUPABASE
+    # ========================================================
 
     refresh_token = (
         get_saved_refresh_token(
@@ -1359,6 +1397,7 @@ def get_gmail_service():
     try:
 
         service = build(
+
             "gmail",
             "v1",
             credentials=credentials,
@@ -1396,6 +1435,7 @@ def get_connected_email():
     try:
 
         service = build(
+
             "gmail",
             "v1",
             credentials=credentials,
@@ -1417,11 +1457,7 @@ def get_connected_email():
 
             return None
 
-        email = (
-            email
-            .lower()
-            .strip()
-        )
+        email = email.lower().strip()
 
         if not email.endswith(
             "@casadorada.com"
@@ -1679,6 +1715,7 @@ def build_option_html(
 
         services_html += f"""
         <tr>
+
             <td style="
                 padding:6px 0;
                 color:#555555;
@@ -1696,6 +1733,7 @@ def build_option_html(
             ">
                 {money(price)}
             </td>
+
         </tr>
         """
 
@@ -1703,6 +1741,7 @@ def build_option_html(
 
         services_html = """
         <tr>
+
             <td colspan="2"
                 style="
                     padding:6px 0;
@@ -1712,6 +1751,7 @@ def build_option_html(
                 ">
                 No additional services
             </td>
+
         </tr>
         """
 
@@ -1775,6 +1815,7 @@ def build_option_html(
            ">
 
         <tr>
+
             <td style="
                 padding:20px;
                 text-align:left;
@@ -1816,6 +1857,7 @@ def build_option_html(
                        border="0">
 
                     <tr>
+
                         <td style="
                             padding:6px 0;
                             color:#555555;
@@ -1833,9 +1875,11 @@ def build_option_html(
                         ">
                             {money(nightly_before_tax)}
                         </td>
+
                     </tr>
 
                     <tr>
+
                         <td style="
                             padding:6px 0;
                             color:#555555;
@@ -1854,9 +1898,11 @@ def build_option_html(
                         ">
                             {money(nightly_with_tax)}
                         </td>
+
                     </tr>
 
                     <tr>
+
                         <td style="
                             padding:6px 0;
                             color:#555555;
@@ -1874,9 +1920,11 @@ def build_option_html(
                         ">
                             {html_escape(nights)}
                         </td>
+
                     </tr>
 
                     <tr>
+
                         <td style="
                             padding:6px 0;
                             color:#555555;
@@ -1894,9 +1942,11 @@ def build_option_html(
                         ">
                             {money(total_before_tax)}
                         </td>
+
                     </tr>
 
                     <tr>
+
                         <td style="
                             padding:6px 0;
                             color:#555555;
@@ -1914,9 +1964,11 @@ def build_option_html(
                         ">
                             {money(taxes)}
                         </td>
+
                     </tr>
 
                     <tr>
+
                         <td style="
                             border-top:1px solid #eeeeee;
                             padding:10px 0 6px 0;
@@ -1938,6 +1990,7 @@ def build_option_html(
                         ">
                             {money(total_with_tax)}
                         </td>
+
                     </tr>
 
                 </table>
@@ -1959,7 +2012,9 @@ def build_option_html(
                     margin-bottom:20px;
                     text-align:left;
                 ">
+
                     {inclusions_html}
+
                 </ul>
 
                 <div style="
@@ -1981,6 +2036,7 @@ def build_option_html(
                     {services_html}
 
                     <tr>
+
                         <td style="
                             border-top:1px solid #eeeeee;
                             padding-top:10px;
@@ -2002,6 +2058,7 @@ def build_option_html(
                         ">
                             {money(additional_services_total)}
                         </td>
+
                     </tr>
 
                 </table>
@@ -2095,7 +2152,9 @@ def build_option_html(
                     margin-top:20px;
                     text-align:left;
                 ">
+
                     {buttons_html}
+
                 </div>
 
                 <div style="
@@ -2104,6 +2163,7 @@ def build_option_html(
                     font-size:12px;
                     text-align:left;
                 ">
+
                     Quote valid until:
                     <strong>
                         {html_escape(
@@ -2112,9 +2172,11 @@ def build_option_html(
                             )
                         )}
                     </strong>
+
                 </div>
 
             </td>
+
         </tr>
 
     </table>
@@ -2205,9 +2267,11 @@ def build_plain_text(
         )
 
         services_total = sum(
+
             ADDITIONAL_SERVICES[
                 service
             ]
+
             for service in option[
                 "selected_services"
             ]
@@ -2448,7 +2512,7 @@ def build_email_html(
 
 <tr>
 
-<td align="center"
+<td align="left"
     style="padding:30px 10px;">
 
 <table width="600"
@@ -2804,7 +2868,6 @@ def create_gmail_message(
     subject,
     html_body,
     plain_text_body,
-    attachments=None,
 ):
 
     message = EmailMessage()
@@ -2821,45 +2884,6 @@ def create_gmail_message(
         html_body,
         subtype="html",
     )
-
-    if attachments:
-
-        for attachment in attachments:
-
-            file_name = attachment.name
-
-            file_bytes = attachment.getvalue()
-
-            mime_type = (
-                attachment.type
-                or "application/octet-stream"
-            )
-
-            if "/" in mime_type:
-
-                maintype, subtype = (
-                    mime_type.split(
-                        "/",
-                        1,
-                    )
-                )
-
-            else:
-
-                maintype = "application"
-
-                subtype = "octet-stream"
-
-            message.add_attachment(
-
-                file_bytes,
-
-                maintype=maintype,
-
-                subtype=subtype,
-
-                filename=file_name,
-            )
 
     encoded_message = (
         base64.urlsafe_b64encode(
@@ -2882,7 +2906,6 @@ def save_gmail_draft(
     subject,
     html_body,
     plain_text_body,
-    attachments=None,
 ):
 
     service = get_gmail_service()
@@ -2902,8 +2925,6 @@ def save_gmail_draft(
         html_body=html_body,
 
         plain_text_body=plain_text_body,
-
-        attachments=attachments,
     )
 
     return (
@@ -2928,7 +2949,6 @@ def send_gmail_message(
     subject,
     html_body,
     plain_text_body,
-    attachments=None,
 ):
 
     service = get_gmail_service()
@@ -2948,8 +2968,6 @@ def send_gmail_message(
         html_body=html_body,
 
         plain_text_body=plain_text_body,
-
-        attachments=attachments,
     )
 
     return (
@@ -2967,39 +2985,38 @@ def send_gmail_message(
 # SESSION STATE
 # ============================================================
 
-if "google_connected" not in st.session_state:
+SESSION_DEFAULTS = {
 
-    st.session_state.google_connected = False
+    "google_connected": False,
 
+    "google_credentials": None,
 
-if "google_credentials" not in st.session_state:
+    "google_email": None,
 
-    st.session_state.google_credentials = None
+    "gmail_auth_error": None,
 
+    "supabase_save_error": None,
 
-if "google_email" not in st.session_state:
+    "supabase_get_error": None,
 
-    st.session_state.google_email = None
+    "pending_quote": None,
 
+    "pending_action": None,
 
-if "gmail_auth_error" not in st.session_state:
+    "auto_draft_success": False,
 
-    st.session_state.gmail_auth_error = None
+    "auto_send_success": False,
 
+    "pending_action_error": None,
 
-if "supabase_save_error" not in st.session_state:
-
-    st.session_state.supabase_save_error = None
-
-
-if "supabase_get_error" not in st.session_state:
-
-    st.session_state.supabase_get_error = None
+}
 
 
-if "gmail_pending_action" not in st.session_state:
+for key, default_value in SESSION_DEFAULTS.items():
 
-    st.session_state.gmail_pending_action = None
+    if key not in st.session_state:
+
+        st.session_state[key] = default_value
 
 
 # ============================================================
@@ -3013,14 +3030,12 @@ validate_logged_in_user()
 # GMAIL CALLBACK
 # ============================================================
 
-callback_processed = False
-
 if (
     "code" in st.query_params
     and "state" in st.query_params
 ):
 
-    callback_processed = process_google_callback()
+    process_google_callback()
 
 
 # ============================================================
@@ -3042,6 +3057,52 @@ if logged_email:
     else:
 
         st.session_state.google_connected = False
+
+
+# ============================================================
+# MOSTRAR RESULTADOS AUTOMÁTICOS
+# ============================================================
+
+if st.session_state.get(
+    "auto_draft_success"
+):
+
+    st.success(
+        "Draft saved successfully in Gmail."
+    )
+
+    st.session_state.auto_draft_success = False
+
+
+if st.session_state.get(
+    "auto_send_success"
+):
+
+    st.success(
+        "Email sent successfully."
+    )
+
+    st.session_state.auto_send_success = False
+
+
+if st.session_state.get(
+    "pending_action_error"
+):
+
+    st.error(
+        "The quotation was recovered, "
+        "but the email action could not be completed."
+    )
+
+    with st.expander(
+        "Technical details"
+    ):
+
+        st.code(
+            st.session_state.pending_action_error
+        )
+
+    st.session_state.pending_action_error = None
 
 
 # ============================================================
@@ -3095,27 +3156,45 @@ with st.sidebar:
 
             user_logged_in = False
 
-
         if not user_logged_in:
 
-            if st.button(
-                "Connect Google Account",
-                use_container_width=True,
-            ):
-
-                st.login()
-
-            st.caption(
-                "Inicia sesión con tu cuenta "
-                "@casadorada.com."
+            st.info(
+                "Gmail se conectará automáticamente "
+                "cuando intentes guardar o enviar una cotización."
             )
 
         else:
 
-            st.info(
-                "Gmail se autorizará automáticamente "
-                "cuando guardes un borrador o envíes "
-                "un correo."
+            login_url = (
+                get_google_login_url()
+            )
+
+            st.markdown(
+                f"""
+                <a href="{login_url}"
+                   rel="noopener noreferrer"
+                   style="
+                       display:block;
+                       width:100%;
+                       box-sizing:border-box;
+                       text-align:center;
+                       text-decoration:none;
+                       background:#2563eb;
+                       color:#ffffff;
+                       padding:12px 10px;
+                       border-radius:9px;
+                       font-weight:600;
+                       margin-bottom:10px;
+                   ">
+                   Connect Gmail
+                </a>
+                """,
+                unsafe_allow_html=True,
+            )
+
+            st.caption(
+                "Opcional. También puedes conectar Gmail "
+                "antes de crear una cotización."
             )
 
             gmail_error = (
@@ -3139,7 +3218,7 @@ with st.sidebar:
                     if gmail_error:
 
                         st.write(
-                            "Gmail error:"
+                            "Gmail:"
                         )
 
                         st.code(
@@ -3149,7 +3228,7 @@ with st.sidebar:
                     if supabase_error:
 
                         st.write(
-                            "Supabase error:"
+                            "Supabase:"
                         )
 
                         st.code(
@@ -3298,20 +3377,6 @@ with guest_col7:
     )
 
 
-# ============================================================
-# ATTACHMENTS
-# ============================================================
-
-st.markdown(
-    "### Attachments"
-)
-
-attachments = st.file_uploader(
-    "Optional files to attach to the email",
-    accept_multiple_files=True,
-)
-
-
 st.divider()
 
 
@@ -3336,6 +3401,10 @@ for option_number in range(
     )
 
 
+    # --------------------------------------------------------
+    # ROOM
+    # --------------------------------------------------------
+
     room_type = st.selectbox(
 
         "Room type",
@@ -3350,6 +3419,10 @@ for option_number in range(
         ),
     )
 
+
+    # --------------------------------------------------------
+    # RATE
+    # --------------------------------------------------------
 
     st.markdown(
         "### Rate"
@@ -3463,6 +3536,10 @@ for option_number in range(
         )
 
 
+    # --------------------------------------------------------
+    # INCLUDED BENEFITS
+    # --------------------------------------------------------
+
     st.markdown(
         "### Included Benefits"
     )
@@ -3562,6 +3639,10 @@ for option_number in range(
                 )
 
 
+    # --------------------------------------------------------
+    # ADDITIONAL SERVICES
+    # --------------------------------------------------------
+
     st.markdown(
         "### Additional Services"
     )
@@ -3635,6 +3716,10 @@ for option_number in range(
     )
 
 
+    # --------------------------------------------------------
+    # DEPOSIT POLICY
+    # --------------------------------------------------------
+
     st.markdown(
         "### Deposit Policy"
     )
@@ -3653,6 +3738,10 @@ for option_number in range(
     )
 
 
+    # --------------------------------------------------------
+    # CANCELLATION POLICY
+    # --------------------------------------------------------
+
     st.markdown(
         "### Cancellation Policy"
     )
@@ -3670,6 +3759,10 @@ for option_number in range(
         ),
     )
 
+
+    # --------------------------------------------------------
+    # OPTIONAL LINKS
+    # --------------------------------------------------------
 
     st.markdown(
         "### Optional Links"
@@ -3853,13 +3946,44 @@ subject = (
 
 
 # ============================================================
+# FUNCIÓN PARA GUARDAR COTIZACIÓN PENDIENTE
+# ============================================================
+
+def store_pending_quote(
+    action,
+    guest_email,
+    email_html,
+    plain_text_email,
+):
+
+    st.session_state.pending_quote = {
+
+        "guest_email":
+            guest_email,
+
+        "subject":
+            subject,
+
+        "email_html":
+            email_html,
+
+        "plain_text_email":
+            plain_text_email,
+    }
+
+    st.session_state.pending_action = action
+
+
+# ============================================================
 # SAVE DRAFT
 # ============================================================
 
 with action_col1:
 
     if st.button(
+
         "💾 Save Draft to Gmail",
+
         use_container_width=True,
     ):
 
@@ -3873,60 +3997,7 @@ with action_col1:
 
             gmail_service = get_gmail_service()
 
-            # ------------------------------------------------
-            # SI NO HAY GMAIL AUTORIZADO
-            # ------------------------------------------------
-
-            if not gmail_service:
-
-                logged_email = (
-                    get_logged_in_email()
-                )
-
-                if not logged_email:
-
-                    st.error(
-                        "Please sign in with your "
-                        "@casadorada.com account first."
-                    )
-
-                else:
-
-                    st.session_state.gmail_pending_action = (
-                        "draft"
-                    )
-
-                    login_url = (
-                        get_google_login_url(
-                            action="draft"
-                        )
-                    )
-
-                    st.warning(
-                        "You need to authorize Gmail "
-                        "before creating the draft."
-                    )
-
-                    st.markdown(
-                        f"""
-                        <a href="{login_url}"
-                           style="
-                               display:inline-block;
-                               background:#2563eb;
-                               color:#ffffff;
-                               text-decoration:none;
-                               padding:12px 20px;
-                               border-radius:9px;
-                               font-weight:600;
-                               margin-top:5px;
-                           ">
-                           Continue with Google
-                        </a>
-                        """,
-                        unsafe_allow_html=True,
-                    )
-
-            else:
+            if gmail_service:
 
                 try:
 
@@ -3941,8 +4012,6 @@ with action_col1:
                         plain_text_body=(
                             plain_text_email
                         ),
-
-                        attachments=attachments,
                     )
 
                     st.success(
@@ -3955,6 +4024,88 @@ with action_col1:
                         f"Could not save draft: {e}"
                     )
 
+            else:
+
+                # =================================================
+                # GUARDAR LA COTIZACIÓN ANTES DE IR A GOOGLE
+                # =================================================
+
+                store_pending_quote(
+
+                    action="draft",
+
+                    guest_email=guest_email,
+
+                    email_html=email_html,
+
+                    plain_text_email=plain_text_email,
+                )
+
+                try:
+
+                    user_logged_in = (
+                        st.user.is_logged_in
+                    )
+
+                except Exception:
+
+                    user_logged_in = False
+
+
+                # =================================================
+                # PRIMERO LOGIN OIDC
+                # =================================================
+
+                if not user_logged_in:
+
+                    st.info(
+                        "Your quotation has been saved. "
+                        "Sign in with your @casadorada.com account "
+                        "to continue."
+                    )
+
+                    st.login()
+
+                else:
+
+                    # =================================================
+                    # GMAIL NO CONECTADO
+                    # =================================================
+
+                    login_url = (
+                        get_google_login_url()
+                    )
+
+                    st.warning(
+                        "Your quotation is saved. "
+                        "Connect Gmail to continue."
+                    )
+
+                    st.markdown(
+                        f"""
+                        <a href="{login_url}"
+                           rel="noopener noreferrer"
+                           style="
+                               display:inline-block;
+                               background:#2563eb;
+                               color:#ffffff;
+                               padding:13px 22px;
+                               border-radius:9px;
+                               text-decoration:none;
+                               font-weight:600;
+                               margin-top:8px;
+                           ">
+                           Continue with Google
+                        </a>
+                        """,
+                        unsafe_allow_html=True,
+                    )
+
+                    st.caption(
+                        "After authorization, your quotation "
+                        "will be saved automatically as a Gmail draft."
+                    )
+
 
 # ============================================================
 # SEND EMAIL
@@ -3963,7 +4114,9 @@ with action_col1:
 with action_col2:
 
     if st.button(
+
         "📤 Send Email",
+
         use_container_width=True,
     ):
 
@@ -3977,60 +4130,7 @@ with action_col2:
 
             gmail_service = get_gmail_service()
 
-            # ------------------------------------------------
-            # SI NO HAY GMAIL AUTORIZADO
-            # ------------------------------------------------
-
-            if not gmail_service:
-
-                logged_email = (
-                    get_logged_in_email()
-                )
-
-                if not logged_email:
-
-                    st.error(
-                        "Please sign in with your "
-                        "@casadorada.com account first."
-                    )
-
-                else:
-
-                    st.session_state.gmail_pending_action = (
-                        "send"
-                    )
-
-                    login_url = (
-                        get_google_login_url(
-                            action="send"
-                        )
-                    )
-
-                    st.warning(
-                        "You need to authorize Gmail "
-                        "before sending the email."
-                    )
-
-                    st.markdown(
-                        f"""
-                        <a href="{login_url}"
-                           style="
-                               display:inline-block;
-                               background:#2563eb;
-                               color:#ffffff;
-                               text-decoration:none;
-                               padding:12px 20px;
-                               border-radius:9px;
-                               font-weight:600;
-                               margin-top:5px;
-                           ">
-                           Continue with Google
-                        </a>
-                        """,
-                        unsafe_allow_html=True,
-                    )
-
-            else:
+            if gmail_service:
 
                 try:
 
@@ -4045,8 +4145,6 @@ with action_col2:
                         plain_text_body=(
                             plain_text_email
                         ),
-
-                        attachments=attachments,
                     )
 
                     st.success(
@@ -4057,4 +4155,78 @@ with action_col2:
 
                     st.error(
                         f"Could not send email: {e}"
+                    )
+
+            else:
+
+                # =================================================
+                # GUARDAR COTIZACIÓN ANTES DE GOOGLE
+                # =================================================
+
+                store_pending_quote(
+
+                    action="send",
+
+                    guest_email=guest_email,
+
+                    email_html=email_html,
+
+                    plain_text_email=plain_text_email,
+                )
+
+                try:
+
+                    user_logged_in = (
+                        st.user.is_logged_in
+                    )
+
+                except Exception:
+
+                    user_logged_in = False
+
+
+                if not user_logged_in:
+
+                    st.info(
+                        "Your quotation has been saved. "
+                        "Sign in with your @casadorada.com account "
+                        "to continue."
+                    )
+
+                    st.login()
+
+                else:
+
+                    login_url = (
+                        get_google_login_url()
+                    )
+
+                    st.warning(
+                        "Your quotation is saved. "
+                        "Connect Gmail to continue."
+                    )
+
+                    st.markdown(
+                        f"""
+                        <a href="{login_url}"
+                           rel="noopener noreferrer"
+                           style="
+                               display:inline-block;
+                               background:#2563eb;
+                               color:#ffffff;
+                               padding:13px 22px;
+                               border-radius:9px;
+                               text-decoration:none;
+                               font-weight:600;
+                               margin-top:8px;
+                           ">
+                           Continue with Google
+                        </a>
+                        """,
+                        unsafe_allow_html=True,
+                    )
+
+                    st.caption(
+                        "After authorization, the email "
+                        "will be sent automatically."
                     )
