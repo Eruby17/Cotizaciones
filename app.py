@@ -29,12 +29,26 @@ st.set_page_config(
 
 
 # ============================================================
-# GOOGLE GMAIL OAUTH
+# GMAIL OAUTH SCOPES
+# ============================================================
+#
+# IMPORTANTE:
+#
+# La identidad del empleado la maneja Streamlit OIDC.
+#
+# Gmail OAuth solamente solicita permiso para Gmail Compose.
+#
+# NO agregamos:
+# openid
+# userinfo.email
+# userinfo.profile
+#
+# Esto evita el conflicto:
+# "Scope has changed..."
+#
 # ============================================================
 
-SCOPES = [
-    "openid",
-    "https://www.googleapis.com/auth/userinfo.email",
+GMAIL_SCOPES = [
     "https://www.googleapis.com/auth/gmail.compose",
 ]
 
@@ -449,11 +463,20 @@ def save_refresh_token(
             timeout=15,
         )
 
-        return response.status_code in [
+        if response.status_code in [
             200,
             201,
             204,
-        ]
+        ]:
+
+            return True
+
+        st.session_state.supabase_save_error = (
+            f"HTTP {response.status_code}: "
+            f"{response.text}"
+        )
+
+        return False
 
     except Exception as e:
 
@@ -559,7 +582,7 @@ def get_logged_in_email():
 
 
 # ============================================================
-# VALIDACIÓN DE DOMINIO
+# VALIDACIÓN DE USUARIO
 # ============================================================
 
 def validate_logged_in_user():
@@ -676,6 +699,7 @@ def verify_state(state):
             expected,
             received,
         ):
+
             return None
 
         payload = json.loads(
@@ -698,6 +722,7 @@ def verify_state(state):
             - float(created_at)
             > 900
         ):
+
             return None
 
         return payload
@@ -708,7 +733,7 @@ def verify_state(state):
 
 
 # ============================================================
-# CREATE GMAIL OAUTH FLOW
+# CREATE OAUTH FLOW
 # ============================================================
 
 def create_oauth_flow(
@@ -741,8 +766,11 @@ def create_oauth_flow(
     }
 
     flow = Flow.from_client_config(
+
         client_config,
-        scopes=SCOPES,
+
+        scopes=GMAIL_SCOPES,
+
         redirect_uri=config["redirect_uri"],
     )
 
@@ -797,8 +825,12 @@ def get_google_login_url():
         "response_type":
             "code",
 
+        # ====================================================
+        # SOLO GMAIL COMPOSE
+        # ====================================================
+
         "scope":
-            " ".join(SCOPES),
+            " ".join(GMAIL_SCOPES),
 
         "access_type":
             "offline",
@@ -936,7 +968,7 @@ def process_google_callback():
         email = email.lower().strip()
 
         # ----------------------------------------------------
-        # VALIDAR DOMINIO GMAIL
+        # VALIDAR DOMINIO
         # ----------------------------------------------------
 
         if not email.endswith(
@@ -953,7 +985,7 @@ def process_google_callback():
             return False
 
         # ----------------------------------------------------
-        # VALIDAR QUE COINCIDA CON OIDC
+        # VALIDAR USUARIO OIDC
         # ----------------------------------------------------
 
         logged_email = get_logged_in_email()
@@ -981,7 +1013,7 @@ def process_google_callback():
             return False
 
         # ----------------------------------------------------
-        # GUARDAR REFRESH TOKEN
+        # REFRESH TOKEN
         # ----------------------------------------------------
 
         refresh_token = (
@@ -999,15 +1031,23 @@ def process_google_callback():
 
             return False
 
+        # ----------------------------------------------------
+        # GUARDAR EN SUPABASE
+        # ----------------------------------------------------
+
         saved = save_refresh_token(
+
             email=email,
+
             refresh_token=refresh_token,
         )
 
         if not saved:
 
-            error_detail = st.session_state.get(
-                "supabase_save_error"
+            error_detail = (
+                st.session_state.get(
+                    "supabase_save_error"
+                )
             )
 
             st.error(
@@ -1030,7 +1070,7 @@ def process_google_callback():
             return False
 
         # ----------------------------------------------------
-        # GUARDAR EN SESSION
+        # SESSION
         # ----------------------------------------------------
 
         st.session_state.google_credentials = (
@@ -1044,6 +1084,8 @@ def process_google_callback():
         st.session_state.google_connected = True
 
         st.session_state.gmail_auth_error = None
+
+        st.session_state.supabase_get_error = None
 
         st.query_params.clear()
 
@@ -1067,7 +1109,7 @@ def process_google_callback():
 def get_credentials():
 
     # --------------------------------------------------------
-    # 1. VERIFICAR IDENTIDAD OIDC
+    # 1. IDENTIDAD OIDC
     # --------------------------------------------------------
 
     logged_email = get_logged_in_email()
@@ -1083,7 +1125,7 @@ def get_credentials():
     )
 
     # --------------------------------------------------------
-    # 2. USAR CREDENCIALES DE SESSION
+    # 2. CREDENCIALES EN SESSION
     # --------------------------------------------------------
 
     data = st.session_state.get(
@@ -1120,7 +1162,7 @@ def get_credentials():
         )
 
         # ----------------------------------------------------
-        # SI EL TOKEN TODAVÍA SIRVE
+        # TOKEN VÁLIDO
         # ----------------------------------------------------
 
         if credentials.valid:
@@ -1128,7 +1170,7 @@ def get_credentials():
             return credentials
 
         # ----------------------------------------------------
-        # SI ESTÁ EXPIRADO, RENOVAR
+        # TOKEN EXPIRADO
         # ----------------------------------------------------
 
         if (
@@ -1152,14 +1194,18 @@ def get_credentials():
 
                 return credentials
 
-            except Exception:
+            except Exception as e:
 
                 st.session_state.google_credentials = None
 
                 st.session_state.google_connected = False
 
+                st.session_state.gmail_auth_error = (
+                    str(e)
+                )
+
     # --------------------------------------------------------
-    # 3. USAR EMAIL DEL USUARIO OIDC
+    # 3. EMAIL OIDC
     # --------------------------------------------------------
 
     st.session_state.google_email = (
@@ -1167,7 +1213,7 @@ def get_credentials():
     )
 
     # --------------------------------------------------------
-    # 4. BUSCAR REFRESH TOKEN EN SUPABASE
+    # 4. BUSCAR REFRESH TOKEN
     # --------------------------------------------------------
 
     refresh_token = (
@@ -1181,7 +1227,7 @@ def get_credentials():
         return None
 
     # --------------------------------------------------------
-    # 5. CONFIGURACIÓN GOOGLE
+    # 5. CONFIGURACIÓN
     # --------------------------------------------------------
 
     config = get_oauth_config()
@@ -1204,7 +1250,7 @@ def get_credentials():
             "client_secret"
         ],
 
-        scopes=SCOPES,
+        scopes=GMAIL_SCOPES,
     )
 
     # --------------------------------------------------------
@@ -1239,7 +1285,9 @@ def get_credentials():
 
         st.session_state.google_connected = False
 
-        st.session_state.gmail_auth_error = str(e)
+        st.session_state.gmail_auth_error = (
+            str(e)
+        )
 
         return None
 
@@ -1276,7 +1324,9 @@ def get_gmail_service():
 
     except Exception as e:
 
-        st.session_state.gmail_auth_error = str(e)
+        st.session_state.gmail_auth_error = (
+            str(e)
+        )
 
         st.session_state.google_connected = False
 
@@ -1288,12 +1338,6 @@ def get_gmail_service():
 # ============================================================
 
 def get_connected_email():
-
-    # IMPORTANTE:
-    # No debemos considerar que el usuario está conectado
-    # a Gmail solamente porque st.user tiene un email.
-    #
-    # Primero verificamos que Gmail realmente funcione.
 
     credentials = get_credentials()
 
@@ -1333,10 +1377,6 @@ def get_connected_email():
 
             return None
 
-        # ----------------------------------------------------
-        # VALIDAR QUE SEA EL MISMO USUARIO OIDC
-        # ----------------------------------------------------
-
         logged_email = get_logged_in_email()
 
         if (
@@ -1356,13 +1396,15 @@ def get_connected_email():
 
         st.session_state.google_connected = False
 
-        st.session_state.gmail_auth_error = str(e)
+        st.session_state.gmail_auth_error = (
+            str(e)
+        )
 
         return None
 
 
 # ============================================================
-# CÁLCULOS
+# RATE CALCULATIONS
 # ============================================================
 
 def calculate_rate_values(
@@ -1503,7 +1545,7 @@ def format_date_email(value):
 
 
 # ============================================================
-# HTML OPTION
+# OPTION HTML
 # ============================================================
 
 def build_option_html(
@@ -2783,9 +2825,13 @@ def create_gmail_message(
                 subtype = "octet-stream"
 
             message.add_attachment(
+
                 file_bytes,
+
                 maintype=maintype,
+
                 subtype=subtype,
+
                 filename=file_name,
             )
 
@@ -2945,7 +2991,7 @@ if (
 
 
 # ============================================================
-# RESTORE GOOGLE CONNECTION
+# RESTORE GMAIL CONNECTION
 # ============================================================
 
 logged_email = get_logged_in_email()
@@ -3006,10 +3052,6 @@ with st.sidebar:
 
     else:
 
-        # ----------------------------------------------------
-        # LOGIN DE IDENTIDAD STREAMLIT
-        # ----------------------------------------------------
-
         try:
 
             user_logged_in = (
@@ -3021,6 +3063,10 @@ with st.sidebar:
             user_logged_in = False
 
 
+        # ----------------------------------------------------
+        # LOGIN OIDC
+        # ----------------------------------------------------
+
         if not user_logged_in:
 
             if st.button(
@@ -3028,12 +3074,20 @@ with st.sidebar:
                 use_container_width=True,
             ):
 
+                # IMPORTANTE:
+                # No pasar "google" aquí.
+                # Usa el provider definido en [auth].
+
                 st.login()
 
             st.caption(
                 "Inicia sesión con tu cuenta "
                 "@casadorada.com."
             )
+
+        # ----------------------------------------------------
+        # GMAIL OAUTH
+        # ----------------------------------------------------
 
         else:
 
@@ -3070,16 +3124,16 @@ with st.sidebar:
                 "La conexión quedará guardada."
             )
 
-            # ------------------------------------------------
-            # DIAGNÓSTICO
-            # ------------------------------------------------
-
-            gmail_error = st.session_state.get(
-                "gmail_auth_error"
+            gmail_error = (
+                st.session_state.get(
+                    "gmail_auth_error"
+                )
             )
 
-            supabase_error = st.session_state.get(
-                "supabase_get_error"
+            supabase_error = (
+                st.session_state.get(
+                    "supabase_get_error"
+                )
             )
 
             if gmail_error or supabase_error:
