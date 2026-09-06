@@ -3930,20 +3930,20 @@ if st.session_state.get(
         st.session_state.conf_auto_draft_success
     )
 
-    if isinstance(result, str) and result.startswith(
-        "CN"
-    ):
+    if isinstance(result, str) and "failed" in result:
 
-        st.success(
-            f"Confirmation Draft saved successfully. "
-            f"Confirmation #{result}"
+        st.warning(
+            result
         )
 
     else:
 
         st.success(
-            result
+            f"✅ Reservation Confirmed! "
+            f"Draft saved successfully. Confirmation #{result}"
         )
+
+        st.balloons()
 
     st.session_state.conf_auto_draft_success = False
 
@@ -3956,20 +3956,20 @@ if st.session_state.get(
         st.session_state.conf_auto_send_success
     )
 
-    if isinstance(result, str) and result.startswith(
-        "CN"
-    ):
+    if isinstance(result, str) and "failed" in result:
 
-        st.success(
-            f"Confirmation Email sent successfully. "
-            f"Confirmation #{result}"
+        st.warning(
+            result
         )
 
     else:
 
         st.success(
-            result
+            f"✅ Reservation Confirmed! "
+            f"Email sent successfully. Confirmation #{result}"
         )
+
+        st.balloons()
 
     st.session_state.conf_auto_send_success = False
 
@@ -5143,6 +5143,15 @@ elif app_mode == "Confirm Quotation":
             "Special Requests (Guest Needs)", 
             placeholder="e.g. Early check-in, Anniversary setup."
         )
+
+        st.markdown(
+            "### Confirmation Details"
+        )
+
+        hotel_conf_number = st.text_input(
+            "Hotel Confirmation Number", 
+            placeholder="Leave blank to auto-generate (CN...)"
+        )
         
         st.markdown(
             "### Actions"
@@ -5154,7 +5163,7 @@ elif app_mode == "Confirm Quotation":
         
         def store_pending_confirmation_ui(action):
 
-            conf_number = generate_confirmation_number()
+            conf_number = hotel_conf_number.strip() if hotel_conf_number.strip() else generate_confirmation_number()
 
             st.session_state.pending_confirmation = {
 
@@ -5309,17 +5318,21 @@ elif app_mode == "Manual Confirmation":
     mc_col1, mc_col2 = st.columns(2)
 
     with mc_col1:
+
         m_guest_name = st.text_input("Guest name", placeholder="John Smith", key="m_gname")
 
     with mc_col2:
+
         m_guest_email = st.text_input("Guest email", placeholder="guest@email.com", key="m_gemail")
 
     mc_col3, mc_col4 = st.columns(2)
 
     with mc_col3:
+
         m_arrival = st.date_input("Arrival", value=date.today(), key="m_arr")
 
     with mc_col4:
+
         m_departure = st.date_input("Departure", value=date.today(), key="m_dep")
 
     mc_col5, mc_col6, mc_col7 = st.columns(3)
@@ -5327,12 +5340,15 @@ elif app_mode == "Manual Confirmation":
     m_calculated_nights = max(1, (m_departure - m_arrival).days)
 
     with mc_col5:
+
         m_adults = st.number_input("Adults", min_value=1, max_value=20, value=2, step=1, key="m_adults")
 
     with mc_col6:
+
         m_children = st.number_input("Children", min_value=0, max_value=20, value=0, step=1, key="m_child")
 
     with mc_col7:
+
         m_nights = st.number_input("Nights", min_value=1, max_value=365, value=m_calculated_nights, step=1, key="m_nights")
         
     st.divider()
@@ -5344,9 +5360,11 @@ elif app_mode == "Manual Confirmation":
     r_col1, r_col2 = st.columns(2)
 
     with r_col1:
+
         m_room_type = st.selectbox("Room type", list(ROOM_TYPES.keys()), key="m_rtype")
 
     with r_col2:
+
         m_stay_total = st.number_input("Stay Total Taxes Included (USD)", min_value=0.00, value=0.00, step=100.00, format="%.2f", key="m_stotal")
         
     m_calc = calculate_rate_values(m_stay_total, m_nights)
@@ -5380,11 +5398,23 @@ elif app_mode == "Manual Confirmation":
     po_col1, po_col2 = st.columns(2)
 
     with po_col1:
+
         m_dep_pol = st.selectbox("Deposit Policy", DEPOSIT_POLICIES, key="m_dpol")
 
     with po_col2:
+
         m_can_pol = st.selectbox("Cancellation Policy", CANCELLATION_POLICIES, key="m_cpol")
         
+    st.markdown(
+        "### Confirmation Details"
+    )
+
+    m_hotel_conf_number = st.text_input(
+        "Hotel Confirmation Number", 
+        placeholder="Leave blank to auto-generate (CN...)", 
+        key="m_hconf"
+    )
+
     st.markdown(
         "### Actions"
     )
@@ -5395,7 +5425,7 @@ elif app_mode == "Manual Confirmation":
     
     def store_manual_pending_ui(action):
 
-        conf_number = generate_confirmation_number()
+        conf_number = m_hotel_conf_number.strip() if m_hotel_conf_number.strip() else generate_confirmation_number()
 
         st.session_state.pending_confirmation = {
 
