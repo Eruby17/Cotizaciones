@@ -1,5 +1,6 @@
-streamlit
-Authlib
+streamlit==1.63.0
+Authlib==1.8.0
+httpx2
 google-auth
 google-auth-oauthlib
 google-api-python-client
