@@ -57,7 +57,8 @@ EMAIL_LOGO_URL = (
 # ============================================================
 
 ROOM_TYPES = {
-   "Standard Pool View": {
+
+    "Standard Pool View": {
         "default_inclusions": [
             "Free Wi-Fi",
             "Free Valet Parking",
@@ -70,7 +71,9 @@ ROOM_TYPES = {
             "Free Wi-Fi",
             "Free Valet Parking",
         ],
-        "360_url": "https://my.matterport.com/show/?m=6Zo1QcjJvS3",
+        "360_url": (
+            "https://my.matterport.com/show/?m=6Zo1QcjJvS3"
+        ),
     },
 
     "Junior Suite": {
@@ -78,7 +81,10 @@ ROOM_TYPES = {
             "Free Wi-Fi",
             "Free Valet Parking",
         ],
-        "360_url": "https://my.matterport.com/models/asDp8M3WB35?section=media&mediasection=showcase",
+        "360_url": (
+            "https://my.matterport.com/models/"
+            "asDp8M3WB35?section=media&mediasection=showcase"
+        ),
     },
 
     "One Bedroom Suite": {
@@ -86,7 +92,10 @@ ROOM_TYPES = {
             "Free Wi-Fi",
             "Free Valet Parking",
         ],
-        "360_url": "https://my.matterport.com/models/Atpb4Tt7URH?section=media&mediasection=showcase",
+        "360_url": (
+            "https://my.matterport.com/models/"
+            "Atpb4Tt7URH?section=media&mediasection=showcase"
+        ),
     },
 
     "One Bedroom Plus": {
@@ -102,7 +111,9 @@ ROOM_TYPES = {
             "Free Wi-Fi",
             "Free Valet Parking",
         ],
-        "360_url": "https://linkprotect.cudasvc.com/url?a=https%3a%2f%2fmy.matterport.com%2fshow%2f%3fm%3dKeDqsnXnaMC&c=E,1,sx9k_XvHedOA6JWB_tZlSo_iiNuk_wo33K6i0NtX-mWrkKfLzlSGBzBI7fAG08ARj0-iAH8ut5pRs1n5L5BQ-bWro-tpkDI8OAackkhYOgS41yCLfgtZ4iXgXYk,&typo=1",
+        "360_url": (
+            "https://my.matterport.com/show/?m=KeDqsnXnaMC"
+        ),
     },
 
     "Two Bedroom Suite": {
@@ -110,7 +121,9 @@ ROOM_TYPES = {
             "Free Wi-Fi",
             "Free Valet Parking",
         ],
-        "360_url": "https://my.matterport.com/models/v5byckDjTex",
+        "360_url": (
+            "https://my.matterport.com/models/v5byckDjTex"
+        ),
     },
 
     "One Bedroom Penthouse": {
@@ -118,15 +131,19 @@ ROOM_TYPES = {
             "Free Wi-Fi",
             "Free Valet Parking",
         ],
-        "360_url": "https://my.matterport.com/show/?m=1fiBeobaV6D",
+        "360_url": (
+            "https://my.matterport.com/show/?m=1fiBeobaV6D"
+        ),
     },
 
-     "Two Bedroom Penthouse": {
+    "Two Bedroom Penthouse": {
         "default_inclusions": [
             "Free Wi-Fi",
             "Free Valet Parking",
         ],
-        "360_url": "https://my.matterport.com/show/?m=oXToa8PNnKL",
+        "360_url": (
+            "https://my.matterport.com/show/?m=oXToa8PNnKL"
+        ),
     },
 }
 
@@ -552,7 +569,6 @@ def get_saved_refresh_token(email):
         data = response.json()
 
         if not data:
-
             return None
 
         return data[0].get(
@@ -801,10 +817,6 @@ def get_google_login_url():
         "access_type":
             "offline",
 
-        # IMPORTANTE:
-        # No pedir la unión automática de scopes
-        # del login OIDC.
-
         "include_granted_scopes":
             "false",
 
@@ -871,7 +883,6 @@ def process_google_callback():
     )
 
     if not code or not state:
-
         return False
 
     payload = verify_state(
@@ -901,17 +912,6 @@ def process_google_callback():
     try:
 
         config = get_oauth_config()
-
-        # ====================================================
-        # INTERCAMBIO DIRECTO CON GOOGLE
-        #
-        # Esto evita el error:
-        #
-        # Scope has changed...
-        #
-        # causado por usar el mismo OAuth Client para
-        # Streamlit OIDC y Gmail OAuth.
-        # ====================================================
 
         token_response = requests.post(
 
@@ -978,10 +978,6 @@ def process_google_callback():
                 "Please authorize Gmail again."
             )
 
-        # ====================================================
-        # CREAR CREDENTIALS
-        # ====================================================
-
         credentials = Credentials(
 
             token=access_token,
@@ -1002,10 +998,6 @@ def process_google_callback():
 
             scopes=GMAIL_SCOPES,
         )
-
-        # ====================================================
-        # VERIFICAR GMAIL
-        # ====================================================
 
         service = build(
 
@@ -1034,10 +1026,6 @@ def process_google_callback():
 
         email = email.lower().strip()
 
-        # ====================================================
-        # VALIDAR DOMINIO
-        # ====================================================
-
         if not email.endswith(
             "@casadorada.com"
         ):
@@ -1050,10 +1038,6 @@ def process_google_callback():
             st.query_params.clear()
 
             return False
-
-        # ====================================================
-        # VALIDAR USUARIO OIDC
-        # ====================================================
 
         logged_email = get_logged_in_email()
 
@@ -1078,10 +1062,6 @@ def process_google_callback():
             st.query_params.clear()
 
             return False
-
-        # ====================================================
-        # GUARDAR REFRESH TOKEN
-        # ====================================================
 
         saved = save_refresh_token(
 
@@ -1117,10 +1097,6 @@ def process_google_callback():
 
             return False
 
-        # ====================================================
-        # GUARDAR EN SESSION
-        # ====================================================
-
         st.session_state.google_credentials = (
             credentials_to_dict(
                 credentials
@@ -1136,10 +1112,6 @@ def process_google_callback():
         st.session_state.supabase_get_error = None
 
         st.query_params.clear()
-
-        # ====================================================
-        # VERIFICAR SI EXISTE COTIZACIÓN PENDIENTE
-        # ====================================================
 
         pending_quote = (
             st.session_state.get(
@@ -1252,7 +1224,6 @@ def get_credentials():
     logged_email = get_logged_in_email()
 
     if not logged_email:
-
         return None
 
     logged_email = (
@@ -1260,10 +1231,6 @@ def get_credentials():
         .lower()
         .strip()
     )
-
-    # ========================================================
-    # SESSION
-    # ========================================================
 
     data = st.session_state.get(
         "google_credentials"
@@ -1299,7 +1266,6 @@ def get_credentials():
         )
 
         if credentials.valid:
-
             return credentials
 
         if (
@@ -1333,10 +1299,6 @@ def get_credentials():
                     str(e)
                 )
 
-    # ========================================================
-    # REFRESH TOKEN DESDE SUPABASE
-    # ========================================================
-
     refresh_token = (
         get_saved_refresh_token(
             logged_email
@@ -1344,7 +1306,6 @@ def get_credentials():
     )
 
     if not refresh_token:
-
         return None
 
     config = get_oauth_config()
@@ -1414,7 +1375,6 @@ def get_gmail_service():
     credentials = get_credentials()
 
     if not credentials:
-
         return None
 
     try:
@@ -1452,7 +1412,6 @@ def get_connected_email():
     credentials = get_credentials()
 
     if not credentials:
-
         return None
 
     try:
@@ -1477,7 +1436,6 @@ def get_connected_email():
         )
 
         if not email:
-
             return None
 
         email = email.lower().strip()
@@ -1485,7 +1443,6 @@ def get_connected_email():
         if not email.endswith(
             "@casadorada.com"
         ):
-
             return None
 
         logged_email = get_logged_in_email()
@@ -1494,7 +1451,6 @@ def get_connected_email():
             logged_email
             and email != logged_email
         ):
-
             return None
 
         st.session_state.google_email = email
@@ -1544,7 +1500,6 @@ def calculate_rate_values(
         number_nights = 1
 
     if number_nights <= 0:
-
         number_nights = 1
 
     total_before_tax = (
@@ -1610,7 +1565,6 @@ def money(value):
 def html_escape(value):
 
     if value is None:
-
         return ""
 
     return (
@@ -1630,7 +1584,6 @@ def html_escape(value):
 def format_date_email(value):
 
     if not value:
-
         return ""
 
     try:
@@ -1680,14 +1633,6 @@ def build_option_html(
 
     total_with_tax = calculations[
         "total_with_tax"
-    ]
-
-    total_before_tax = calculations[
-        "total_before_tax"
-    ]
-
-    taxes = calculations[
-        "taxes"
     ]
 
     nightly_with_tax = calculations[
@@ -1942,50 +1887,6 @@ def build_option_html(
                             text-align:right;
                         ">
                             {html_escape(nights)}
-                        </td>
-
-                    </tr>
-
-                    <tr>
-
-                        <td style="
-                            padding:6px 0;
-                            color:#555555;
-                            font-size:14px;
-                            text-align:left;
-                        ">
-                            Stay total before taxes
-                        </td>
-
-                        <td style="
-                            padding:6px 0;
-                            color:#222222;
-                            font-size:14px;
-                            text-align:right;
-                        ">
-                            {money(total_before_tax)}
-                        </td>
-
-                    </tr>
-
-                    <tr>
-
-                        <td style="
-                            padding:6px 0;
-                            color:#555555;
-                            font-size:14px;
-                            text-align:left;
-                        ">
-                            Taxes
-                        </td>
-
-                        <td style="
-                            padding:6px 0;
-                            color:#222222;
-                            font-size:14px;
-                            text-align:right;
-                        ">
-                            {money(taxes)}
                         </td>
 
                     </tr>
@@ -2298,6 +2199,7 @@ def build_plain_text(
             for service in option[
                 "selected_services"
             ]
+
         )
 
         final_total = (
@@ -2326,13 +2228,7 @@ def build_plain_text(
         )
 
         lines.append(
-            f"Stay total before taxes: "
-            f"{money(calculations['total_before_tax'])}"
-        )
-
-        lines.append(
-            f"Taxes: "
-            f"{money(calculations['taxes'])}"
+            f"Number of nights: {nights}"
         )
 
         lines.append(
@@ -2360,13 +2256,23 @@ def build_plain_text(
             "Additional Services:"
         )
 
-        for service in option[
+        if option[
             "selected_services"
         ]:
 
+            for service in option[
+                "selected_services"
+            ]:
+
+                lines.append(
+                    f"• {service}: "
+                    f"{money(ADDITIONAL_SERVICES[service])}"
+                )
+
+        else:
+
             lines.append(
-                f"• {service}: "
-                f"{money(ADDITIONAL_SERVICES[service])}"
+                "No additional services"
             )
 
         lines.append("")
@@ -2446,6 +2352,9 @@ def build_email_html(
 ):
 
     options_html = ""
+
+    # IMPORTANTE:
+    # Se recorren TODAS las opciones.
 
     for index, option in enumerate(
         options,
@@ -3267,6 +3176,10 @@ with st.sidebar:
     )
 
 
+    # ========================================================
+    # AHORA PERMITE HASTA 5 OPCIONES
+    # ========================================================
+
     number_options = st.selectbox(
 
         "Number of quotation options",
@@ -3795,30 +3708,42 @@ for option_number in range(
     link_col1, link_col2 = st.columns(2)
 
 
-with link_col1:
+    # ========================================================
+    # 360 LINK
+    #
+    # SE ACTUALIZA AUTOMÁTICAMENTE SEGÚN LA HABITACIÓN
+    # ========================================================
 
-    room_360_url = ROOM_TYPES[
-        room_type
-    ].get(
-        "360_url",
-        ""
-    )
+    with link_col1:
 
-    st.text_input(
+        room_360_url = ROOM_TYPES[
+            room_type
+        ].get(
+            "360_url",
+            ""
+        )
 
-        "360° Room View Link",
+        st.text_input(
 
-        value=room_360_url,
+            "360° Room View Link",
 
-        placeholder="https://...",
+            value=room_360_url,
 
-        key=(
-            f"room_360_url_"
-            f"{option_number}_"
-            f"{room_type}"
-        ),
-    )
+            placeholder="https://...",
 
+            key=(
+                f"room_360_url_display_"
+                f"{option_number}_"
+                f"{room_type}"
+            ),
+
+            disabled=True,
+        )
+
+
+    # ========================================================
+    # PAYMENT LINK
+    # ========================================================
 
     with link_col2:
 
@@ -3834,6 +3759,15 @@ with link_col1:
             ),
         )
 
+
+    # ========================================================
+    # SAVE OPTION
+    #
+    # MUY IMPORTANTE:
+    # ESTE BLOQUE ESTÁ DENTRO DEL FOR.
+    #
+    # Por eso se guardan las opciones 1, 2, 3, 4 y 5.
+    # ========================================================
 
     option_data = {
 
@@ -3863,6 +3797,7 @@ with link_col1:
 
         "room_360_url":
             room_360_url,
+
     }
 
 
@@ -4047,10 +3982,6 @@ with action_col1:
 
             else:
 
-                # =================================================
-                # GUARDAR LA COTIZACIÓN ANTES DE IR A GOOGLE
-                # =================================================
-
                 store_pending_quote(
 
                     action="draft",
@@ -4073,10 +4004,6 @@ with action_col1:
                     user_logged_in = False
 
 
-                # =================================================
-                # PRIMERO LOGIN OIDC
-                # =================================================
-
                 if not user_logged_in:
 
                     st.info(
@@ -4088,10 +4015,6 @@ with action_col1:
                     st.login()
 
                 else:
-
-                    # =================================================
-                    # GMAIL NO CONECTADO
-                    # =================================================
 
                     login_url = (
                         get_google_login_url()
@@ -4179,10 +4102,6 @@ with action_col2:
                     )
 
             else:
-
-                # =================================================
-                # GUARDAR COTIZACIÓN ANTES DE GOOGLE
-                # =================================================
 
                 store_pending_quote(
 
