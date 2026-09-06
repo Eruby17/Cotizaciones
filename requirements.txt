@@ -1,4 +1,5 @@
-streamlit>=1.30.0
+streamlit
+Authlib
 google-auth
 google-auth-oauthlib
 google-api-python-client
