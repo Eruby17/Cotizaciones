@@ -404,7 +404,8 @@ st.markdown(
     }
 
     </style>
-    """,
+    """
+    ,
     unsafe_allow_html=True,
 )
 
@@ -626,7 +627,7 @@ def get_saved_refresh_token(
 
 
 # ============================================================
-# QUOTATIONS DATABASE
+# QUOTATIONS & CONFIRMATIONS DATABASE
 # ============================================================
 
 def generate_quotation_number():
@@ -644,6 +645,23 @@ def generate_quotation_number():
 
     return (
         f"CD{date_part}-{random_part}"
+    )
+
+def generate_confirmation_number():
+
+    today = datetime.utcnow()
+
+    date_part = today.strftime(
+        "%y%m%d"
+    )
+
+    random_part = (
+        secrets.randbelow(9000)
+        + 1000
+    )
+
+    return (
+        f"CN{date_part}-{random_part}"
     )
 
 
@@ -900,6 +918,116 @@ def save_quotation_to_supabase(
             "quotation_database_error"
         ] = str(e)
 
+        return None
+
+
+def search_quotations_in_supabase(search_term):
+    
+    config = get_supabase_config()
+    if not config:
+        return []
+
+    endpoint = f"{config['url']}/rest/v1/quotations"
+    headers = get_supabase_headers()
+
+    term = search_term.strip()
+    
+    params = {
+        "or": f"(quotation_number.ilike.*{term}*,guest_name.ilike.*{term}*,guest_email.ilike.*{term}*)",
+        "order": "created_at.desc",
+        "limit": "20",
+    }
+    
+    try:
+        response = requests.get(endpoint, headers=headers, params=params, timeout=15)
+        if response.status_code != 200:
+            st.session_state["quotation_database_error"] = f"HTTP {response.status_code}: {response.text}"
+            return []
+        return response.json()
+    except Exception as e:
+        st.session_state["quotation_database_error"] = str(e)
+        return []
+
+def update_quotation_status(quotation_number, status="CONFIRMED"):
+    config = get_supabase_config()
+    if not config:
+        return False
+        
+    endpoint = f"{config['url']}/rest/v1/quotations"
+    headers = get_supabase_headers()
+    params = {"quotation_number": f"eq.{quotation_number}"}
+    payload = {"status": status}
+    
+    try:
+        response = requests.patch(endpoint, headers=headers, params=params, json=payload, timeout=15)
+        return response.status_code in [200, 204]
+    except Exception:
+        return False
+
+
+def save_confirmation_to_supabase(
+    confirmation_number,
+    quotation_number,
+    guest_name,
+    guest_email,
+    arrival,
+    departure,
+    nights,
+    adults,
+    children,
+    room_type,
+    rate_per_night,
+    stay_total,
+    first_night_amount,
+    balance_due,
+    payment_status,
+    comments,
+    special_requests,
+    additional_services,
+    created_by,
+):
+    config = get_supabase_config()
+    if not config:
+        return None
+
+    endpoint = f"{config['url']}/rest/v1/confirmations"
+    headers = get_supabase_headers("return=representation")
+
+    payload = {
+        "confirmation_number": confirmation_number,
+        "quotation_number": quotation_number,
+        "guest_name": guest_name,
+        "guest_email": guest_email,
+        "arrival": str(arrival),
+        "departure": str(departure),
+        "nights": int(nights),
+        "adults": int(adults),
+        "children": int(children),
+        "room_type": room_type,
+        "rate_per_night": float(rate_per_night),
+        "stay_total": float(stay_total),
+        "first_night_amount": float(first_night_amount),
+        "balance_due": float(balance_due),
+        "payment_status": payment_status,
+        "comments": comments,
+        "special_requests": special_requests,
+        "additional_services": additional_services,
+        "status": "CONFIRMED",
+        "created_by": created_by,
+        "confirmed_by": created_by,
+    }
+
+    try:
+        response = requests.post(endpoint, headers=headers, json=payload, timeout=20)
+        if response.status_code not in [200, 201]:
+            st.session_state["quotation_database_error"] = f"HTTP {response.status_code}: {response.text}"
+            return None
+        data = response.json()
+        if not data:
+            return None
+        return data[0]
+    except Exception as e:
+        st.session_state["quotation_database_error"] = str(e)
         return None
 
 
@@ -1461,6 +1589,12 @@ def process_google_callback():
                 "pending_quote"
             )
         )
+        
+        pending_confirmation = (
+            st.session_state.get(
+                "pending_confirmation"
+            )
+        )
 
         pending_action = (
             st.session_state.get(
@@ -1666,6 +1800,67 @@ def process_google_callback():
                 )
 
                 st.session_state.pending_quote = None
+                st.session_state.pending_action = None
+                
+        elif (
+            pending_confirmation
+            and pending_action
+        ):
+            try:
+                if pending_action == "draft":
+                    save_gmail_draft(
+                        to_email=pending_confirmation["guest_email"],
+                        subject=pending_confirmation["subject"],
+                        html_body=pending_confirmation["email_html"],
+                        plain_text_body=pending_confirmation["plain_text_email"],
+                    )
+                elif pending_action == "send":
+                    send_gmail_message(
+                        to_email=pending_confirmation["guest_email"],
+                        subject=pending_confirmation["subject"],
+                        html_body=pending_confirmation["email_html"],
+                        plain_text_body=pending_confirmation["plain_text_email"],
+                    )
+                
+                conf = save_confirmation_to_supabase(
+                    confirmation_number=pending_confirmation["confirmation_number"],
+                    quotation_number=pending_confirmation["quotation_number"],
+                    guest_name=pending_confirmation["guest_name"],
+                    guest_email=pending_confirmation["guest_email"],
+                    arrival=pending_confirmation["arrival"],
+                    departure=pending_confirmation["departure"],
+                    nights=pending_confirmation["nights"],
+                    adults=pending_confirmation["adults"],
+                    children=pending_confirmation["children"],
+                    room_type=pending_confirmation["room_type"],
+                    rate_per_night=pending_confirmation["rate_per_night"],
+                    stay_total=pending_confirmation["stay_total"],
+                    first_night_amount=pending_confirmation["first_night_amount"],
+                    balance_due=pending_confirmation["balance_due"],
+                    payment_status=pending_confirmation["payment_status"],
+                    comments=pending_confirmation["comments"],
+                    special_requests=pending_confirmation["special_requests"],
+                    additional_services=pending_confirmation["additional_services"],
+                    created_by=logged_email,
+                )
+                
+                if conf and pending_confirmation["quotation_number"]:
+                    update_quotation_status(pending_confirmation["quotation_number"], "CONFIRMED")
+                    
+                st.session_state.pending_confirmation = None
+                st.session_state.pending_action = None
+                
+                if conf:
+                    if pending_action == "draft":
+                        st.session_state.conf_auto_draft_success = conf["confirmation_number"]
+                    else:
+                        st.session_state.conf_auto_send_success = conf["confirmation_number"]
+                else:
+                    st.session_state.conf_auto_draft_success = "Action completed, but database save failed."
+
+            except Exception as e:
+                st.session_state.pending_action_error = str(e)
+                st.session_state.pending_confirmation = None
                 st.session_state.pending_action = None
 
         return True
@@ -3280,6 +3475,189 @@ US:
 </html>
 """
 
+# ============================================================
+# CONFIRMATION EMAIL HTML
+# ============================================================
+
+def build_confirmation_email_html(
+    confirmation_number,
+    guest_name,
+    arrival,
+    departure,
+    adults,
+    children,
+    nights,
+    room_type,
+    rate_per_night,
+    stay_total,
+    first_night_amount,
+    balance_due,
+    payment_status,
+    special_requests,
+    deposit_policy,
+    cancellation_policy,
+    selected_inclusions,
+    selected_services
+):
+    guest_summary = f"{adults} Adults"
+    if children > 0:
+        guest_summary += f" + {children} Children"
+
+    inclusions_html = ""
+    if selected_inclusions:
+        for inclusion in selected_inclusions:
+            inclusions_html += f"""<li style="margin-bottom:7px; color:#444444; font-size:14px; line-height:1.4;">{html_escape(inclusion)}</li>"""
+    else:
+        inclusions_html = """<li style="color:#777777; font-size:14px;">No inclusions selected</li>"""
+
+    services_html = ""
+    if selected_services:
+        for service in selected_services:
+            services_html += f"""<tr><td style="padding:6px 0; color:#555555; font-size:14px; text-align:left;">• {html_escape(service)}</td></tr>"""
+    else:
+        services_html = """<tr><td style="padding:6px 0; color:#777777; font-size:14px; text-align:left;">No additional services</td></tr>"""
+
+    special_html = ""
+    if special_requests:
+        special_html = f"""
+        <div style="color:#1f4f78; font-size:14px; font-weight:bold; margin-top:15px; margin-bottom:6px; text-align:left;">Special Requests</div>
+        <div style="color:#555555; font-size:13px; line-height:1.5; text-align:left;">{html_escape(special_requests)}</div>
+        """
+
+    return f"""
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reservation Confirmation</title>
+</head>
+<body style="margin:0; padding:0; background:#f3f4f6; font-family:Arial,Helvetica,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" border="0">
+<tr>
+<td align="left" style="padding:30px 10px;">
+<table width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px; max-width:100%; background:#ffffff;">
+<tr>
+<td align="left" style="background:#ffffff; padding:25px 35px 15px 35px;">
+<img src="{EMAIL_LOGO_URL}" alt="Casa Dorada" style="max-width:220px; width:100%; height:auto; display:block;">
+</td>
+</tr>
+<tr>
+<td style="padding:15px 35px 5px 35px; text-align:left;">
+<div style="color:#1f4f78; font-size:25px; font-weight:bold; text-align:left;">Reservation Confirmation</div>
+<div style="color:#222222; font-size:16px; font-weight:bold; margin-top:5px;">Confirmation Number: {html_escape(confirmation_number)}</div>
+</td>
+</tr>
+<tr>
+<td style="padding:15px 35px 10px 35px; text-align:left;">
+<p style="color:#333333; font-size:15px; line-height:1.6; margin:0 0 12px 0; text-align:left;">Dear {html_escape(guest_name)},</p>
+<p style="color:#555555; font-size:14px; line-height:1.6; margin:0; text-align:left;">We are delighted to confirm your reservation at Casa Dorada Los Cabos Resort & Spa.</p>
+</td>
+</tr>
+<tr>
+<td style="padding:20px 35px 15px 35px; text-align:left;">
+<div style="color:#1f4f78; font-size:19px; font-weight:bold; margin-bottom:12px; text-align:left;">Reservation Details</div>
+<table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f7f8fa; border:1px solid #e5e7eb;">
+<tr><td style="padding:10px 14px; width:35%; color:#777777; font-size:13px; font-weight:bold; text-align:left; border-bottom:1px solid #e5e7eb;">Guests</td><td style="padding:10px 14px; color:#1f2937; font-size:13px; font-weight:bold; text-align:left; border-bottom:1px solid #e5e7eb;">{html_escape(guest_summary)}</td></tr>
+<tr><td style="padding:10px 14px; color:#777777; font-size:13px; font-weight:bold; text-align:left; border-bottom:1px solid #e5e7eb;">Arrival</td><td style="padding:10px 14px; color:#1f2937; font-size:13px; font-weight:bold; text-align:left; border-bottom:1px solid #e5e7eb;">{html_escape(format_date_email(arrival))}</td></tr>
+<tr><td style="padding:10px 14px; color:#777777; font-size:13px; font-weight:bold; text-align:left; border-bottom:1px solid #e5e7eb;">Departure</td><td style="padding:10px 14px; color:#1f2937; font-size:13px; font-weight:bold; text-align:left; border-bottom:1px solid #e5e7eb;">{html_escape(format_date_email(departure))}</td></tr>
+<tr><td style="padding:10px 14px; color:#777777; font-size:13px; font-weight:bold; text-align:left; border-bottom:1px solid #e5e7eb;">Nights</td><td style="padding:10px 14px; color:#1f2937; font-size:13px; font-weight:bold; text-align:left; border-bottom:1px solid #e5e7eb;">{html_escape(nights)}</td></tr>
+<tr><td style="padding:10px 14px; color:#777777; font-size:13px; font-weight:bold; text-align:left;">Room Type</td><td style="padding:10px 14px; color:#1f2937; font-size:13px; font-weight:bold; text-align:left;">{html_escape(room_type)}</td></tr>
+</table>
+</td>
+</tr>
+<tr>
+<td style="padding:10px 35px 20px 35px; text-align:left;">
+<table width="100%" cellpadding="0" cellspacing="0" border="0">
+<tr><td style="padding:6px 0; color:#555555; font-size:14px; text-align:left;">Rate per night (taxes incl.)</td><td style="padding:6px 0; color:#222222; font-size:14px; text-align:right;">{money(rate_per_night)}</td></tr>
+<tr><td style="border-top:1px solid #eeeeee; padding:10px 0 6px 0; color:#1f4f78; font-size:15px; font-weight:bold; text-align:left;">Total Amount</td><td style="border-top:1px solid #eeeeee; padding:10px 0 6px 0; color:#1f4f78; font-size:16px; text-align:right; font-weight:bold;">{money(stay_total)}</td></tr>
+<tr><td style="padding:6px 0; color:#555555; font-size:14px; text-align:left;">Payment Status</td><td style="padding:6px 0; color:#222222; font-size:14px; text-align:right;">{html_escape(payment_status)}</td></tr>
+<tr><td style="padding:6px 0; color:#555555; font-size:14px; text-align:left;">Deposit</td><td style="padding:6px 0; color:#222222; font-size:14px; text-align:right;">{money(first_night_amount)}</td></tr>
+<tr><td style="padding:6px 0; color:#555555; font-size:14px; text-align:left; font-weight:bold;">Balance Due</td><td style="padding:6px 0; color:#222222; font-size:14px; text-align:right; font-weight:bold;">{money(balance_due)}</td></tr>
+</table>
+<div style="margin-top:20px; color:#1f4f78; font-size:15px; font-weight:bold; text-align:left;">Included Benefits</div>
+<ul style="padding-left:22px; margin-top:8px; margin-bottom:15px; text-align:left;">{inclusions_html}</ul>
+<div style="margin-top:15px; color:#1f4f78; font-size:15px; font-weight:bold; text-align:left;">Additional Services</div>
+<table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:8px;">{services_html}</table>
+<div style="margin-top:20px; padding-top:15px; border-top:1px solid #eeeeee;">
+<div style="color:#1f4f78; font-size:14px; font-weight:bold; margin-bottom:6px; text-align:left;">Deposit Policy</div>
+<div style="color:#555555; font-size:13px; line-height:1.5; text-align:left;">{html_escape(deposit_policy)}</div>
+<div style="color:#1f4f78; font-size:14px; font-weight:bold; margin-top:15px; margin-bottom:6px; text-align:left;">Cancellation Policy</div>
+<div style="color:#555555; font-size:13px; line-height:1.5; text-align:left;">{html_escape(cancellation_policy)}</div>
+{special_html}
+</div>
+</td>
+</tr>
+<tr>
+<td style="background:#1f4f78; padding:22px 30px; text-align:left;">
+<div style="color:#ffffff; font-size:14px; font-weight:bold; margin-bottom:6px; text-align:left;">Casa Dorada Los Cabos Resort & Spa</div>
+<div style="color:#dbeafe; font-size:12px; line-height:1.5; text-align:left;">Av. del Pescador s/n, Cabo San Lucas, B.C.S.</div>
+<div style="color:#dbeafe; font-size:12px; line-height:1.5; text-align:left;">US: <a href="tel:18664480151" style="color:#ffffff; text-decoration:none;">1-866-448-0151</a></div>
+</td>
+</tr>
+</table>
+</td>
+</tr>
+</table>
+</body>
+</html>
+"""
+
+def build_confirmation_plain_text(
+    confirmation_number, guest_name, arrival, departure, adults, children, nights,
+    room_type, rate_per_night, stay_total, first_night_amount, balance_due,
+    payment_status, special_requests, deposit_policy, cancellation_policy,
+    selected_inclusions, selected_services
+):
+    lines = []
+    lines.append("RESERVATION CONFIRMATION")
+    lines.append(f"Confirmation Number: {confirmation_number}")
+    lines.append("")
+    lines.append(f"Dear {guest_name},")
+    lines.append("We are delighted to confirm your reservation at Casa Dorada Los Cabos Resort & Spa.")
+    lines.append("")
+    lines.append("RESERVATION DETAILS")
+    lines.append(f"Guests: {adults} Adults" + (f", {children} Children" if children > 0 else ""))
+    lines.append(f"Arrival: {format_date_email(arrival)}")
+    lines.append(f"Departure: {format_date_email(departure)}")
+    lines.append(f"Nights: {nights}")
+    lines.append(f"Room Type: {room_type}")
+    lines.append(f"Rate per night (taxes incl.): {money(rate_per_night)}")
+    lines.append(f"Total Amount: {money(stay_total)}")
+    lines.append(f"Payment Status: {payment_status}")
+    lines.append(f"Deposit: {money(first_night_amount)}")
+    lines.append(f"Balance Due: {money(balance_due)}")
+    lines.append("")
+    lines.append("Included Benefits:")
+    if selected_inclusions:
+        for inc in selected_inclusions:
+            lines.append(f"• {inc}")
+    else:
+        lines.append("No inclusions selected")
+    lines.append("")
+    lines.append("Additional Services:")
+    if selected_services:
+        for srv in selected_services:
+            lines.append(f"• {srv}")
+    else:
+        lines.append("No additional services")
+    lines.append("")
+    lines.append("Deposit Policy:")
+    lines.append(deposit_policy)
+    lines.append("")
+    lines.append("Cancellation Policy:")
+    lines.append(cancellation_policy)
+    if special_requests:
+        lines.append("")
+        lines.append("Special Requests:")
+        lines.append(special_requests)
+    lines.append("")
+    lines.append("----------------------------------------")
+    lines.append("Casa Dorada Los Cabos Resort & Spa")
+    lines.append("Av. del Pescador s/n, Cabo San Lucas, B.C.S.")
+    lines.append("US: 1-866-448-0151")
+    return "\n".join(lines)
+
 
 # ============================================================
 # GMAIL MESSAGE
@@ -3408,43 +3786,23 @@ def send_gmail_message(
 # ============================================================
 
 SESSION_DEFAULTS = {
-
-    "google_connected":
-        False,
-
-    "google_credentials":
-        None,
-
-    "google_email":
-        None,
-
-    "gmail_auth_error":
-        None,
-
-    "supabase_save_error":
-        None,
-
-    "supabase_get_error":
-        None,
-
-    "quotation_database_error":
-        None,
-
-    "pending_quote":
-        None,
-
-    "pending_action":
-        None,
-
-    "auto_draft_success":
-        False,
-
-    "auto_send_success":
-        False,
-
-    "pending_action_error":
-        None,
-
+    "google_connected": False,
+    "google_credentials": None,
+    "google_email": None,
+    "gmail_auth_error": None,
+    "supabase_save_error": None,
+    "supabase_get_error": None,
+    "quotation_database_error": None,
+    "pending_quote": None,
+    "pending_confirmation": None,
+    "pending_action": None,
+    "auto_draft_success": False,
+    "auto_send_success": False,
+    "conf_auto_draft_success": False,
+    "conf_auto_send_success": False,
+    "pending_action_error": None,
+    "confirm_search_results": [],
+    "selected_quote": None,
 }
 
 
@@ -3559,6 +3917,23 @@ if st.session_state.get(
         )
 
     st.session_state.auto_send_success = False
+    
+    
+if st.session_state.get("conf_auto_draft_success"):
+    result = st.session_state.conf_auto_draft_success
+    if isinstance(result, str) and result.startswith("CN"):
+        st.success(f"Confirmation Draft saved successfully. Confirmation #{result}")
+    else:
+        st.success(result)
+    st.session_state.conf_auto_draft_success = False
+
+if st.session_state.get("conf_auto_send_success"):
+    result = st.session_state.conf_auto_send_success
+    if isinstance(result, str) and result.startswith("CN"):
+        st.success(f"Confirmation Email sent successfully. Confirmation #{result}")
+    else:
+        st.success(result)
+    st.session_state.conf_auto_send_success = False
 
 
 if st.session_state.get(
@@ -3566,7 +3941,7 @@ if st.session_state.get(
 ):
 
     st.error(
-        "The quotation was recovered, "
+        "The operation was recovered, "
         "but the email action could not be completed."
     )
 
@@ -3586,7 +3961,7 @@ if st.session_state.get(
 ):
 
     with st.expander(
-        "Quotation database diagnostics"
+        "Database diagnostics"
     ):
 
         st.code(
@@ -3605,6 +3980,10 @@ if st.session_state.get(
 # ============================================================
 
 with st.sidebar:
+
+    st.markdown("## Navigation")
+    app_mode = st.radio("Select View", ["Create Quotation", "Confirm Quotation", "Manual Confirmation"])
+    st.divider()
 
     st.markdown(
         "## Gmail"
@@ -3730,1174 +4109,949 @@ with st.sidebar:
                             supabase_error
                         )
 
+    if app_mode == "Create Quotation":
+        st.divider()
 
-    st.divider()
+        st.markdown(
+            "### Quote Settings"
+        )
 
+        number_options = st.selectbox(
 
-    st.markdown(
-        "### Quote Settings"
-    )
+            "Number of quotation options",
 
+            [1, 2, 3, 4, 5],
 
-    number_options = st.selectbox(
+            index=0,
+        )
 
-        "Number of quotation options",
+        st.divider()
 
-        [1, 2, 3, 4, 5],
-
-        index=0,
-    )
-
-
-    st.divider()
-
-
-    st.caption(
-        "Cada opción es independiente y puede "
-        "tener diferente habitación, tarifa, "
-        "beneficios, servicios y políticas."
-    )
-
-
-# ============================================================
-# MAIN TITLE
-# ============================================================
-
-st.title(
-    "Create Quotation"
-)
-
-st.caption(
-    "Create a professional quotation "
-    "for your guest."
-)
-
-
-# ============================================================
-# GUEST INFORMATION
-# ============================================================
-
-st.markdown(
-    "## Guest Information"
-)
-
-st.caption(
-    "Basic information for the quotation."
-)
-
-
-guest_col1, guest_col2 = (
-    st.columns(2)
-)
-
-
-with guest_col1:
-
-    guest_name = st.text_input(
-        "Guest name",
-        placeholder="John Smith",
-    )
-
-
-with guest_col2:
-
-    guest_email = st.text_input(
-        "Guest email",
-        placeholder="guest@email.com",
-    )
-
-
-guest_col3, guest_col4 = (
-    st.columns(2)
-)
-
-
-with guest_col3:
-
-    arrival = st.date_input(
-        "Arrival",
-        value=date.today(),
-    )
-
-
-with guest_col4:
-
-    departure = st.date_input(
-        "Departure",
-        value=date.today(),
-    )
-
-
-guest_col5, guest_col6, guest_col7 = (
-    st.columns(3)
-)
-
-
-calculated_nights = (
-    departure - arrival
-).days
-
-
-if calculated_nights < 1:
-
-    calculated_nights = 1
-
-
-with guest_col5:
-
-    adults = st.number_input(
-        "Adults",
-        min_value=1,
-        max_value=20,
-        value=2,
-        step=1,
-    )
-
-
-with guest_col6:
-
-    children = st.number_input(
-        "Children",
-        min_value=0,
-        max_value=20,
-        value=0,
-        step=1,
-    )
-
-
-with guest_col7:
-
-    nights = st.number_input(
-        "Nights",
-        min_value=1,
-        max_value=365,
-        value=calculated_nights,
-        step=1,
-    )
-
-
-st.divider()
-
-
-# ============================================================
-# QUOTATION OPTIONS
-# ============================================================
-
-all_options = []
-
-
-for option_number in range(
-    1,
-    number_options + 1,
-):
-
-    st.markdown(
-        f"## Quotation Option {option_number}"
-    )
-
-    st.caption(
-        "Configure this quotation option independently."
-    )
-
-
-    # --------------------------------------------------------
-    # ROOM
-    # --------------------------------------------------------
-
-    room_type = st.selectbox(
-
-        "Room type",
-
-        list(
-            ROOM_TYPES.keys()
-        ),
-
-        key=(
-            f"room_type_"
-            f"{option_number}"
-        ),
-    )
-
-
-    # --------------------------------------------------------
-    # RATE
-    # --------------------------------------------------------
-
-    st.markdown(
-        "### Rate"
-    )
-
-    st.caption(
-        "Enter the total stay amount with taxes included. "
-        "The system will calculate all rates automatically."
-    )
-
-
-    rate_col1, rate_col2 = (
-        st.columns(2)
-    )
-
-
-    with rate_col1:
-
-        stay_total_tax_included = (
-            st.number_input(
-
-                "Stay Total Taxes Included (USD)",
-
-                min_value=0.00,
-
-                value=0.00,
-
-                step=100.00,
-
-                format="%.2f",
-
-                key=(
-                    f"stay_total_tax_included_"
-                    f"{option_number}"
-                ),
-            )
+        st.caption(
+            "Cada opción es independiente y puede "
+            "tener diferente habitación, tarifa, "
+            "beneficios, servicios y políticas."
         )
 
 
-    with rate_col2:
+# ============================================================
+# WORKFLOW: CREATE QUOTATION
+# ============================================================
 
-        valid_until = st.date_input(
+if app_mode == "Create Quotation":
 
-            "Quote valid until",
+    st.title(
+        "Create Quotation"
+    )
 
+    st.caption(
+        "Create a professional quotation "
+        "for your guest."
+    )
+
+    st.markdown(
+        "## Guest Information"
+    )
+
+    st.caption(
+        "Basic information for the quotation."
+    )
+
+    guest_col1, guest_col2 = (
+        st.columns(2)
+    )
+
+    with guest_col1:
+        guest_name = st.text_input(
+            "Guest name",
+            placeholder="John Smith",
+        )
+
+    with guest_col2:
+        guest_email = st.text_input(
+            "Guest email",
+            placeholder="guest@email.com",
+        )
+
+    guest_col3, guest_col4 = (
+        st.columns(2)
+    )
+
+    with guest_col3:
+        arrival = st.date_input(
+            "Arrival",
             value=date.today(),
+        )
 
+    with guest_col4:
+        departure = st.date_input(
+            "Departure",
+            value=date.today(),
+        )
+
+    guest_col5, guest_col6, guest_col7 = (
+        st.columns(3)
+    )
+
+    calculated_nights = (
+        departure - arrival
+    ).days
+
+    if calculated_nights < 1:
+        calculated_nights = 1
+
+    with guest_col5:
+        adults = st.number_input(
+            "Adults",
+            min_value=1,
+            max_value=20,
+            value=2,
+            step=1,
+        )
+
+    with guest_col6:
+        children = st.number_input(
+            "Children",
+            min_value=0,
+            max_value=20,
+            value=0,
+            step=1,
+        )
+
+    with guest_col7:
+        nights = st.number_input(
+            "Nights",
+            min_value=1,
+            max_value=365,
+            value=calculated_nights,
+            step=1,
+        )
+
+    st.divider()
+
+    all_options = []
+
+    for option_number in range(
+        1,
+        number_options + 1,
+    ):
+
+        st.markdown(
+            f"## Quotation Option {option_number}"
+        )
+
+        st.caption(
+            "Configure this quotation option independently."
+        )
+
+        room_type = st.selectbox(
+            "Room type",
+            list(
+                ROOM_TYPES.keys()
+            ),
             key=(
-                f"valid_until_"
+                f"room_type_"
                 f"{option_number}"
             ),
         )
 
-
-    calculations = (
-        calculate_rate_values(
-            stay_total_tax_included,
-            nights,
-        )
-    )
-
-
-    rate_col3, rate_col4, rate_col5, rate_col6 = (
-        st.columns(4)
-    )
-
-
-    with rate_col3:
-
-        st.metric(
-            "Nightly Before Taxes",
-            money(
-                calculations[
-                    "nightly_before_tax"
-                ]
-            ),
+        st.markdown(
+            "### Rate"
         )
 
-
-    with rate_col4:
-
-        st.metric(
-            "Nightly Taxes Included",
-            money(
-                calculations[
-                    "nightly_with_tax"
-                ]
-            ),
+        st.caption(
+            "Enter the total stay amount with taxes included. "
+            "The system will calculate all rates automatically."
         )
 
-
-    with rate_col5:
-
-        st.metric(
-            "Stay Before Taxes",
-            money(
-                calculations[
-                    "total_before_tax"
-                ]
-            ),
+        rate_col1, rate_col2 = (
+            st.columns(2)
         )
 
+        with rate_col1:
+            stay_total_tax_included = (
+                st.number_input(
+                    "Stay Total Taxes Included (USD)",
+                    min_value=0.00,
+                    value=0.00,
+                    step=100.00,
+                    format="%.2f",
+                    key=(
+                        f"stay_total_tax_included_"
+                        f"{option_number}"
+                    ),
+                )
+            )
 
-    with rate_col6:
+        with rate_col2:
+            valid_until = st.date_input(
+                "Quote valid until",
+                value=date.today(),
+                key=(
+                    f"valid_until_"
+                    f"{option_number}"
+                ),
+            )
 
-        st.metric(
-            "Taxes 30%",
-            money(
-                calculations[
-                    "taxes"
-                ]
-            ),
+        calculations = (
+            calculate_rate_values(
+                stay_total_tax_included,
+                nights,
+            )
         )
 
+        rate_col3, rate_col4, rate_col5, rate_col6 = (
+            st.columns(4)
+        )
 
-    # --------------------------------------------------------
-    # INCLUDED BENEFITS
-    # --------------------------------------------------------
+        with rate_col3:
+            st.metric(
+                "Nightly Before Taxes",
+                money(
+                    calculations[
+                        "nightly_before_tax"
+                    ]
+                ),
+            )
 
-    st.markdown(
-        "### Included Benefits"
-    )
+        with rate_col4:
+            st.metric(
+                "Nightly Taxes Included",
+                money(
+                    calculations[
+                        "nightly_with_tax"
+                    ]
+                ),
+            )
 
-    st.caption(
-        "Select independently the benefits included "
-        "in this quotation option."
-    )
+        with rate_col5:
+            st.metric(
+                "Stay Before Taxes",
+                money(
+                    calculations[
+                        "total_before_tax"
+                    ]
+                ),
+            )
 
+        with rate_col6:
+            st.metric(
+                "Taxes 30%",
+                money(
+                    calculations[
+                        "taxes"
+                    ]
+                ),
+            )
 
-    defaults = list(
-        ROOM_TYPES[
+        st.markdown(
+            "### Included Benefits"
+        )
+
+        st.caption(
+            "Select independently the benefits included "
+            "in this quotation option."
+        )
+
+        defaults = list(
+            ROOM_TYPES[
+                room_type
+            ][
+                "default_inclusions"
+            ]
+        )
+
+        inclusion_signature = (
             room_type
-        ][
-            "default_inclusions"
-        ]
-    )
-
-
-    inclusion_signature = (
-        room_type
-        + "|"
-        + "|".join(
-            AVAILABLE_INCLUSIONS
+            + "|"
+            + "|".join(
+                AVAILABLE_INCLUSIONS
+            )
         )
-    )
 
-
-    signature_key = (
-        "inclusion_signature_"
-        + str(option_number)
-    )
-
-
-    old_signature = (
-        st.session_state.get(
-            signature_key
+        signature_key = (
+            "inclusion_signature_"
+            + str(option_number)
         )
-    )
 
+        old_signature = (
+            st.session_state.get(
+                signature_key
+            )
+        )
 
-    if old_signature != inclusion_signature:
+        if old_signature != inclusion_signature:
+
+            for index, inclusion in enumerate(
+                AVAILABLE_INCLUSIONS
+            ):
+
+                checkbox_key = (
+                    f"inclusion_"
+                    f"{option_number}_"
+                    f"{index}"
+                )
+
+                st.session_state[
+                    checkbox_key
+                ] = (
+                    inclusion in defaults
+                )
+
+            st.session_state[
+                signature_key
+            ] = inclusion_signature
+
+        inclusion_columns = (
+            st.columns(2)
+        )
+
+        selected_inclusions = []
 
         for index, inclusion in enumerate(
             AVAILABLE_INCLUSIONS
         ):
 
-            checkbox_key = (
-                f"inclusion_"
-                f"{option_number}_"
-                f"{index}"
-            )
+            with inclusion_columns[
+                index % 2
+            ]:
 
-            st.session_state[
-                checkbox_key
-            ] = (
-                inclusion in defaults
-            )
-
-
-        st.session_state[
-            signature_key
-        ] = inclusion_signature
-
-
-    inclusion_columns = (
-        st.columns(2)
-    )
-
-
-    selected_inclusions = []
-
-
-    for index, inclusion in enumerate(
-        AVAILABLE_INCLUSIONS
-    ):
-
-        with inclusion_columns[
-            index % 2
-        ]:
-
-            checkbox_key = (
-                f"inclusion_"
-                f"{option_number}_"
-                f"{index}"
-            )
-
-            checked = st.checkbox(
-
-                inclusion,
-
-                key=checkbox_key,
-            )
-
-            if checked:
-
-                selected_inclusions.append(
-                    inclusion
+                checkbox_key = (
+                    f"inclusion_"
+                    f"{option_number}_"
+                    f"{index}"
                 )
 
-
-    # --------------------------------------------------------
-    # ADDITIONAL SERVICES
-    # --------------------------------------------------------
-
-    st.markdown(
-        "### Additional Services"
-    )
-
-    st.caption(
-        "Select any additional services. "
-        "Their prices will be added automatically."
-    )
-
-
-    service_columns = (
-        st.columns(2)
-    )
-
-
-    selected_services = []
-
-
-    for index, (
-        service,
-        price
-    ) in enumerate(
-        ADDITIONAL_SERVICES.items()
-    ):
-
-        with service_columns[
-            index % 2
-        ]:
-
-            service_key = (
-                f"service_"
-                f"{option_number}_"
-                f"{index}"
-            )
-
-            selected = st.checkbox(
-
-                f"{service} — {money(price)}",
-
-                key=service_key,
-            )
-
-            if selected:
-
-                selected_services.append(
-                    service
+                checked = st.checkbox(
+                    inclusion,
+                    key=checkbox_key,
                 )
 
+                if checked:
 
-    services_total = sum(
+                    selected_inclusions.append(
+                        inclusion
+                    )
 
-        ADDITIONAL_SERVICES[
-            service
-        ]
-
-        for service in selected_services
-    )
-
-
-    final_total = (
-
-        calculations[
-            "total_with_tax"
-        ]
-
-        + services_total
-    )
-
-
-    st.metric(
-        "Total Amount",
-        money(final_total),
-    )
-
-
-    # --------------------------------------------------------
-    # DEPOSIT POLICY
-    # --------------------------------------------------------
-
-    st.markdown(
-        "### Deposit Policy"
-    )
-
-
-    deposit_policy = st.selectbox(
-
-        "Select deposit policy",
-
-        DEPOSIT_POLICIES,
-
-        key=(
-            f"deposit_policy_"
-            f"{option_number}"
-        ),
-    )
-
-
-    # --------------------------------------------------------
-    # CANCELLATION POLICY
-    # --------------------------------------------------------
-
-    st.markdown(
-        "### Cancellation Policy"
-    )
-
-
-    cancellation_policy = st.selectbox(
-
-        "Select cancellation policy",
-
-        CANCELLATION_POLICIES,
-
-        key=(
-            f"cancellation_policy_"
-            f"{option_number}"
-        ),
-    )
-
-
-    # --------------------------------------------------------
-    # OPTIONAL LINKS
-    # --------------------------------------------------------
-
-    st.markdown(
-        "### Optional Links"
-    )
-
-
-    link_col1, link_col2 = (
-        st.columns(2)
-    )
-
-
-    # --------------------------------------------------------
-    # 360 LINK
-    # --------------------------------------------------------
-
-    with link_col1:
-
-        room_360_url = (
-            ROOM_TYPES[
-                room_type
-            ].get(
-                "360_url",
-                ""
-            )
+        st.markdown(
+            "### Additional Services"
         )
 
-        st.text_input(
-
-            "360° Room View Link",
-
-            value=room_360_url,
-
-            placeholder="https://...",
-
-            key=(
-                f"room_360_url_display_"
-                f"{option_number}_"
-                f"{room_type}"
-            ),
-
-            disabled=True,
+        st.caption(
+            "Select any additional services. "
+            "Their prices will be added automatically."
         )
 
+        service_columns = (
+            st.columns(2)
+        )
 
-    # --------------------------------------------------------
-    # PAYMENT LINK
-    # --------------------------------------------------------
+        selected_services = []
 
-    with link_col2:
+        for index, (
+            service,
+            price
+        ) in enumerate(
+            ADDITIONAL_SERVICES.items()
+        ):
 
-        payment_url = st.text_input(
+            with service_columns[
+                index % 2
+            ]:
 
-            "Payment Link",
+                service_key = (
+                    f"service_"
+                    f"{option_number}_"
+                    f"{index}"
+                )
 
-            placeholder="https://...",
+                selected = st.checkbox(
+                    f"{service} — {money(price)}",
+                    key=service_key,
+                )
 
+                if selected:
+
+                    selected_services.append(
+                        service
+                    )
+
+        services_total = sum(
+            ADDITIONAL_SERVICES[
+                service
+            ]
+            for service in selected_services
+        )
+
+        final_total = (
+            calculations[
+                "total_with_tax"
+            ]
+            + services_total
+        )
+
+        st.metric(
+            "Total Amount",
+            money(final_total),
+        )
+
+        st.markdown(
+            "### Deposit Policy"
+        )
+
+        deposit_policy = st.selectbox(
+            "Select deposit policy",
+            DEPOSIT_POLICIES,
             key=(
-                f"payment_url_"
+                f"deposit_policy_"
                 f"{option_number}"
             ),
         )
 
+        st.markdown(
+            "### Cancellation Policy"
+        )
 
-    # --------------------------------------------------------
-    # SAVE OPTION
-    # --------------------------------------------------------
+        cancellation_policy = st.selectbox(
+            "Select cancellation policy",
+            CANCELLATION_POLICIES,
+            key=(
+                f"cancellation_policy_"
+                f"{option_number}"
+            ),
+        )
 
-    option_data = {
+        st.markdown(
+            "### Optional Links"
+        )
 
-        "room_type":
-            room_type,
+        link_col1, link_col2 = (
+            st.columns(2)
+        )
 
-        "valid_until":
-            valid_until,
+        with link_col1:
 
-        "stay_total_tax_included":
-            stay_total_tax_included,
+            room_360_url = (
+                ROOM_TYPES[
+                    room_type
+                ].get(
+                    "360_url",
+                    ""
+                )
+            )
 
-        "selected_inclusions":
-            selected_inclusions,
+            st.text_input(
+                "360° Room View Link",
+                value=room_360_url,
+                placeholder="https://...",
+                key=(
+                    f"room_360_url_display_"
+                    f"{option_number}_"
+                    f"{room_type}"
+                ),
+                disabled=True,
+            )
 
-        "selected_services":
-            selected_services,
+        with link_col2:
 
-        "deposit_policy":
-            deposit_policy,
+            payment_url = st.text_input(
+                "Payment Link",
+                placeholder="https://...",
+                key=(
+                    f"payment_url_"
+                    f"{option_number}"
+                ),
+            )
 
-        "cancellation_policy":
-            cancellation_policy,
+        option_data = {
+            "room_type": room_type,
+            "valid_until": valid_until,
+            "stay_total_tax_included": stay_total_tax_included,
+            "selected_inclusions": selected_inclusions,
+            "selected_services": selected_services,
+            "deposit_policy": deposit_policy,
+            "cancellation_policy": cancellation_policy,
+            "payment_url": payment_url,
+            "room_360_url": room_360_url,
+        }
 
-        "payment_url":
-            payment_url,
+        all_options.append(
+            option_data
+        )
 
-        "room_360_url":
-            room_360_url,
-    }
+        st.divider()
 
 
-    all_options.append(
-        option_data
+    email_html = build_email_html(
+        guest_name=(guest_name or "Guest"),
+        arrival=arrival,
+        departure=departure,
+        adults=adults,
+        children=children,
+        nights=nights,
+        options=all_options,
+    )
+
+    plain_text_email = build_plain_text(
+        guest_name=(guest_name or "Guest"),
+        arrival=arrival,
+        departure=departure,
+        adults=adults,
+        children=children,
+        nights=nights,
+        options=all_options,
+    )
+
+    st.markdown(
+        "## Email Preview"
+    )
+
+    st.caption(
+        "This preview simulates the actual email your guest will receive."
+    )
+
+    st.components.v1.html(
+        email_html,
+        height=(850 + number_options * 750),
+        scrolling=True,
     )
 
 
-    st.divider()
-
-
-# ============================================================
-# BUILD EMAIL
-# ============================================================
-
-email_html = build_email_html(
-
-    guest_name=(
-        guest_name
-        or "Guest"
-    ),
-
-    arrival=arrival,
-
-    departure=departure,
-
-    adults=adults,
-
-    children=children,
-
-    nights=nights,
-
-    options=all_options,
-)
-
-
-plain_text_email = build_plain_text(
-
-    guest_name=(
-        guest_name
-        or "Guest"
-    ),
-
-    arrival=arrival,
-
-    departure=departure,
-
-    adults=adults,
-
-    children=children,
-
-    nights=nights,
-
-    options=all_options,
-)
-
-
-# ============================================================
-# EMAIL PREVIEW
-# ============================================================
-
-st.markdown(
-    "## Email Preview"
-)
-
-st.caption(
-    "This preview simulates the actual email your guest will receive."
-)
-
-
-st.components.v1.html(
-
-    email_html,
-
-    height=(
-        850
-        + number_options * 750
-    ),
-
-    scrolling=True,
-)
-
-
-# ============================================================
-# ACTIONS
-# ============================================================
-
-st.markdown(
-    "## Actions"
-)
-
-
-action_col1, action_col2 = (
-    st.columns(2)
-)
-
-
-subject = (
-    "Your Custom Quotation "
-    "Casa Dorada Los Cabos"
-)
-
-
-# ============================================================
-# FUNCIÓN PARA GUARDAR COTIZACIÓN PENDIENTE
-# ============================================================
-
-def store_pending_quote(
-
-    action,
-
-    guest_name,
-
-    guest_email,
-
-    arrival,
-
-    departure,
-
-    nights,
-
-    adults,
-
-    children,
-
-    options,
-
-    email_html,
-
-    plain_text_email,
-
-):
-
-    st.session_state.pending_quote = {
-
-        "guest_name":
-            guest_name,
-
-        "guest_email":
-            guest_email,
-
-        "arrival":
-            arrival,
-
-        "departure":
-            departure,
-
-        "nights":
-            nights,
-
-        "adults":
-            adults,
-
-        "children":
-            children,
-
-        "options":
-            options,
-
-        "subject":
-            subject,
-
-        "email_html":
-            email_html,
-
-        "plain_text_email":
-            plain_text_email,
-    }
-
-    st.session_state.pending_action = (
-        action
+    st.markdown(
+        "## Actions"
     )
 
+    action_col1, action_col2 = (
+        st.columns(2)
+    )
 
-# ============================================================
-# SAVE DRAFT
-# ============================================================
+    subject = (
+        "Your Custom Quotation "
+        "Casa Dorada Los Cabos"
+    )
 
-with action_col1:
-
-    if st.button(
-
-        "💾 Save Draft to Gmail",
-
-        use_container_width=True,
+    def store_pending_quote(
+        action, guest_name, guest_email, arrival, departure, nights, adults, children,
+        options, email_html, plain_text_email,
     ):
+        st.session_state.pending_quote = {
+            "guest_name": guest_name,
+            "guest_email": guest_email,
+            "arrival": arrival,
+            "departure": departure,
+            "nights": nights,
+            "adults": adults,
+            "children": children,
+            "options": options,
+            "subject": subject,
+            "email_html": email_html,
+            "plain_text_email": plain_text_email,
+        }
+        st.session_state.pending_action = action
 
-        if not guest_name:
-
-            st.error(
-                "Please enter the guest name."
-            )
-
-        elif not guest_email:
-
-            st.error(
-                "Please enter the guest email."
-            )
-
-        else:
-
-            gmail_service = (
-                get_gmail_service()
-            )
-
-            if gmail_service:
-
-                try:
-
-                    save_gmail_draft(
-
-                        to_email=guest_email,
-
-                        subject=subject,
-
-                        html_body=email_html,
-
-                        plain_text_body=(
-                            plain_text_email
-                        ),
-                    )
-
-                    created_by = (
-                        get_logged_in_email()
-                    )
-
-                    quotation = (
-                        save_quotation_to_supabase(
-
+    with action_col1:
+        if st.button("💾 Save Draft to Gmail", use_container_width=True):
+            if not guest_name:
+                st.error("Please enter the guest name.")
+            elif not guest_email:
+                st.error("Please enter the guest email.")
+            else:
+                gmail_service = get_gmail_service()
+                if gmail_service:
+                    try:
+                        save_gmail_draft(
+                            to_email=guest_email,
+                            subject=subject,
+                            html_body=email_html,
+                            plain_text_body=plain_text_email,
+                        )
+                        created_by = get_logged_in_email()
+                        quotation = save_quotation_to_supabase(
                             guest_name=guest_name,
-
                             guest_email=guest_email,
-
                             arrival=arrival,
-
                             departure=departure,
-
                             nights=nights,
-
                             adults=adults,
-
                             children=children,
-
                             options=all_options,
-
                             created_by=created_by,
-
                             status="QUOTED",
                         )
-                    )
-
-                    if quotation:
-
-                        st.success(
-                            "Draft saved successfully in Gmail. "
-                            f"Quotation #{quotation['quotation_number']}"
-                        )
-
-                    else:
-
-                        st.warning(
-                            "Draft saved successfully in Gmail, "
-                            "but the quotation could not be saved "
-                            "to the database."
-                        )
-
-                except Exception as e:
-
-                    st.error(
-                        f"Could not save draft: {e}"
-                    )
-
-            else:
-
-                store_pending_quote(
-
-                    action="draft",
-
-                    guest_name=guest_name,
-
-                    guest_email=guest_email,
-
-                    arrival=arrival,
-
-                    departure=departure,
-
-                    nights=nights,
-
-                    adults=adults,
-
-                    children=children,
-
-                    options=all_options,
-
-                    email_html=email_html,
-
-                    plain_text_email=plain_text_email,
-                )
-
-                try:
-
-                    user_logged_in = (
-                        st.user.is_logged_in
-                    )
-
-                except Exception:
-
-                    user_logged_in = False
-
-
-                if not user_logged_in:
-
-                    st.info(
-                        "Your quotation has been saved. "
-                        "Sign in with your @casadorada.com account "
-                        "to continue."
-                    )
-
-                    st.login()
-
+                        if quotation:
+                            st.success(
+                                "Draft saved successfully in Gmail. "
+                                f"Quotation #{quotation['quotation_number']}"
+                            )
+                        else:
+                            st.warning(
+                                "Draft saved successfully in Gmail, "
+                                "but the quotation could not be saved to the database."
+                            )
+                    except Exception as e:
+                        st.error(f"Could not save draft: {e}")
                 else:
-
-                    login_url = (
-                        get_google_login_url()
+                    store_pending_quote(
+                        action="draft", guest_name=guest_name, guest_email=guest_email,
+                        arrival=arrival, departure=departure, nights=nights, adults=adults,
+                        children=children, options=all_options, email_html=email_html, plain_text_email=plain_text_email,
                     )
+                    try:
+                        user_logged_in = st.user.is_logged_in
+                    except Exception:
+                        user_logged_in = False
 
-                    st.warning(
-                        "Your quotation is saved. "
-                        "Connect Gmail to continue."
-                    )
+                    if not user_logged_in:
+                        st.info("Your quotation has been saved. Sign in with your @casadorada.com account to continue.")
+                        st.login()
+                    else:
+                        login_url = get_google_login_url()
+                        st.warning("Your quotation is saved. Connect Gmail to continue.")
+                        st.markdown(
+                            f"""<a href="{login_url}" rel="noopener noreferrer" style="display:inline-block; background:#2563eb; color:#ffffff; padding:13px 22px; border-radius:9px; text-decoration:none; font-weight:600; margin-top:8px;">Continue with Google</a>""",
+                            unsafe_allow_html=True,
+                        )
+                        st.caption("After authorization, your quotation will be saved automatically as a Gmail draft.")
 
-                    st.markdown(
-                        f"""
-                        <a href="{login_url}"
-                           rel="noopener noreferrer"
-                           style="
-                               display:inline-block;
-                               background:#2563eb;
-                               color:#ffffff;
-                               padding:13px 22px;
-                               border-radius:9px;
-                               text-decoration:none;
-                               font-weight:600;
-                               margin-top:8px;
-                           ">
-                           Continue with Google
-                        </a>
-                        """,
-                        unsafe_allow_html=True,
-                    )
-
-                    st.caption(
-                        "After authorization, your quotation "
-                        "will be saved automatically as a Gmail draft."
-                    )
-
-
-# ============================================================
-# SEND EMAIL
-# ============================================================
-
-with action_col2:
-
-    if st.button(
-
-        "📤 Send Email",
-
-        use_container_width=True,
-    ):
-
-        if not guest_name:
-
-            st.error(
-                "Please enter the guest name."
-            )
-
-        elif not guest_email:
-
-            st.error(
-                "Please enter the guest email."
-            )
-
-        else:
-
-            gmail_service = (
-                get_gmail_service()
-            )
-
-            if gmail_service:
-
-                try:
-
-                    send_gmail_message(
-
-                        to_email=guest_email,
-
-                        subject=subject,
-
-                        html_body=email_html,
-
-                        plain_text_body=(
-                            plain_text_email
-                        ),
-                    )
-
-                    created_by = (
-                        get_logged_in_email()
-                    )
-
-                    quotation = (
-                        save_quotation_to_supabase(
-
+    with action_col2:
+        if st.button("📤 Send Email", use_container_width=True):
+            if not guest_name:
+                st.error("Please enter the guest name.")
+            elif not guest_email:
+                st.error("Please enter the guest email.")
+            else:
+                gmail_service = get_gmail_service()
+                if gmail_service:
+                    try:
+                        send_gmail_message(
+                            to_email=guest_email,
+                            subject=subject,
+                            html_body=email_html,
+                            plain_text_body=plain_text_email,
+                        )
+                        created_by = get_logged_in_email()
+                        quotation = save_quotation_to_supabase(
                             guest_name=guest_name,
-
                             guest_email=guest_email,
-
                             arrival=arrival,
-
                             departure=departure,
-
                             nights=nights,
-
                             adults=adults,
-
                             children=children,
-
                             options=all_options,
-
                             created_by=created_by,
-
                             status="SENT",
                         )
-                    )
-
-                    if quotation:
-
-                        st.success(
-                            "Email sent successfully. "
-                            f"Quotation #{quotation['quotation_number']}"
-                        )
-
-                    else:
-
-                        st.warning(
-                            "Email sent successfully, "
-                            "but the quotation could not be saved "
-                            "to the database."
-                        )
-
-                except Exception as e:
-
-                    st.error(
-                        f"Could not send email: {e}"
-                    )
-
-            else:
-
-                store_pending_quote(
-
-                    action="send",
-
-                    guest_name=guest_name,
-
-                    guest_email=guest_email,
-
-                    arrival=arrival,
-
-                    departure=departure,
-
-                    nights=nights,
-
-                    adults=adults,
-
-                    children=children,
-
-                    options=all_options,
-
-                    email_html=email_html,
-
-                    plain_text_email=plain_text_email,
-                )
-
-                try:
-
-                    user_logged_in = (
-                        st.user.is_logged_in
-                    )
-
-                except Exception:
-
-                    user_logged_in = False
-
-
-                if not user_logged_in:
-
-                    st.info(
-                        "Your quotation has been saved. "
-                        "Sign in with your @casadorada.com account "
-                        "to continue."
-                    )
-
-                    st.login()
-
+                        if quotation:
+                            st.success(
+                                "Email sent successfully. "
+                                f"Quotation #{quotation['quotation_number']}"
+                            )
+                        else:
+                            st.warning(
+                                "Email sent successfully, "
+                                "but the quotation could not be saved to the database."
+                            )
+                    except Exception as e:
+                        st.error(f"Could not send email: {e}")
                 else:
-
-                    login_url = (
-                        get_google_login_url()
+                    store_pending_quote(
+                        action="send", guest_name=guest_name, guest_email=guest_email,
+                        arrival=arrival, departure=departure, nights=nights, adults=adults,
+                        children=children, options=all_options, email_html=email_html, plain_text_email=plain_text_email,
                     )
+                    try:
+                        user_logged_in = st.user.is_logged_in
+                    except Exception:
+                        user_logged_in = False
 
-                    st.warning(
-                        "Your quotation is saved. "
-                        "Connect Gmail to continue."
-                    )
+                    if not user_logged_in:
+                        st.info("Your quotation has been saved. Sign in with your @casadorada.com account to continue.")
+                        st.login()
+                    else:
+                        login_url = get_google_login_url()
+                        st.warning("Your quotation is saved. Connect Gmail to continue.")
+                        st.markdown(
+                            f"""<a href="{login_url}" rel="noopener noreferrer" style="display:inline-block; background:#2563eb; color:#ffffff; padding:13px 22px; border-radius:9px; text-decoration:none; font-weight:600; margin-top:8px;">Continue with Google</a>""",
+                            unsafe_allow_html=True,
+                        )
+                        st.caption("After authorization, the email will be sent automatically.")
 
-                    st.markdown(
-                        f"""
-                        <a href="{login_url}"
-                           rel="noopener noreferrer"
-                           style="
-                               display:inline-block;
-                               background:#2563eb;
-                               color:#ffffff;
-                               padding:13px 22px;
-                               border-radius:9px;
-                               text-decoration:none;
-                               font-weight:600;
-                               margin-top:8px;
-                           ">
-                           Continue with Google
-                        </a>
-                        """,
-                        unsafe_allow_html=True,
-                    )
 
-                    st.caption(
-                        "After authorization, the email "
-                        "will be sent automatically."
-                    )
+# ============================================================
+# WORKFLOW: CONFIRM QUOTATION
+# ============================================================
+
+elif app_mode == "Confirm Quotation":
+
+    st.title("Confirm Quotation")
+    st.caption("Search for an existing quotation and convert it into a confirmed reservation.")
+    
+    st.markdown("## Search Quotation")
+    search_term = st.text_input("Enter Quotation Number, Guest Name, or Guest Email", placeholder="e.g. CD240101-1234 or guest@email.com")
+    
+    if st.button("Search", use_container_width=True):
+        if search_term:
+            results = search_quotations_in_supabase(search_term)
+            st.session_state.confirm_search_results = results
+            st.session_state.selected_quote = None
+        else:
+            st.warning("Please enter a search term.")
+            
+    results = st.session_state.confirm_search_results
+    if results:
+        st.markdown("### Search Results")
+        for q in results:
+            with st.container():
+                col1, col2, col3, col4 = st.columns([2, 3, 2, 2])
+                col1.write(f"**{q['quotation_number']}**")
+                col2.write(f"{q['guest_name']} ({q['guest_email']})")
+                col3.write(f"{q['arrival']} to {q['departure']}")
+                col4.write(f"Status: **{q['status']}**")
+                
+                if st.button("Select", key=f"sel_{q['quotation_number']}"):
+                    if q['status'] in ['CONFIRMED', 'CANCELLED']:
+                        st.error(f"Cannot confirm this quotation. Current status is {q['status']}.")
+                        st.session_state.selected_quote = None
+                    else:
+                        st.session_state.selected_quote = q
+                st.divider()
+
+    selected_quote = st.session_state.selected_quote
+    if selected_quote:
+        st.markdown(f"## Confirming: {selected_quote['quotation_number']}")
+        st.write(f"**Guest:** {selected_quote['guest_name']} | **Email:** {selected_quote['guest_email']}")
+        st.write(f"**Stay:** {selected_quote['arrival']} to {selected_quote['departure']} ({selected_quote['nights']} nights, {selected_quote['adults']} adults, {selected_quote['children']} children)")
+        
+        st.markdown("### Select Option")
+        options = selected_quote.get("options", [])
+        
+        opt_choices = []
+        for i, opt in enumerate(options):
+            opt_choices.append(f"Option {i+1}: {opt['room_type']} - {money(opt['final_total'])}")
+            
+        selected_opt_idx = st.radio("Choose the option the guest confirmed:", range(len(options)), format_func=lambda i: opt_choices[i])
+        selected_opt = options[selected_opt_idx]
+        
+        st.markdown("### Payment & Comments")
+        
+        payment_status = st.radio("Payment Status", ["First Night Deposit", "Fully Paid"])
+        
+        stay_total = selected_opt["final_total"]
+        rate_per_night = selected_opt["nightly_taxes_included"]
+        
+        if payment_status == "Fully Paid":
+            deposit = stay_total
+            balance = 0.00
+        else:
+            deposit = rate_per_night
+            balance = stay_total - deposit
+            
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Total Amount", money(stay_total))
+        col2.metric("Deposit", money(deposit))
+        col3.metric("Balance Due", money(balance))
+        
+        comments = st.text_area("Comments (Internal Notes)", placeholder="e.g. Payment received by transfer.")
+        special_requests = st.text_area("Special Requests (Guest Needs)", placeholder="e.g. Early check-in, Anniversary setup.")
+        
+        st.markdown("### Actions")
+        col_act1, col_act2 = st.columns(2)
+        
+        conf_subject = f"Reservation Confirmation - Casa Dorada"
+        
+        def store_pending_confirmation(action):
+            conf_number = generate_confirmation_number()
+            st.session_state.pending_confirmation = {
+                "confirmation_number": conf_number,
+                "quotation_number": selected_quote["quotation_number"],
+                "guest_name": selected_quote["guest_name"],
+                "guest_email": selected_quote["guest_email"],
+                "arrival": selected_quote["arrival"],
+                "departure": selected_quote["departure"],
+                "nights": selected_quote["nights"],
+                "adults": selected_quote["adults"],
+                "children": selected_quote["children"],
+                "room_type": selected_opt["room_type"],
+                "rate_per_night": rate_per_night,
+                "stay_total": stay_total,
+                "first_night_amount": deposit,
+                "balance_due": balance,
+                "payment_status": payment_status,
+                "comments": comments,
+                "special_requests": special_requests,
+                "additional_services": selected_opt,
+                "subject": f"{conf_subject} [{conf_number}]",
+                "email_html": build_confirmation_email_html(
+                    conf_number, selected_quote["guest_name"], selected_quote["arrival"], selected_quote["departure"],
+                    selected_quote["adults"], selected_quote["children"], selected_quote["nights"],
+                    selected_opt["room_type"], rate_per_night, stay_total, deposit, balance, payment_status,
+                    special_requests, selected_opt["deposit_policy"], selected_opt["cancellation_policy"],
+                    selected_opt.get("selected_inclusions", []), selected_opt.get("selected_services", [])
+                ),
+                "plain_text_email": build_confirmation_plain_text(
+                    conf_number, selected_quote["guest_name"], selected_quote["arrival"], selected_quote["departure"],
+                    selected_quote["adults"], selected_quote["children"], selected_quote["nights"],
+                    selected_opt["room_type"], rate_per_night, stay_total, deposit, balance, payment_status,
+                    special_requests, selected_opt["deposit_policy"], selected_opt["cancellation_policy"],
+                    selected_opt.get("selected_inclusions", []), selected_opt.get("selected_services", [])
+                )
+            }
+            st.session_state.pending_action = action
+            
+        with col_act1:
+            if st.button("💾 Generate & Save Draft", use_container_width=True):
+                store_pending_confirmation("draft")
+                gmail_service = get_gmail_service()
+                if gmail_service:
+                    # Execute immediately if connected
+                    process_google_callback()
+                else:
+                    login_url = get_google_login_url()
+                    st.warning("Connect Gmail to generate confirmation.")
+                    st.markdown(f"""<a href="{login_url}" style="display:inline-block; background:#2563eb; color:#ffffff; padding:13px 22px; border-radius:9px; text-decoration:none;">Connect Google</a>""", unsafe_allow_html=True)
+                    
+        with col_act2:
+            if st.button("📤 Generate & Send Email", use_container_width=True):
+                store_pending_confirmation("send")
+                gmail_service = get_gmail_service()
+                if gmail_service:
+                    # Execute immediately if connected
+                    process_google_callback()
+                else:
+                    login_url = get_google_login_url()
+                    st.warning("Connect Gmail to generate confirmation.")
+                    st.markdown(f"""<a href="{login_url}" style="display:inline-block; background:#2563eb; color:#ffffff; padding:13px 22px; border-radius:9px; text-decoration:none;">Connect Google</a>""", unsafe_allow_html=True)
+
+
+# ============================================================
+# WORKFLOW: MANUAL CONFIRMATION
+# ============================================================
+
+elif app_mode == "Manual Confirmation":
+
+    st.title("Manual Confirmation")
+    st.caption("Create a reservation confirmation directly without a previous quotation.")
+    
+    st.markdown("## Guest & Stay Information")
+    
+    mc_col1, mc_col2 = st.columns(2)
+    with mc_col1:
+        m_guest_name = st.text_input("Guest name", placeholder="John Smith", key="m_gname")
+    with mc_col2:
+        m_guest_email = st.text_input("Guest email", placeholder="guest@email.com", key="m_gemail")
+
+    mc_col3, mc_col4 = st.columns(2)
+    with mc_col3:
+        m_arrival = st.date_input("Arrival", value=date.today(), key="m_arr")
+    with mc_col4:
+        m_departure = st.date_input("Departure", value=date.today(), key="m_dep")
+
+    mc_col5, mc_col6, mc_col7 = st.columns(3)
+    m_calculated_nights = max(1, (m_departure - m_arrival).days)
+    with mc_col5:
+        m_adults = st.number_input("Adults", min_value=1, max_value=20, value=2, step=1, key="m_adults")
+    with mc_col6:
+        m_children = st.number_input("Children", min_value=0, max_value=20, value=0, step=1, key="m_child")
+    with mc_col7:
+        m_nights = st.number_input("Nights", min_value=1, max_value=365, value=m_calculated_nights, step=1, key="m_nights")
+        
+    st.divider()
+    st.markdown("## Reservation Information")
+    
+    r_col1, r_col2 = st.columns(2)
+    with r_col1:
+        m_room_type = st.selectbox("Room type", list(ROOM_TYPES.keys()), key="m_rtype")
+    with r_col2:
+        m_stay_total = st.number_input("Stay Total Taxes Included (USD)", min_value=0.00, value=0.00, step=100.00, format="%.2f", key="m_stotal")
+        
+    m_calc = calculate_rate_values(m_stay_total, m_nights)
+    m_nightly_rate = m_calc["nightly_with_tax"]
+    
+    m_payment_status = st.radio("Payment Status", ["First Night Deposit", "Fully Paid"], key="m_pstat")
+    
+    if m_payment_status == "Fully Paid":
+        m_deposit = float(m_stay_total)
+        m_balance = 0.00
+    else:
+        m_deposit = float(m_nightly_rate)
+        m_balance = float(m_stay_total) - m_deposit
+        
+    p_col1, p_col2, p_col3 = st.columns(3)
+    p_col1.metric("Total Amount", money(m_stay_total))
+    p_col2.metric("Deposit", money(m_deposit))
+    p_col3.metric("Balance Due", money(m_balance))
+    
+    m_comments = st.text_area("Comments (Internal Notes)", key="m_comm")
+    m_special = st.text_area("Special Requests (Guest Needs)", key="m_spec")
+    
+    st.markdown("### Policies")
+    po_col1, po_col2 = st.columns(2)
+    with po_col1:
+        m_dep_pol = st.selectbox("Deposit Policy", DEPOSIT_POLICIES, key="m_dpol")
+    with po_col2:
+        m_can_pol = st.selectbox("Cancellation Policy", CANCELLATION_POLICIES, key="m_cpol")
+        
+    st.markdown("### Actions")
+    m_act1, m_act2 = st.columns(2)
+    
+    conf_subject = f"Reservation Confirmation - Casa Dorada"
+    
+    def store_manual_pending(action):
+        conf_number = generate_confirmation_number()
+        st.session_state.pending_confirmation = {
+            "confirmation_number": conf_number,
+            "quotation_number": None,
+            "guest_name": m_guest_name,
+            "guest_email": m_guest_email,
+            "arrival": m_arrival,
+            "departure": m_departure,
+            "nights": m_nights,
+            "adults": m_adults,
+            "children": m_children,
+            "room_type": m_room_type,
+            "rate_per_night": m_nightly_rate,
+            "stay_total": m_stay_total,
+            "first_night_amount": m_deposit,
+            "balance_due": m_balance,
+            "payment_status": m_payment_status,
+            "comments": m_comments,
+            "special_requests": m_special,
+            "additional_services": {"source": "manual"},
+            "subject": f"{conf_subject} [{conf_number}]",
+            "email_html": build_confirmation_email_html(
+                conf_number, m_guest_name, m_arrival, m_departure, m_adults, m_children, m_nights,
+                m_room_type, m_nightly_rate, m_stay_total, m_deposit, m_balance, m_payment_status,
+                m_special, m_dep_pol, m_can_pol, ROOM_TYPES[m_room_type]["default_inclusions"], []
+            ),
+            "plain_text_email": build_confirmation_plain_text(
+                conf_number, m_guest_name, m_arrival, m_departure, m_adults, m_children, m_nights,
+                m_room_type, m_nightly_rate, m_stay_total, m_deposit, m_balance, m_payment_status,
+                m_special, m_dep_pol, m_can_pol, ROOM_TYPES[m_room_type]["default_inclusions"], []
+            )
+        }
+        st.session_state.pending_action = action
+
+    with m_act1:
+        if st.button("💾 Generate Manual Draft", use_container_width=True):
+            if not m_guest_name or not m_guest_email:
+                st.error("Guest name and email are required.")
+            else:
+                store_manual_pending("draft")
+                if get_gmail_service():
+                    process_google_callback()
+                else:
+                    st.warning("Connect Gmail to generate confirmation.")
+                    st.markdown(f"""<a href="{get_google_login_url()}" style="display:inline-block; background:#2563eb; color:#ffffff; padding:13px 22px; border-radius:9px; text-decoration:none;">Connect Google</a>""", unsafe_allow_html=True)
+                    
+    with m_act2:
+        if st.button("📤 Generate & Send Email", use_container_width=True):
+            if not m_guest_name or not m_guest_email:
+                st.error("Guest name and email are required.")
+            else:
+                store_manual_pending("send")
+                if get_gmail_service():
+                    process_google_callback()
+                else:
+                    st.warning("Connect Gmail to generate confirmation.")
+                    st.markdown(f"""<a href="{get_google_login_url()}" style="display:inline-block; background:#2563eb; color:#ffffff; padding:13px 22px; border-radius:9px; text-decoration:none;">Connect Google</a>""", unsafe_allow_html=True)
