@@ -271,6 +271,100 @@ CANCELLATION_POLICIES = [
 
 
 # ============================================================
+# TRANSLATIONS DICTIONARY
+# ============================================================
+
+TRANSLATIONS = {
+    "en": {
+        "custom_quotation": "Your Custom Quotation",
+        "reservation_confirmation": "Reservation Confirmation",
+        "dear": "Dear",
+        "quote_intro": "Thank you for considering Casa Dorada Los Cabos Resort & Spa for your upcoming stay. Please find below your personalized quotation and available options.",
+        "conf_intro": "We are delighted to confirm your reservation at Casa Dorada Los Cabos Resort & Spa.",
+        "your_stay": "Your Stay",
+        "reservation_details": "Reservation Details",
+        "guests": "Guests",
+        "adults": "Adults",
+        "children": "Children",
+        "nights": "Nights",
+        "night": "Night",
+        "arrival": "Arrival",
+        "departure": "Departure",
+        "available_options": "Available Options",
+        "option": "Option",
+        "room_type": "Room Type",
+        "rate_details": "Rate Details",
+        "rate_before_taxes": "Rate per night before taxes",
+        "rate_with_taxes": "Rate per night taxes included",
+        "number_nights": "Number of nights",
+        "stay_total": "Stay total taxes included",
+        "included": "Included",
+        "included_benefits": "Included Benefits",
+        "additional_services": "Additional Services",
+        "additional_total": "Additional services total",
+        "total_amount": "TOTAL AMOUNT",
+        "deposit_policy": "Deposit Policy",
+        "cancellation_policy": "Cancellation Policy",
+        "quote_valid": "Quote valid until",
+        "conf_number": "Confirmation Number",
+        "payment_status": "Payment Status",
+        "deposit": "Deposit",
+        "balance_due": "Balance Due",
+        "special_requests": "Special Requests",
+        "no_inclusions": "No inclusions selected",
+        "no_services": "No additional services",
+        "view_room": "VIEW ROOM",
+        "secure_booking": "SECURE YOUR BOOKING",
+        "fully_paid": "Fully Paid",
+        "first_night_deposit": "First Night Deposit"
+    },
+    "es": {
+        "custom_quotation": "Su Cotización Personalizada",
+        "reservation_confirmation": "Confirmación de Reservación",
+        "dear": "Estimado/a",
+        "quote_intro": "Gracias por considerar a Casa Dorada Los Cabos Resort & Spa para su próxima estadía. A continuación encontrará su cotización personalizada y las opciones disponibles.",
+        "conf_intro": "Estamos encantados de confirmar su reservación en Casa Dorada Los Cabos Resort & Spa.",
+        "your_stay": "Su Estadía",
+        "reservation_details": "Detalles de la Reservación",
+        "guests": "Huéspedes",
+        "adults": "Adultos",
+        "children": "Niños",
+        "nights": "Noches",
+        "night": "Noche",
+        "arrival": "Llegada",
+        "departure": "Salida",
+        "available_options": "Opciones Disponibles",
+        "option": "Opción",
+        "room_type": "Tipo de Habitación",
+        "rate_details": "Detalles de la Tarifa",
+        "rate_before_taxes": "Tarifa por noche sin impuestos",
+        "rate_with_taxes": "Tarifa por noche con impuestos",
+        "number_nights": "Número de noches",
+        "stay_total": "Total de la estadía con impuestos",
+        "included": "Incluye",
+        "included_benefits": "Beneficios Incluidos",
+        "additional_services": "Servicios Adicionales",
+        "additional_total": "Total de servicios adicionales",
+        "total_amount": "MONTO TOTAL",
+        "deposit_policy": "Política de Depósito",
+        "cancellation_policy": "Política de Cancelación",
+        "quote_valid": "Cotización válida hasta",
+        "conf_number": "Número de Confirmación",
+        "payment_status": "Estado de Pago",
+        "deposit": "Depósito",
+        "balance_due": "Saldo Pendiente",
+        "special_requests": "Solicitudes Especiales",
+        "no_inclusions": "Sin inclusiones seleccionadas",
+        "no_services": "Sin servicios adicionales",
+        "view_room": "VER HABITACIÓN",
+        "secure_booking": "ASEGURE SU RESERVA",
+        "fully_paid": "Pagado en su totalidad",
+        "first_night_deposit": "Depósito de la primera noche"
+    }
+}
+
+
+# ============================================================
 # CSS
 # ============================================================
 
@@ -1465,9 +1559,9 @@ def execute_pending_confirmation():
                 st.session_state.conf_auto_send_success = conf["confirmation_number"]
         else:
             if pending_action == "draft":
-                st.session_state.conf_auto_draft_success = "Draft saved successfully, but database save failed."
+                st.session_state.conf_auto_draft_success = "Action completed, but database save failed."
             else:
-                st.session_state.conf_auto_send_success = "Email sent successfully, but database save failed."
+                st.session_state.conf_auto_send_success = "Action completed, but database save failed."
 
         return True
 
@@ -2092,17 +2186,18 @@ def calculate_rate_values(
 # MONEY
 # ============================================================
 
-def money(value):
+def money(value, currency="USD"):
 
     try:
 
-        return "${:,.2f} USD".format(
-            float(value)
+        return "${:,.2f} {}".format(
+            float(value),
+            currency
         )
 
     except Exception:
 
-        return "$0.00 USD"
+        return "$0.00 {}".format(currency)
 
 
 # ============================================================
@@ -2128,7 +2223,7 @@ def html_escape(value):
 # DATE FORMAT
 # ============================================================
 
-def format_date_email(value):
+def format_date_email(value, lang="en"):
 
     if not value:
         return ""
@@ -2146,9 +2241,16 @@ def format_date_email(value):
                 "%Y-%m-%d"
             ).date()
 
-        return d.strftime(
-            "%B %d, %Y"
-        )
+        if lang == "es":
+
+            months_es = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
+            return f"{d.day} de {months_es[d.month-1]} de {d.year}"
+
+        else:
+
+            return d.strftime(
+                "%B %d, %Y"
+            )
 
     except Exception:
 
@@ -2171,7 +2273,11 @@ def build_option_html(
     cancellation_policy,
     payment_url,
     room_360_url,
+    lang="en",
+    currency="USD"
 ):
+
+    t = TRANSLATIONS[lang]
 
     calculations = (
         calculate_rate_values(
@@ -2215,12 +2321,12 @@ def build_option_html(
 
     if not inclusions_html:
 
-        inclusions_html = """
+        inclusions_html = f"""
         <li style="
             color:#777777;
             font-size:14px;
         ">
-            No inclusions selected
+            {t["no_inclusions"]}
         </li>
         """
 
@@ -2254,7 +2360,7 @@ def build_option_html(
                 font-size:14px;
                 text-align:right;
             ">
-                {money(price)}
+                {money(price, currency)}
             </td>
 
         </tr>
@@ -2262,7 +2368,7 @@ def build_option_html(
 
     if not services_html:
 
-        services_html = """
+        services_html = f"""
         <tr>
 
             <td colspan="2"
@@ -2272,7 +2378,7 @@ def build_option_html(
                     font-size:14px;
                     text-align:left;
                 ">
-                No additional services
+                {t["no_services"]}
             </td>
 
         </tr>
@@ -2302,7 +2408,7 @@ def build_option_html(
                font-weight:bold;
                margin-right:7px;
            ">
-           VIEW ROOM
+           {t["view_room"]}
         </a>
         """
 
@@ -2321,7 +2427,7 @@ def build_option_html(
                font-size:13px;
                font-weight:bold;
            ">
-           SECURE YOUR BOOKING
+           {t["secure_booking"]}
         </a>
         """
 
@@ -2351,7 +2457,7 @@ def build_option_html(
                     margin-bottom:5px;
                     text-align:left;
                 ">
-                    Option {option_number}
+                    {t["option"]} {option_number}
                 </div>
 
                 <div style="
@@ -2371,7 +2477,7 @@ def build_option_html(
                     margin-bottom:8px;
                     text-align:left;
                 ">
-                    Rate Details
+                    {t["rate_details"]}
                 </div>
 
                 <table width="100%"
@@ -2387,7 +2493,7 @@ def build_option_html(
                             font-size:14px;
                             text-align:left;
                         ">
-                            Rate per night before taxes
+                            {t["rate_before_taxes"]}
                         </td>
 
                         <td style="
@@ -2396,7 +2502,7 @@ def build_option_html(
                             font-size:14px;
                             text-align:right;
                         ">
-                            {money(nightly_before_tax)}
+                            {money(nightly_before_tax, currency)}
                         </td>
 
                     </tr>
@@ -2409,7 +2515,7 @@ def build_option_html(
                             font-size:14px;
                             text-align:left;
                         ">
-                            Rate per night taxes included
+                            {t["rate_with_taxes"]}
                         </td>
 
                         <td style="
@@ -2419,7 +2525,7 @@ def build_option_html(
                             text-align:right;
                             font-weight:bold;
                         ">
-                            {money(nightly_with_tax)}
+                            {money(nightly_with_tax, currency)}
                         </td>
 
                     </tr>
@@ -2432,7 +2538,7 @@ def build_option_html(
                             font-size:14px;
                             text-align:left;
                         ">
-                            Number of nights
+                            {t["number_nights"]}
                         </td>
 
                         <td style="
@@ -2456,7 +2562,7 @@ def build_option_html(
                             font-weight:bold;
                             text-align:left;
                         ">
-                            Stay total taxes included
+                            {t["stay_total"]}
                         </td>
 
                         <td style="
@@ -2467,7 +2573,7 @@ def build_option_html(
                             text-align:right;
                             font-weight:bold;
                         ">
-                            {money(total_with_tax)}
+                            {money(total_with_tax, currency)}
                         </td>
 
                     </tr>
@@ -2482,7 +2588,7 @@ def build_option_html(
                     font-weight:bold;
                     text-align:left;
                 ">
-                    Included
+                    {t["included"]}
                 </div>
 
                 <ul style="
@@ -2504,7 +2610,7 @@ def build_option_html(
                     font-weight:bold;
                     text-align:left;
                 ">
-                    Additional Services
+                    {t["additional_services"]}
                 </div>
 
                 <table width="100%"
@@ -2524,7 +2630,7 @@ def build_option_html(
                             font-weight:bold;
                             text-align:left;
                         ">
-                            Additional services total
+                            {t["additional_total"]}
                         </td>
 
                         <td style="
@@ -2535,7 +2641,7 @@ def build_option_html(
                             text-align:right;
                             font-weight:bold;
                         ">
-                            {money(additional_services_total)}
+                            {money(additional_services_total, currency)}
                         </td>
 
                     </tr>
@@ -2561,7 +2667,7 @@ def build_option_html(
                                 font-weight:bold;
                                 text-align:left;
                             ">
-                                TOTAL AMOUNT
+                                {t["total_amount"]}
                             </td>
 
                             <td style="
@@ -2570,7 +2676,7 @@ def build_option_html(
                                 font-weight:bold;
                                 text-align:right;
                             ">
-                                {money(final_total)}
+                                {money(final_total, currency)}
                             </td>
 
                         </tr>
@@ -2593,7 +2699,7 @@ def build_option_html(
                         margin-bottom:6px;
                         text-align:left;
                     ">
-                        Deposit Policy
+                        {t["deposit_policy"]}
                     </div>
 
                     <div style="
@@ -2613,7 +2719,7 @@ def build_option_html(
                         margin-bottom:6px;
                         text-align:left;
                     ">
-                        Cancellation Policy
+                        {t["cancellation_policy"]}
                     </div>
 
                     <div style="
@@ -2643,11 +2749,11 @@ def build_option_html(
                     text-align:left;
                 ">
 
-                    Quote valid until:
+                    {t["quote_valid"]}: 
                     <strong>
                         {html_escape(
                             format_date_email(
-                                valid_until
+                                valid_until, lang
                             )
                         )}
                     </strong>
@@ -2675,60 +2781,62 @@ def build_plain_text(
     children,
     nights,
     options,
+    lang="en",
+    currency="USD"
 ):
+
+    t = TRANSLATIONS[lang]
 
     lines = []
 
     lines.append(
-        "YOUR CUSTOM QUOTATION"
+        t["custom_quotation"].upper()
     )
 
     lines.append("")
 
     lines.append(
-        f"Dear {guest_name},"
+        f"{t['dear']} {guest_name},"
     )
 
     lines.append("")
 
     lines.append(
-        "Thank you for considering "
-        "Casa Dorada Los Cabos Resort & Spa "
-        "for your upcoming stay."
+        t["quote_intro"]
     )
 
     lines.append("")
 
     lines.append(
-        "YOUR STAY"
+        t["your_stay"].upper()
     )
 
     lines.append(
-        f"Guests: {adults} Adults"
+        f"{t['guests']}: {adults} {t['adults']}"
     )
 
     if children > 0:
 
         lines.append(
-            f"Children: {children}"
+            f"{t['children']}: {children}"
         )
 
     lines.append(
-        f"Nights: {nights}"
+        f"{t['nights']}: {nights}"
     )
 
     lines.append(
-        f"Arrival: {format_date_email(arrival)}"
+        f"{t['arrival']}: {format_date_email(arrival, lang)}"
     )
 
     lines.append(
-        f"Departure: {format_date_email(departure)}"
+        f"{t['departure']}: {format_date_email(departure, lang)}"
     )
 
     lines.append("")
 
     lines.append(
-        "AVAILABLE OPTIONS"
+        t["available_options"].upper()
     )
 
     lines.append("")
@@ -2769,50 +2877,53 @@ def build_plain_text(
         )
 
         lines.append(
-            f"OPTION {index}"
+            f"{t['option'].upper()} {index}"
         )
 
         lines.append(
-            f"Room: {option['room_type']}"
+            f"{t['room_type']}: {option['room_type']}"
         )
 
         lines.append(
-            f"Rate per night before taxes: "
-            f"{money(calculations['nightly_before_tax'])}"
+            f"{t['rate_before_taxes']}: "
+            f"{money(calculations['nightly_before_tax'], currency)}"
         )
 
         lines.append(
-            f"Rate per night taxes included: "
-            f"{money(calculations['nightly_with_tax'])}"
+            f"{t['rate_with_taxes']}: "
+            f"{money(calculations['nightly_with_tax'], currency)}"
         )
 
         lines.append(
-            f"Number of nights: {nights}"
+            f"{t['number_nights']}: {nights}"
         )
 
         lines.append(
-            f"Stay total taxes included: "
-            f"{money(calculations['total_with_tax'])}"
+            f"{t['stay_total']}: "
+            f"{money(calculations['total_with_tax'], currency)}"
         )
 
         lines.append("")
 
         lines.append(
-            "Included:"
+            f"{t['included']}:"
         )
 
-        for inclusion in option[
-            "selected_inclusions"
-        ]:
+        if option["selected_inclusions"]:
+            for inclusion in option[
+                "selected_inclusions"
+            ]:
 
-            lines.append(
-                f"• {inclusion}"
-            )
+                lines.append(
+                    f"• {inclusion}"
+                )
+        else:
+            lines.append(t["no_inclusions"])
 
         lines.append("")
 
         lines.append(
-            "Additional Services:"
+            f"{t['additional_services']}:"
         )
 
         if option[
@@ -2825,26 +2936,26 @@ def build_plain_text(
 
                 lines.append(
                     f"• {service}: "
-                    f"{money(ADDITIONAL_SERVICES[service])}"
+                    f"{money(ADDITIONAL_SERVICES[service], currency)}"
                 )
 
         else:
 
             lines.append(
-                "No additional services"
+                t["no_services"]
             )
 
         lines.append("")
 
         lines.append(
-            f"TOTAL AMOUNT: "
-            f"{money(final_total)}"
+            f"{t['total_amount']}: "
+            f"{money(final_total, currency)}"
         )
 
         lines.append("")
 
         lines.append(
-            "Deposit Policy:"
+            f"{t['deposit_policy']}:"
         )
 
         lines.append(
@@ -2856,7 +2967,7 @@ def build_plain_text(
         lines.append("")
 
         lines.append(
-            "Cancellation Policy:"
+            f"{t['cancellation_policy']}:"
         )
 
         lines.append(
@@ -2868,8 +2979,8 @@ def build_plain_text(
         lines.append("")
 
         lines.append(
-            f"Quote valid until: "
-            f"{format_date_email(option['valid_until'])}"
+            f"{t['quote_valid']}: "
+            f"{format_date_email(option['valid_until'], lang)}"
         )
 
         lines.append("")
@@ -2908,7 +3019,11 @@ def build_email_html(
     children,
     nights,
     options,
+    lang="en",
+    currency="USD"
 ):
+
+    t = TRANSLATIONS[lang]
 
     options_html = ""
 
@@ -2958,16 +3073,20 @@ def build_email_html(
             room_360_url=option[
                 "room_360_url"
             ],
+
+            lang=lang,
+            
+            currency=currency
         )
 
     guest_summary = (
-        f"{adults} Adults"
+        f"{adults} {t['adults']}"
     )
 
     if children > 0:
 
         guest_summary += (
-            f" + {children} Children"
+            f" + {children} {t['children']}"
         )
 
     return f"""
@@ -2982,7 +3101,7 @@ def build_email_html(
 <meta name="viewport"
       content="width=device-width, initial-scale=1.0">
 
-<title>Your Custom Quotation</title>
+<title>{t["custom_quotation"]}</title>
 
 </head>
 
@@ -3048,7 +3167,7 @@ def build_email_html(
     text-align:left;
 ">
 
-Your Custom Quotation
+{t["custom_quotation"]}
 
 </div>
 
@@ -3071,7 +3190,7 @@ Your Custom Quotation
     text-align:left;
 ">
 
-Dear {html_escape(guest_name)},
+{t["dear"]} {html_escape(guest_name)},
 
 </p>
 
@@ -3083,12 +3202,7 @@ Dear {html_escape(guest_name)},
     text-align:left;
 ">
 
-Thank you for considering
-Casa Dorada Los Cabos Resort & Spa
-for your upcoming stay.
-
-Please find below your personalized
-quotation and available options.
+{t["quote_intro"]}
 
 </p>
 
@@ -3111,7 +3225,7 @@ quotation and available options.
     text-align:left;
 ">
 
-Your Stay
+{t["your_stay"]}
 
 </div>
 
@@ -3136,7 +3250,7 @@ Your Stay
     border-bottom:1px solid #e5e7eb;
 ">
 
-Guests
+{t["guests"]}
 
 </td>
 
@@ -3166,7 +3280,7 @@ Guests
     border-bottom:1px solid #e5e7eb;
 ">
 
-Nights
+{t["nights"]}
 
 </td>
 
@@ -3180,7 +3294,7 @@ Nights
 ">
 
 {html_escape(nights)}
-{" Night" if nights == 1 else " Nights"}
+{(" " + t["night"]) if nights == 1 else (" " + t["nights"])}
 
 </td>
 
@@ -3197,7 +3311,7 @@ Nights
     border-bottom:1px solid #e5e7eb;
 ">
 
-Arrival
+{t["arrival"]}
 
 </td>
 
@@ -3211,7 +3325,7 @@ Arrival
 ">
 
 {html_escape(
-    format_date_email(arrival)
+    format_date_email(arrival, lang)
 )}
 
 </td>
@@ -3228,7 +3342,7 @@ Arrival
     text-align:left;
 ">
 
-Departure
+{t["departure"]}
 
 </td>
 
@@ -3241,7 +3355,7 @@ Departure
 ">
 
 {html_escape(
-    format_date_email(departure)
+    format_date_email(departure, lang)
 )}
 
 </td>
@@ -3269,7 +3383,7 @@ Departure
     text-align:left;
 ">
 
-Available Options
+{t["available_options"]}
 
 </div>
 
@@ -3368,13 +3482,17 @@ def build_confirmation_email_html(
     deposit_policy,
     cancellation_policy,
     selected_inclusions,
-    selected_services
+    selected_services,
+    lang="en",
+    currency="USD"
 ):
 
-    guest_summary = f"{adults} Adults"
+    t = TRANSLATIONS[lang]
+
+    guest_summary = f"{adults} {t['adults']}"
 
     if children > 0:
-        guest_summary += f" + {children} Children"
+        guest_summary += f" + {children} {t['children']}"
 
     inclusions_html = ""
 
@@ -3395,12 +3513,12 @@ def build_confirmation_email_html(
 
     else:
 
-        inclusions_html = """
+        inclusions_html = f"""
         <li style="
             color:#777777; 
             font-size:14px;
         ">
-            No inclusions selected
+            {t['no_inclusions']}
         </li>
         """
 
@@ -3425,7 +3543,7 @@ def build_confirmation_email_html(
 
     else:
 
-        services_html = """
+        services_html = f"""
         <tr>
             <td style="
                 padding:6px 0; 
@@ -3433,7 +3551,7 @@ def build_confirmation_email_html(
                 font-size:14px; 
                 text-align:left;
             ">
-                No additional services
+                {t['no_services']}
             </td>
         </tr>
         """
@@ -3451,7 +3569,7 @@ def build_confirmation_email_html(
             margin-bottom:6px; 
             text-align:left;
         ">
-            Special Requests
+            {t['special_requests']}
         </div>
 
         <div style="
@@ -3470,7 +3588,7 @@ def build_confirmation_email_html(
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Reservation Confirmation</title>
+<title>{t['reservation_confirmation']}</title>
 </head>
 <body style="margin:0; padding:0; background:#f3f4f6; font-family:Arial,Helvetica,sans-serif;">
 <table width="100%" cellpadding="0" cellspacing="0" border="0">
@@ -3484,45 +3602,45 @@ def build_confirmation_email_html(
 </tr>
 <tr>
 <td style="padding:15px 35px 5px 35px; text-align:left;">
-<div style="color:#1f4f78; font-size:25px; font-weight:bold; text-align:left;">Reservation Confirmation</div>
-<div style="color:#222222; font-size:16px; font-weight:bold; margin-top:5px;">Confirmation Number: {html_escape(confirmation_number)}</div>
+<div style="color:#1f4f78; font-size:25px; font-weight:bold; text-align:left;">{t['reservation_confirmation']}</div>
+<div style="color:#222222; font-size:16px; font-weight:bold; margin-top:5px;">{t['conf_number']}: {html_escape(confirmation_number)}</div>
 </td>
 </tr>
 <tr>
 <td style="padding:15px 35px 10px 35px; text-align:left;">
-<p style="color:#333333; font-size:15px; line-height:1.6; margin:0 0 12px 0; text-align:left;">Dear {html_escape(guest_name)},</p>
-<p style="color:#555555; font-size:14px; line-height:1.6; margin:0; text-align:left;">We are delighted to confirm your reservation at Casa Dorada Los Cabos Resort & Spa.</p>
+<p style="color:#333333; font-size:15px; line-height:1.6; margin:0 0 12px 0; text-align:left;">{t['dear']} {html_escape(guest_name)},</p>
+<p style="color:#555555; font-size:14px; line-height:1.6; margin:0; text-align:left;">{t['conf_intro']}</p>
 </td>
 </tr>
 <tr>
 <td style="padding:20px 35px 15px 35px; text-align:left;">
-<div style="color:#1f4f78; font-size:19px; font-weight:bold; margin-bottom:12px; text-align:left;">Reservation Details</div>
+<div style="color:#1f4f78; font-size:19px; font-weight:bold; margin-bottom:12px; text-align:left;">{t['reservation_details']}</div>
 <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f7f8fa; border:1px solid #e5e7eb;">
-<tr><td style="padding:10px 14px; width:35%; color:#777777; font-size:13px; font-weight:bold; text-align:left; border-bottom:1px solid #e5e7eb;">Guests</td><td style="padding:10px 14px; color:#1f2937; font-size:13px; font-weight:bold; text-align:left; border-bottom:1px solid #e5e7eb;">{html_escape(guest_summary)}</td></tr>
-<tr><td style="padding:10px 14px; color:#777777; font-size:13px; font-weight:bold; text-align:left; border-bottom:1px solid #e5e7eb;">Arrival</td><td style="padding:10px 14px; color:#1f2937; font-size:13px; font-weight:bold; text-align:left; border-bottom:1px solid #e5e7eb;">{html_escape(format_date_email(arrival))}</td></tr>
-<tr><td style="padding:10px 14px; color:#777777; font-size:13px; font-weight:bold; text-align:left; border-bottom:1px solid #e5e7eb;">Departure</td><td style="padding:10px 14px; color:#1f2937; font-size:13px; font-weight:bold; text-align:left; border-bottom:1px solid #e5e7eb;">{html_escape(format_date_email(departure))}</td></tr>
-<tr><td style="padding:10px 14px; color:#777777; font-size:13px; font-weight:bold; text-align:left; border-bottom:1px solid #e5e7eb;">Nights</td><td style="padding:10px 14px; color:#1f2937; font-size:13px; font-weight:bold; text-align:left; border-bottom:1px solid #e5e7eb;">{html_escape(nights)}</td></tr>
-<tr><td style="padding:10px 14px; color:#777777; font-size:13px; font-weight:bold; text-align:left;">Room Type</td><td style="padding:10px 14px; color:#1f2937; font-size:13px; font-weight:bold; text-align:left;">{html_escape(room_type)}</td></tr>
+<tr><td style="padding:10px 14px; width:35%; color:#777777; font-size:13px; font-weight:bold; text-align:left; border-bottom:1px solid #e5e7eb;">{t['guests']}</td><td style="padding:10px 14px; color:#1f2937; font-size:13px; font-weight:bold; text-align:left; border-bottom:1px solid #e5e7eb;">{html_escape(guest_summary)}</td></tr>
+<tr><td style="padding:10px 14px; color:#777777; font-size:13px; font-weight:bold; text-align:left; border-bottom:1px solid #e5e7eb;">{t['arrival']}</td><td style="padding:10px 14px; color:#1f2937; font-size:13px; font-weight:bold; text-align:left; border-bottom:1px solid #e5e7eb;">{html_escape(format_date_email(arrival, lang))}</td></tr>
+<tr><td style="padding:10px 14px; color:#777777; font-size:13px; font-weight:bold; text-align:left; border-bottom:1px solid #e5e7eb;">{t['departure']}</td><td style="padding:10px 14px; color:#1f2937; font-size:13px; font-weight:bold; text-align:left; border-bottom:1px solid #e5e7eb;">{html_escape(format_date_email(departure, lang))}</td></tr>
+<tr><td style="padding:10px 14px; color:#777777; font-size:13px; font-weight:bold; text-align:left; border-bottom:1px solid #e5e7eb;">{t['nights']}</td><td style="padding:10px 14px; color:#1f2937; font-size:13px; font-weight:bold; text-align:left; border-bottom:1px solid #e5e7eb;">{html_escape(nights)}</td></tr>
+<tr><td style="padding:10px 14px; color:#777777; font-size:13px; font-weight:bold; text-align:left;">{t['room_type']}</td><td style="padding:10px 14px; color:#1f2937; font-size:13px; font-weight:bold; text-align:left;">{html_escape(room_type)}</td></tr>
 </table>
 </td>
 </tr>
 <tr>
 <td style="padding:10px 35px 20px 35px; text-align:left;">
 <table width="100%" cellpadding="0" cellspacing="0" border="0">
-<tr><td style="padding:6px 0; color:#555555; font-size:14px; text-align:left;">Rate per night (taxes incl.)</td><td style="padding:6px 0; color:#222222; font-size:14px; text-align:right;">{money(rate_per_night)}</td></tr>
-<tr><td style="border-top:1px solid #eeeeee; padding:10px 0 6px 0; color:#1f4f78; font-size:15px; font-weight:bold; text-align:left;">Total Amount</td><td style="border-top:1px solid #eeeeee; padding:10px 0 6px 0; color:#1f4f78; font-size:16px; text-align:right; font-weight:bold;">{money(stay_total)}</td></tr>
-<tr><td style="padding:6px 0; color:#555555; font-size:14px; text-align:left;">Payment Status</td><td style="padding:6px 0; color:#222222; font-size:14px; text-align:right;">{html_escape(payment_status)}</td></tr>
-<tr><td style="padding:6px 0; color:#555555; font-size:14px; text-align:left;">Deposit</td><td style="padding:6px 0; color:#222222; font-size:14px; text-align:right;">{money(first_night_amount)}</td></tr>
-<tr><td style="padding:6px 0; color:#555555; font-size:14px; text-align:left; font-weight:bold;">Balance Due</td><td style="padding:6px 0; color:#222222; font-size:14px; text-align:right; font-weight:bold;">{money(balance_due)}</td></tr>
+<tr><td style="padding:6px 0; color:#555555; font-size:14px; text-align:left;">{t['rate_with_taxes']}</td><td style="padding:6px 0; color:#222222; font-size:14px; text-align:right;">{money(rate_per_night, currency)}</td></tr>
+<tr><td style="border-top:1px solid #eeeeee; padding:10px 0 6px 0; color:#1f4f78; font-size:15px; font-weight:bold; text-align:left;">{t['total_amount']}</td><td style="border-top:1px solid #eeeeee; padding:10px 0 6px 0; color:#1f4f78; font-size:16px; text-align:right; font-weight:bold;">{money(stay_total, currency)}</td></tr>
+<tr><td style="padding:6px 0; color:#555555; font-size:14px; text-align:left;">{t['payment_status']}</td><td style="padding:6px 0; color:#222222; font-size:14px; text-align:right;">{html_escape(payment_status)}</td></tr>
+<tr><td style="padding:6px 0; color:#555555; font-size:14px; text-align:left;">{t['deposit']}</td><td style="padding:6px 0; color:#222222; font-size:14px; text-align:right;">{money(first_night_amount, currency)}</td></tr>
+<tr><td style="padding:6px 0; color:#555555; font-size:14px; text-align:left; font-weight:bold;">{t['balance_due']}</td><td style="padding:6px 0; color:#222222; font-size:14px; text-align:right; font-weight:bold;">{money(balance_due, currency)}</td></tr>
 </table>
-<div style="margin-top:20px; color:#1f4f78; font-size:15px; font-weight:bold; text-align:left;">Included Benefits</div>
+<div style="margin-top:20px; color:#1f4f78; font-size:15px; font-weight:bold; text-align:left;">{t['included_benefits']}</div>
 <ul style="padding-left:22px; margin-top:8px; margin-bottom:15px; text-align:left;">{inclusions_html}</ul>
-<div style="margin-top:15px; color:#1f4f78; font-size:15px; font-weight:bold; text-align:left;">Additional Services</div>
+<div style="margin-top:15px; color:#1f4f78; font-size:15px; font-weight:bold; text-align:left;">{t['additional_services']}</div>
 <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:8px;">{services_html}</table>
 <div style="margin-top:20px; padding-top:15px; border-top:1px solid #eeeeee;">
-<div style="color:#1f4f78; font-size:14px; font-weight:bold; margin-bottom:6px; text-align:left;">Deposit Policy</div>
+<div style="color:#1f4f78; font-size:14px; font-weight:bold; margin-bottom:6px; text-align:left;">{t['deposit_policy']}</div>
 <div style="color:#555555; font-size:13px; line-height:1.5; text-align:left;">{html_escape(deposit_policy)}</div>
-<div style="color:#1f4f78; font-size:14px; font-weight:bold; margin-top:15px; margin-bottom:6px; text-align:left;">Cancellation Policy</div>
+<div style="color:#1f4f78; font-size:14px; font-weight:bold; margin-top:15px; margin-bottom:6px; text-align:left;">{t['cancellation_policy']}</div>
 <div style="color:#555555; font-size:13px; line-height:1.5; text-align:left;">{html_escape(cancellation_policy)}</div>
 {special_html}
 </div>
@@ -3561,61 +3679,65 @@ def build_confirmation_plain_text(
     deposit_policy, 
     cancellation_policy,
     selected_inclusions, 
-    selected_services
+    selected_services,
+    lang="en",
+    currency="USD"
 ):
+
+    t = TRANSLATIONS[lang]
 
     lines = []
 
-    lines.append("RESERVATION CONFIRMATION")
-    lines.append(f"Confirmation Number: {confirmation_number}")
+    lines.append(t["reservation_confirmation"].upper())
+    lines.append(f"{t['conf_number']}: {confirmation_number}")
     lines.append("")
-    lines.append(f"Dear {guest_name},")
-    lines.append("We are delighted to confirm your reservation at Casa Dorada Los Cabos Resort & Spa.")
+    lines.append(f"{t['dear']} {guest_name},")
+    lines.append(t["conf_intro"])
     lines.append("")
-    lines.append("RESERVATION DETAILS")
+    lines.append(t["reservation_details"].upper())
     
     if children > 0:
-        lines.append(f"Guests: {adults} Adults, {children} Children")
+        lines.append(f"{t['guests']}: {adults} {t['adults']}, {children} {t['children']}")
     else:
-        lines.append(f"Guests: {adults} Adults")
+        lines.append(f"{t['guests']}: {adults} {t['adults']}")
 
-    lines.append(f"Arrival: {format_date_email(arrival)}")
-    lines.append(f"Departure: {format_date_email(departure)}")
-    lines.append(f"Nights: {nights}")
-    lines.append(f"Room Type: {room_type}")
-    lines.append(f"Rate per night (taxes incl.): {money(rate_per_night)}")
-    lines.append(f"Total Amount: {money(stay_total)}")
-    lines.append(f"Payment Status: {payment_status}")
-    lines.append(f"Deposit: {money(first_night_amount)}")
-    lines.append(f"Balance Due: {money(balance_due)}")
+    lines.append(f"{t['arrival']}: {format_date_email(arrival, lang)}")
+    lines.append(f"{t['departure']}: {format_date_email(departure, lang)}")
+    lines.append(f"{t['nights']}: {nights}")
+    lines.append(f"{t['room_type']}: {room_type}")
+    lines.append(f"{t['rate_with_taxes']}: {money(rate_per_night, currency)}")
+    lines.append(f"{t['total_amount']}: {money(stay_total, currency)}")
+    lines.append(f"{t['payment_status']}: {payment_status}")
+    lines.append(f"{t['deposit']}: {money(first_night_amount, currency)}")
+    lines.append(f"{t['balance_due']}: {money(balance_due, currency)}")
     lines.append("")
-    lines.append("Included Benefits:")
+    lines.append(f"{t['included_benefits']}:")
 
     if selected_inclusions:
         for inc in selected_inclusions:
             lines.append(f"• {inc}")
     else:
-        lines.append("No inclusions selected")
+        lines.append(t["no_inclusions"])
 
     lines.append("")
-    lines.append("Additional Services:")
+    lines.append(f"{t['additional_services']}:")
 
     if selected_services:
         for srv in selected_services:
             lines.append(f"• {srv}")
     else:
-        lines.append("No additional services")
+        lines.append(t["no_services"])
 
     lines.append("")
-    lines.append("Deposit Policy:")
+    lines.append(f"{t['deposit_policy']}:")
     lines.append(deposit_policy)
     lines.append("")
-    lines.append("Cancellation Policy:")
+    lines.append(f"{t['cancellation_policy']}:")
     lines.append(cancellation_policy)
 
     if special_requests:
         lines.append("")
-        lines.append("Special Requests:")
+        lines.append(f"{t['special_requests']}:")
         lines.append(special_requests)
 
     lines.append("")
@@ -3806,6 +3928,12 @@ SESSION_DEFAULTS = {
     "selected_quote":
         None,
 
+    "app_lang": 
+        "English",
+
+    "app_currency": 
+        "USD"
+
 }
 
 
@@ -3920,58 +4048,6 @@ if st.session_state.get(
         )
 
     st.session_state.auto_send_success = False
-    
-    
-if st.session_state.get(
-    "conf_auto_draft_success"
-):
-
-    result = (
-        st.session_state.conf_auto_draft_success
-    )
-
-    if isinstance(result, str) and "failed" in result:
-
-        st.warning(
-            result
-        )
-
-    else:
-
-        st.success(
-            f"✅ Reservation Confirmed! "
-            f"Draft saved successfully. Confirmation #{result}"
-        )
-
-        st.balloons()
-
-    st.session_state.conf_auto_draft_success = False
-
-
-if st.session_state.get(
-    "conf_auto_send_success"
-):
-
-    result = (
-        st.session_state.conf_auto_send_success
-    )
-
-    if isinstance(result, str) and "failed" in result:
-
-        st.warning(
-            result
-        )
-
-    else:
-
-        st.success(
-            f"✅ Reservation Confirmed! "
-            f"Email sent successfully. Confirmation #{result}"
-        )
-
-        st.balloons()
-
-    st.session_state.conf_auto_send_success = False
 
 
 if st.session_state.get(
@@ -4031,6 +4107,27 @@ with st.sidebar:
             "Manual Confirmation"
         ]
     )
+
+    st.divider()
+
+    st.markdown(
+        "## Global Settings"
+    )
+
+    st.session_state.app_lang = st.radio(
+        "Language / Idioma", 
+        ["English", "Español"], 
+        index=0 if st.session_state.app_lang == "English" else 1
+    )
+
+    st.session_state.app_currency = st.radio(
+        "Currency / Moneda", 
+        ["USD", "MXN"], 
+        index=0 if st.session_state.app_currency == "USD" else 1
+    )
+
+    lang_code = "en" if st.session_state.app_lang == "English" else "es"
+    curr_code = st.session_state.app_currency
 
     st.divider()
 
@@ -4334,7 +4431,7 @@ if app_mode == "Create Quotation":
             stay_total_tax_included = (
                 st.number_input(
 
-                    "Stay Total Taxes Included (USD)",
+                    f"Stay Total Taxes Included ({curr_code})",
 
                     min_value=0.00,
 
@@ -4383,7 +4480,8 @@ if app_mode == "Create Quotation":
                 money(
                     calculations[
                         "nightly_before_tax"
-                    ]
+                    ],
+                    curr_code
                 ),
             )
 
@@ -4394,7 +4492,8 @@ if app_mode == "Create Quotation":
                 money(
                     calculations[
                         "nightly_with_tax"
-                    ]
+                    ],
+                    curr_code
                 ),
             )
 
@@ -4405,7 +4504,8 @@ if app_mode == "Create Quotation":
                 money(
                     calculations[
                         "total_before_tax"
-                    ]
+                    ],
+                    curr_code
                 ),
             )
 
@@ -4416,7 +4516,8 @@ if app_mode == "Create Quotation":
                 money(
                     calculations[
                         "taxes"
-                    ]
+                    ],
+                    curr_code
                 ),
             )
 
@@ -4545,7 +4646,7 @@ if app_mode == "Create Quotation":
 
                 selected = st.checkbox(
 
-                    f"{service} — {money(price)}",
+                    f"{service} — {money(price, curr_code)}",
 
                     key=service_key,
                 )
@@ -4576,7 +4677,7 @@ if app_mode == "Create Quotation":
 
         st.metric(
             "Total Amount",
-            money(final_total),
+            money(final_total, curr_code),
         )
 
         st.markdown(
@@ -4715,6 +4816,10 @@ if app_mode == "Create Quotation":
         nights=nights,
 
         options=all_options,
+
+        lang=lang_code,
+
+        currency=curr_code
     )
 
     plain_text_email = build_plain_text(
@@ -4735,6 +4840,10 @@ if app_mode == "Create Quotation":
         nights=nights,
 
         options=all_options,
+
+        lang=lang_code,
+
+        currency=curr_code
     )
 
     st.markdown(
@@ -4760,7 +4869,7 @@ if app_mode == "Create Quotation":
     )
 
     subject = (
-        "Your Custom Quotation "
+        f"{TRANSLATIONS[lang_code]['custom_quotation']} | "
         "Casa Dorada Los Cabos"
     )
 
@@ -5095,7 +5204,7 @@ elif app_mode == "Confirm Quotation":
         for i, opt in enumerate(options):
 
             opt_choices.append(
-                f"Option {i+1}: {opt['room_type']} - {money(opt['final_total'])}"
+                f"Option {i+1}: {opt['room_type']} - {money(opt['final_total'], curr_code)}"
             )
             
         selected_opt_idx = st.radio(
@@ -5122,17 +5231,19 @@ elif app_mode == "Confirm Quotation":
 
             deposit = stay_total
             balance = 0.00
+            payment_status_trans = TRANSLATIONS[lang_code]["fully_paid"]
 
         else:
 
             deposit = rate_per_night
             balance = stay_total - deposit
+            payment_status_trans = TRANSLATIONS[lang_code]["first_night_deposit"]
             
         col1, col2, col3 = st.columns(3)
 
-        col1.metric("Total Amount", money(stay_total))
-        col2.metric("Deposit", money(deposit))
-        col3.metric("Balance Due", money(balance))
+        col1.metric("Total Amount", money(stay_total, curr_code))
+        col2.metric("Deposit", money(deposit, curr_code))
+        col3.metric("Balance Due", money(balance, curr_code))
         
         comments = st.text_area(
             "Comments (Internal Notes)", 
@@ -5158,8 +5269,6 @@ elif app_mode == "Confirm Quotation":
         )
 
         col_act1, col_act2 = st.columns(2)
-        
-        conf_subject = "Reservation Confirmation - Casa Dorada"
         
         def store_pending_confirmation_ui(action):
 
@@ -5210,7 +5319,7 @@ elif app_mode == "Confirm Quotation":
                     balance,
 
                 "payment_status": 
-                    payment_status,
+                    payment_status_trans,
 
                 "comments": 
                     comments,
@@ -5222,24 +5331,24 @@ elif app_mode == "Confirm Quotation":
                     selected_opt,
 
                 "subject": 
-                    f"{conf_subject} [{conf_number}]",
+                    f"Booking Confirmation #{conf_number} | Casa Dorada Los Cabos",
 
                 "email_html": build_confirmation_email_html(
                     conf_number, selected_quote["guest_name"], selected_quote["arrival"], 
                     selected_quote["departure"], selected_quote["adults"], selected_quote["children"], 
                     selected_quote["nights"], selected_opt["room_type"], rate_per_night, stay_total, 
-                    deposit, balance, payment_status, special_requests, selected_opt["deposit_policy"], 
+                    deposit, balance, payment_status_trans, special_requests, selected_opt["deposit_policy"], 
                     selected_opt["cancellation_policy"], selected_opt.get("selected_inclusions", []), 
-                    selected_opt.get("selected_services", [])
+                    selected_opt.get("selected_services", []), lang_code, curr_code
                 ),
 
                 "plain_text_email": build_confirmation_plain_text(
                     conf_number, selected_quote["guest_name"], selected_quote["arrival"], 
                     selected_quote["departure"], selected_quote["adults"], selected_quote["children"], 
                     selected_quote["nights"], selected_opt["room_type"], rate_per_night, stay_total, 
-                    deposit, balance, payment_status, special_requests, selected_opt["deposit_policy"], 
+                    deposit, balance, payment_status_trans, special_requests, selected_opt["deposit_policy"], 
                     selected_opt["cancellation_policy"], selected_opt.get("selected_inclusions", []), 
-                    selected_opt.get("selected_services", [])
+                    selected_opt.get("selected_services", []), lang_code, curr_code
                 )
             }
 
@@ -5269,7 +5378,22 @@ elif app_mode == "Confirm Quotation":
                         """, 
                         unsafe_allow_html=True
                     )
-                    
+
+            if st.session_state.get("conf_auto_draft_success"):
+
+                result = st.session_state.conf_auto_draft_success
+
+                if isinstance(result, str) and "failed" in result:
+
+                    st.warning(result)
+
+                else:
+
+                    st.success(f"✅ Reservation Confirmed! Draft saved successfully. Confirmation #{result}")
+                    st.balloons()
+
+                st.session_state.conf_auto_draft_success = False
+
         with col_act2:
 
             if st.button("📤 Generate & Send Email", use_container_width=True):
@@ -5295,6 +5419,21 @@ elif app_mode == "Confirm Quotation":
                         unsafe_allow_html=True
                     )
 
+            if st.session_state.get("conf_auto_send_success"):
+
+                result = st.session_state.conf_auto_send_success
+
+                if isinstance(result, str) and "failed" in result:
+
+                    st.warning(result)
+
+                else:
+
+                    st.success(f"✅ Reservation Confirmed! Email sent successfully. Confirmation #{result}")
+                    st.balloons()
+
+                st.session_state.conf_auto_send_success = False
+
 
 # ============================================================
 # WORKFLOW: MANUAL CONFIRMATION
@@ -5318,21 +5457,17 @@ elif app_mode == "Manual Confirmation":
     mc_col1, mc_col2 = st.columns(2)
 
     with mc_col1:
-
         m_guest_name = st.text_input("Guest name", placeholder="John Smith", key="m_gname")
 
     with mc_col2:
-
         m_guest_email = st.text_input("Guest email", placeholder="guest@email.com", key="m_gemail")
 
     mc_col3, mc_col4 = st.columns(2)
 
     with mc_col3:
-
         m_arrival = st.date_input("Arrival", value=date.today(), key="m_arr")
 
     with mc_col4:
-
         m_departure = st.date_input("Departure", value=date.today(), key="m_dep")
 
     mc_col5, mc_col6, mc_col7 = st.columns(3)
@@ -5340,15 +5475,12 @@ elif app_mode == "Manual Confirmation":
     m_calculated_nights = max(1, (m_departure - m_arrival).days)
 
     with mc_col5:
-
         m_adults = st.number_input("Adults", min_value=1, max_value=20, value=2, step=1, key="m_adults")
 
     with mc_col6:
-
         m_children = st.number_input("Children", min_value=0, max_value=20, value=0, step=1, key="m_child")
 
     with mc_col7:
-
         m_nights = st.number_input("Nights", min_value=1, max_value=365, value=m_calculated_nights, step=1, key="m_nights")
         
     st.divider()
@@ -5360,12 +5492,10 @@ elif app_mode == "Manual Confirmation":
     r_col1, r_col2 = st.columns(2)
 
     with r_col1:
-
         m_room_type = st.selectbox("Room type", list(ROOM_TYPES.keys()), key="m_rtype")
 
     with r_col2:
-
-        m_stay_total = st.number_input("Stay Total Taxes Included (USD)", min_value=0.00, value=0.00, step=100.00, format="%.2f", key="m_stotal")
+        m_stay_total = st.number_input(f"Stay Total Taxes Included ({curr_code})", min_value=0.00, value=0.00, step=100.00, format="%.2f", key="m_stotal")
         
     m_calc = calculate_rate_values(m_stay_total, m_nights)
     m_nightly_rate = m_calc["nightly_with_tax"]
@@ -5376,17 +5506,19 @@ elif app_mode == "Manual Confirmation":
 
         m_deposit = float(m_stay_total)
         m_balance = 0.00
+        payment_status_trans = TRANSLATIONS[lang_code]["fully_paid"]
 
     else:
 
         m_deposit = float(m_nightly_rate)
         m_balance = float(m_stay_total) - m_deposit
+        payment_status_trans = TRANSLATIONS[lang_code]["first_night_deposit"]
         
     p_col1, p_col2, p_col3 = st.columns(3)
 
-    p_col1.metric("Total Amount", money(m_stay_total))
-    p_col2.metric("Deposit", money(m_deposit))
-    p_col3.metric("Balance Due", money(m_balance))
+    p_col1.metric("Total Amount", money(m_stay_total, curr_code))
+    p_col2.metric("Deposit", money(m_deposit, curr_code))
+    p_col3.metric("Balance Due", money(m_balance, curr_code))
     
     m_comments = st.text_area("Comments (Internal Notes)", key="m_comm")
     m_special = st.text_area("Special Requests (Guest Needs)", key="m_spec")
@@ -5398,11 +5530,9 @@ elif app_mode == "Manual Confirmation":
     po_col1, po_col2 = st.columns(2)
 
     with po_col1:
-
         m_dep_pol = st.selectbox("Deposit Policy", DEPOSIT_POLICIES, key="m_dpol")
 
     with po_col2:
-
         m_can_pol = st.selectbox("Cancellation Policy", CANCELLATION_POLICIES, key="m_cpol")
         
     st.markdown(
@@ -5420,8 +5550,6 @@ elif app_mode == "Manual Confirmation":
     )
 
     m_act1, m_act2 = st.columns(2)
-    
-    conf_subject = "Reservation Confirmation - Casa Dorada"
     
     def store_manual_pending_ui(action):
 
@@ -5472,7 +5600,7 @@ elif app_mode == "Manual Confirmation":
                 m_balance,
 
             "payment_status": 
-                m_payment_status,
+                payment_status_trans,
 
             "comments": 
                 m_comments,
@@ -5484,18 +5612,18 @@ elif app_mode == "Manual Confirmation":
                 {"source": "manual"},
 
             "subject": 
-                f"{conf_subject} [{conf_number}]",
+                f"Booking Confirmation #{conf_number} | Casa Dorada Los Cabos",
 
             "email_html": build_confirmation_email_html(
                 conf_number, m_guest_name, m_arrival, m_departure, m_adults, m_children, m_nights,
-                m_room_type, m_nightly_rate, m_stay_total, m_deposit, m_balance, m_payment_status,
-                m_special, m_dep_pol, m_can_pol, ROOM_TYPES[m_room_type]["default_inclusions"], []
+                m_room_type, m_nightly_rate, m_stay_total, m_deposit, m_balance, payment_status_trans,
+                m_special, m_dep_pol, m_can_pol, ROOM_TYPES[m_room_type]["default_inclusions"], [], lang_code, curr_code
             ),
 
             "plain_text_email": build_confirmation_plain_text(
                 conf_number, m_guest_name, m_arrival, m_departure, m_adults, m_children, m_nights,
-                m_room_type, m_nightly_rate, m_stay_total, m_deposit, m_balance, m_payment_status,
-                m_special, m_dep_pol, m_can_pol, ROOM_TYPES[m_room_type]["default_inclusions"], []
+                m_room_type, m_nightly_rate, m_stay_total, m_deposit, m_balance, payment_status_trans,
+                m_special, m_dep_pol, m_can_pol, ROOM_TYPES[m_room_type]["default_inclusions"], [], lang_code, curr_code
             )
 
         }
@@ -5532,7 +5660,22 @@ elif app_mode == "Manual Confirmation":
                         """, 
                         unsafe_allow_html=True
                     )
-                    
+
+        if st.session_state.get("conf_auto_draft_success"):
+
+            result = st.session_state.conf_auto_draft_success
+
+            if isinstance(result, str) and "failed" in result:
+
+                st.warning(result)
+
+            else:
+
+                st.success(f"✅ Reservation Confirmed! Draft saved successfully. Confirmation #{result}")
+                st.balloons()
+
+            st.session_state.conf_auto_draft_success = False
+
     with m_act2:
 
         if st.button("📤 Generate & Send Email", use_container_width=True):
@@ -5563,3 +5706,18 @@ elif app_mode == "Manual Confirmation":
                         """, 
                         unsafe_allow_html=True
                     )
+
+        if st.session_state.get("conf_auto_send_success"):
+
+            result = st.session_state.conf_auto_send_success
+
+            if isinstance(result, str) and "failed" in result:
+
+                st.warning(result)
+
+            else:
+
+                st.success(f"✅ Reservation Confirmed! Email sent successfully. Confirmation #{result}")
+                st.balloons()
+
+            st.session_state.conf_auto_send_success = False
