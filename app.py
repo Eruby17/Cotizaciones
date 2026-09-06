@@ -3795,31 +3795,29 @@ for option_number in range(
     link_col1, link_col2 = st.columns(2)
 
 
-    with link_col1:
+with link_col1:
 
-        default_360 = (
-            ROOM_TYPES[
-                room_type
-            ].get(
-                "360_url",
-                ""
-            )
-        )
+    room_360_url = ROOM_TYPES[
+        room_type
+    ].get(
+        "360_url",
+        ""
+    )
 
+    st.text_input(
 
-        room_360_url = st.text_input(
+        "360° Room View Link",
 
-            "360° Room View Link",
+        value=room_360_url,
 
-            value=default_360,
+        placeholder="https://...",
 
-            placeholder="https://...",
-
-            key=(
-                f"room_360_url_"
-                f"{option_number}"
-            ),
-        )
+        key=(
+            f"room_360_url_"
+            f"{option_number}_"
+            f"{room_type}"
+        ),
+    )
 
 
     with link_col2:
