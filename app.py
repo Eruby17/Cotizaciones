@@ -455,7 +455,9 @@ def save_refresh_token(
             204,
         ]
 
-    except Exception:
+    except Exception as e:
+
+        st.session_state.supabase_save_error = str(e)
 
         return False
 
@@ -497,18 +499,27 @@ def get_saved_refresh_token(email):
         )
 
         if response.status_code != 200:
+
+            st.session_state.supabase_get_error = (
+                f"HTTP {response.status_code}: "
+                f"{response.text}"
+            )
+
             return None
 
         data = response.json()
 
         if not data:
+
             return None
 
         return data[0].get(
             "refresh_token"
         )
 
-    except Exception:
+    except Exception as e:
+
+        st.session_state.supabase_get_error = str(e)
 
         return None
 
@@ -535,6 +546,7 @@ def get_logged_in_email():
                 if not email.endswith(
                     "@casadorada.com"
                 ):
+
                     return None
 
                 return email
@@ -924,7 +936,7 @@ def process_google_callback():
         email = email.lower().strip()
 
         # ----------------------------------------------------
-        # VALIDAR QUE EL GMAIL TAMBIÉN SEA CASADORADA.COM
+        # VALIDAR DOMINIO GMAIL
         # ----------------------------------------------------
 
         if not email.endswith(
@@ -941,15 +953,23 @@ def process_google_callback():
             return False
 
         # ----------------------------------------------------
-        # VALIDAR QUE COINCIDA CON EL USUARIO OIDC
+        # VALIDAR QUE COINCIDA CON OIDC
         # ----------------------------------------------------
 
         logged_email = get_logged_in_email()
 
-        if (
-            logged_email
-            and email != logged_email
-        ):
+        if not logged_email:
+
+            st.error(
+                "Please sign in with your "
+                "@casadorada.com account first."
+            )
+
+            st.query_params.clear()
+
+            return False
+
+        if email != logged_email:
 
             st.error(
                 "The Gmail account must match "
@@ -960,23 +980,58 @@ def process_google_callback():
 
             return False
 
+        # ----------------------------------------------------
+        # GUARDAR REFRESH TOKEN
+        # ----------------------------------------------------
+
         refresh_token = (
             credentials.refresh_token
         )
 
-        if refresh_token:
+        if not refresh_token:
 
-            saved = save_refresh_token(
-                email=email,
-                refresh_token=refresh_token,
+            st.error(
+                "Google did not return a refresh token. "
+                "Please authorize Gmail again."
             )
 
-            if not saved:
+            st.query_params.clear()
 
-                st.warning(
-                    "Gmail se conectó, pero no fue posible "
-                    "guardar la conexión permanente."
-                )
+            return False
+
+        saved = save_refresh_token(
+            email=email,
+            refresh_token=refresh_token,
+        )
+
+        if not saved:
+
+            error_detail = st.session_state.get(
+                "supabase_save_error"
+            )
+
+            st.error(
+                "Gmail was authorized, but the "
+                "connection could not be saved."
+            )
+
+            if error_detail:
+
+                with st.expander(
+                    "Technical details"
+                ):
+
+                    st.code(
+                        error_detail
+                    )
+
+            st.query_params.clear()
+
+            return False
+
+        # ----------------------------------------------------
+        # GUARDAR EN SESSION
+        # ----------------------------------------------------
 
         st.session_state.google_credentials = (
             credentials_to_dict(
@@ -988,14 +1043,18 @@ def process_google_callback():
 
         st.session_state.google_connected = True
 
+        st.session_state.gmail_auth_error = None
+
         st.query_params.clear()
 
         return True
 
     except Exception as e:
 
+        st.session_state.gmail_auth_error = str(e)
+
         st.error(
-            f"Error conectando con Google: {e}"
+            f"Error connecting Gmail: {e}"
         )
 
         return False
@@ -1008,7 +1067,23 @@ def process_google_callback():
 def get_credentials():
 
     # --------------------------------------------------------
-    # 1. SESSION STATE
+    # 1. VERIFICAR IDENTIDAD OIDC
+    # --------------------------------------------------------
+
+    logged_email = get_logged_in_email()
+
+    if not logged_email:
+
+        return None
+
+    logged_email = (
+        logged_email
+        .lower()
+        .strip()
+    )
+
+    # --------------------------------------------------------
+    # 2. USAR CREDENCIALES DE SESSION
     # --------------------------------------------------------
 
     data = st.session_state.get(
@@ -1044,6 +1119,18 @@ def get_credentials():
             ),
         )
 
+        # ----------------------------------------------------
+        # SI EL TOKEN TODAVÍA SIRVE
+        # ----------------------------------------------------
+
+        if credentials.valid:
+
+            return credentials
+
+        # ----------------------------------------------------
+        # SI ESTÁ EXPIRADO, RENOVAR
+        # ----------------------------------------------------
+
         if (
             credentials.expired
             and credentials.refresh_token
@@ -1061,47 +1148,41 @@ def get_credentials():
                     )
                 )
 
+                st.session_state.google_connected = True
+
+                return credentials
+
             except Exception:
 
-                return None
+                st.session_state.google_credentials = None
 
-        return credentials
+                st.session_state.google_connected = False
 
     # --------------------------------------------------------
-    # 2. EMAIL DEL USUARIO AUTENTICADO
+    # 3. USAR EMAIL DEL USUARIO OIDC
     # --------------------------------------------------------
 
-    logged_email = get_logged_in_email()
-
-    if logged_email:
-
-        st.session_state.google_email = (
-            logged_email
-        )
-
-    saved_email = (
-        st.session_state.get(
-            "google_email"
-        )
+    st.session_state.google_email = (
+        logged_email
     )
 
-    if not saved_email:
-
-        return None
-
     # --------------------------------------------------------
-    # 3. BUSCAR REFRESH TOKEN EN SUPABASE
+    # 4. BUSCAR REFRESH TOKEN EN SUPABASE
     # --------------------------------------------------------
 
     refresh_token = (
         get_saved_refresh_token(
-            saved_email
+            logged_email
         )
     )
 
     if not refresh_token:
 
         return None
+
+    # --------------------------------------------------------
+    # 5. CONFIGURACIÓN GOOGLE
+    # --------------------------------------------------------
 
     config = get_oauth_config()
 
@@ -1126,6 +1207,10 @@ def get_credentials():
         scopes=SCOPES,
     )
 
+    # --------------------------------------------------------
+    # 6. RENOVAR TOKEN
+    # --------------------------------------------------------
+
     try:
 
         credentials.refresh(
@@ -1138,11 +1223,23 @@ def get_credentials():
             )
         )
 
+        st.session_state.google_email = (
+            logged_email
+        )
+
         st.session_state.google_connected = True
+
+        st.session_state.gmail_auth_error = None
 
         return credentials
 
-    except Exception:
+    except Exception as e:
+
+        st.session_state.google_credentials = None
+
+        st.session_state.google_connected = False
+
+        st.session_state.gmail_auth_error = str(e)
 
         return None
 
@@ -1161,13 +1258,27 @@ def get_gmail_service():
 
     try:
 
-        return build(
+        service = build(
             "gmail",
             "v1",
             credentials=credentials,
         )
 
-    except Exception:
+        # ----------------------------------------------------
+        # VERIFICAR ACCESO REAL A GMAIL
+        # ----------------------------------------------------
+
+        service.users().getProfile(
+            userId="me"
+        ).execute()
+
+        return service
+
+    except Exception as e:
+
+        st.session_state.gmail_auth_error = str(e)
+
+        st.session_state.google_connected = False
 
         return None
 
@@ -1178,23 +1289,11 @@ def get_gmail_service():
 
 def get_connected_email():
 
-    logged_email = get_logged_in_email()
-
-    if logged_email:
-
-        st.session_state.google_email = (
-            logged_email
-        )
-
-    session_email = (
-        st.session_state.get(
-            "google_email"
-        )
-    )
-
-    if session_email:
-
-        return session_email
+    # IMPORTANTE:
+    # No debemos considerar que el usuario está conectado
+    # a Gmail solamente porque st.user tiene un email.
+    #
+    # Primero verificamos que Gmail realmente funcione.
 
     credentials = get_credentials()
 
@@ -1202,13 +1301,13 @@ def get_connected_email():
 
         return None
 
-    service = get_gmail_service()
-
-    if not service:
-
-        return None
-
     try:
+
+        service = build(
+            "gmail",
+            "v1",
+            credentials=credentials,
+        )
 
         profile = (
             service.users()
@@ -1222,23 +1321,42 @@ def get_connected_email():
             "emailAddress"
         )
 
-        if email:
+        if not email:
 
-            email = email.lower().strip()
+            return None
 
-            if not email.endswith(
-                "@casadorada.com"
-            ):
+        email = email.lower().strip()
 
-                return None
+        if not email.endswith(
+            "@casadorada.com"
+        ):
 
-            st.session_state.google_email = (
-                email
-            )
+            return None
+
+        # ----------------------------------------------------
+        # VALIDAR QUE SEA EL MISMO USUARIO OIDC
+        # ----------------------------------------------------
+
+        logged_email = get_logged_in_email()
+
+        if (
+            logged_email
+            and email != logged_email
+        ):
+
+            return None
+
+        st.session_state.google_email = email
+
+        st.session_state.google_connected = True
 
         return email
 
-    except Exception:
+    except Exception as e:
+
+        st.session_state.google_connected = False
+
+        st.session_state.gmail_auth_error = str(e)
 
         return None
 
@@ -2792,6 +2910,21 @@ if "google_email" not in st.session_state:
     st.session_state.google_email = None
 
 
+if "gmail_auth_error" not in st.session_state:
+
+    st.session_state.gmail_auth_error = None
+
+
+if "supabase_save_error" not in st.session_state:
+
+    st.session_state.supabase_save_error = None
+
+
+if "supabase_get_error" not in st.session_state:
+
+    st.session_state.supabase_get_error = None
+
+
 # ============================================================
 # VALIDAR USUARIO OIDC
 # ============================================================
@@ -2826,6 +2959,10 @@ if logged_email:
     if restored_credentials:
 
         st.session_state.google_connected = True
+
+    else:
+
+        st.session_state.google_connected = False
 
 
 # ============================================================
@@ -2932,6 +3069,44 @@ with st.sidebar:
                 "Autoriza Gmail una sola vez. "
                 "La conexión quedará guardada."
             )
+
+            # ------------------------------------------------
+            # DIAGNÓSTICO
+            # ------------------------------------------------
+
+            gmail_error = st.session_state.get(
+                "gmail_auth_error"
+            )
+
+            supabase_error = st.session_state.get(
+                "supabase_get_error"
+            )
+
+            if gmail_error or supabase_error:
+
+                with st.expander(
+                    "Connection diagnostics"
+                ):
+
+                    if gmail_error:
+
+                        st.write(
+                            "Gmail error:"
+                        )
+
+                        st.code(
+                            gmail_error
+                        )
+
+                    if supabase_error:
+
+                        st.write(
+                            "Supabase error:"
+                        )
+
+                        st.code(
+                            supabase_error
+                        )
 
 
     st.divider()
@@ -3676,40 +3851,82 @@ with action_col1:
                 "Please enter the guest email."
             )
 
-        elif not get_gmail_service():
-
-            st.error(
-                "Please connect your Google Account first."
-            )
-
         else:
 
-            try:
+            gmail_service = get_gmail_service()
 
-                save_gmail_draft(
-
-                    to_email=guest_email,
-
-                    subject=subject,
-
-                    html_body=email_html,
-
-                    plain_text_body=(
-                        plain_text_email
-                    ),
-
-                    attachments=attachments,
-                )
-
-                st.success(
-                    "Draft saved successfully in Gmail."
-                )
-
-            except Exception as e:
+            if not gmail_service:
 
                 st.error(
-                    f"Could not save draft: {e}"
+                    "Please connect your Gmail account first."
                 )
+
+                gmail_error = (
+                    st.session_state.get(
+                        "gmail_auth_error"
+                    )
+                )
+
+                supabase_error = (
+                    st.session_state.get(
+                        "supabase_get_error"
+                    )
+                )
+
+                if gmail_error or supabase_error:
+
+                    with st.expander(
+                        "Why is Gmail not connected?"
+                    ):
+
+                        if gmail_error:
+
+                            st.write(
+                                "Gmail:"
+                            )
+
+                            st.code(
+                                gmail_error
+                            )
+
+                        if supabase_error:
+
+                            st.write(
+                                "Supabase:"
+                            )
+
+                            st.code(
+                                supabase_error
+                            )
+
+            else:
+
+                try:
+
+                    save_gmail_draft(
+
+                        to_email=guest_email,
+
+                        subject=subject,
+
+                        html_body=email_html,
+
+                        plain_text_body=(
+                            plain_text_email
+                        ),
+
+                        attachments=attachments,
+                    )
+
+                    st.success(
+                        "Draft saved successfully in Gmail."
+                    )
+
+                except Exception as e:
+
+                    st.error(
+                        f"Could not save draft: {e}"
+                    )
 
 
 # ============================================================
@@ -3731,37 +3948,79 @@ with action_col2:
                 "Please enter the guest email."
             )
 
-        elif not get_gmail_service():
-
-            st.error(
-                "Please connect your Google Account first."
-            )
-
         else:
 
-            try:
+            gmail_service = get_gmail_service()
 
-                send_gmail_message(
-
-                    to_email=guest_email,
-
-                    subject=subject,
-
-                    html_body=email_html,
-
-                    plain_text_body=(
-                        plain_text_email
-                    ),
-
-                    attachments=attachments,
-                )
-
-                st.success(
-                    "Email sent successfully."
-                )
-
-            except Exception as e:
+            if not gmail_service:
 
                 st.error(
-                    f"Could not send email: {e}"
+                    "Please connect your Gmail account first."
                 )
+
+                gmail_error = (
+                    st.session_state.get(
+                        "gmail_auth_error"
+                    )
+                )
+
+                supabase_error = (
+                    st.session_state.get(
+                        "supabase_get_error"
+                    )
+                )
+
+                if gmail_error or supabase_error:
+
+                    with st.expander(
+                        "Why is Gmail not connected?"
+                    ):
+
+                        if gmail_error:
+
+                            st.write(
+                                "Gmail:"
+                            )
+
+                            st.code(
+                                gmail_error
+                            )
+
+                        if supabase_error:
+
+                            st.write(
+                                "Supabase:"
+                            )
+
+                            st.code(
+                                supabase_error
+                            )
+
+            else:
+
+                try:
+
+                    send_gmail_message(
+
+                        to_email=guest_email,
+
+                        subject=subject,
+
+                        html_body=email_html,
+
+                        plain_text_body=(
+                            plain_text_email
+                        ),
+
+                        attachments=attachments,
+                    )
+
+                    st.success(
+                        "Email sent successfully."
+                    )
+
+                except Exception as e:
+
+                    st.error(
+                        f"Could not send email: {e}"
+                    )
