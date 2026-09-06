@@ -449,6 +449,38 @@ def get_supabase_config():
 
 
 # ============================================================
+# SUPABASE HEADERS
+# ============================================================
+
+def get_supabase_headers(
+    prefer=None,
+):
+
+    config = get_supabase_config()
+
+    if not config:
+        return None
+
+    headers = {
+
+        "apikey":
+            config["key"],
+
+        "Authorization":
+            f"Bearer {config['key']}",
+
+        "Content-Type":
+            "application/json",
+    }
+
+    if prefer:
+
+        headers["Prefer"] = prefer
+
+    return headers
+
+
+# ============================================================
 # SUPABASE TOKEN STORAGE
 # ============================================================
 
@@ -469,33 +501,37 @@ def save_refresh_token(
         f"{config['url']}/rest/v1/google_tokens"
     )
 
-    headers = {
-        "apikey": config["key"],
-        "Authorization": (
-            f"Bearer {config['key']}"
-        ),
-        "Content-Type": "application/json",
-        "Prefer": (
-            "resolution=merge-duplicates,"
-            "return=minimal"
-        ),
-    }
+    headers = get_supabase_headers(
+        "resolution=merge-duplicates,return=minimal"
+    )
 
     now = datetime.utcnow().isoformat()
 
     payload = {
-        "email": email.lower().strip(),
-        "refresh_token": refresh_token,
-        "created_at": now,
-        "updated_at": now,
+
+        "email":
+            email.lower().strip(),
+
+        "refresh_token":
+            refresh_token,
+
+        "created_at":
+            now,
+
+        "updated_at":
+            now,
     }
 
     try:
 
         response = requests.post(
+
             endpoint,
+
             headers=headers,
+
             json=payload,
+
             timeout=15,
         )
 
@@ -521,7 +557,9 @@ def save_refresh_token(
         return False
 
 
-def get_saved_refresh_token(email):
+def get_saved_refresh_token(
+    email,
+):
 
     if not email:
         return None
@@ -535,25 +573,30 @@ def get_saved_refresh_token(email):
         f"{config['url']}/rest/v1/google_tokens"
     )
 
-    headers = {
-        "apikey": config["key"],
-        "Authorization": (
-            f"Bearer {config['key']}"
-        ),
-    }
+    headers = get_supabase_headers()
 
     params = {
-        "email": f"eq.{email.lower().strip()}",
-        "select": "refresh_token",
-        "limit": "1",
+
+        "email":
+            f"eq.{email.lower().strip()}",
+
+        "select":
+            "refresh_token",
+
+        "limit":
+            "1",
     }
 
     try:
 
         response = requests.get(
+
             endpoint,
+
             headers=headers,
+
             params=params,
+
             timeout=15,
         )
 
@@ -583,6 +626,284 @@ def get_saved_refresh_token(email):
 
 
 # ============================================================
+# QUOTATIONS DATABASE
+# ============================================================
+
+def generate_quotation_number():
+
+    today = datetime.utcnow()
+
+    date_part = today.strftime(
+        "%y%m%d"
+    )
+
+    random_part = (
+        secrets.randbelow(9000)
+        + 1000
+    )
+
+    return (
+        f"CD{date_part}-{random_part}"
+    )
+
+
+def prepare_options_for_database(
+    options,
+    nights,
+):
+
+    database_options = []
+
+    for option in options:
+
+        calculations = (
+            calculate_rate_values(
+                option[
+                    "stay_total_tax_included"
+                ],
+                nights,
+            )
+        )
+
+        services_total = sum(
+
+            ADDITIONAL_SERVICES[
+                service
+            ]
+
+            for service in option[
+                "selected_services"
+            ]
+
+        )
+
+        final_total = (
+
+            calculations[
+                "total_with_tax"
+            ]
+
+            + services_total
+        )
+
+        database_options.append({
+
+            "room_type":
+                option[
+                    "room_type"
+                ],
+
+            "valid_until":
+                str(
+                    option[
+                        "valid_until"
+                    ]
+                ),
+
+            "stay_total_tax_included":
+                float(
+                    option[
+                        "stay_total_tax_included"
+                    ]
+                ),
+
+            "nightly_before_tax":
+                float(
+                    calculations[
+                        "nightly_before_tax"
+                    ]
+                ),
+
+            "nightly_taxes_included":
+                float(
+                    calculations[
+                        "nightly_with_tax"
+                    ]
+                ),
+
+            "stay_total_before_tax":
+                float(
+                    calculations[
+                        "total_before_tax"
+                    ]
+                ),
+
+            "taxes":
+                float(
+                    calculations[
+                        "taxes"
+                    ]
+                ),
+
+            "selected_inclusions":
+                option[
+                    "selected_inclusions"
+                ],
+
+            "selected_services":
+                option[
+                    "selected_services"
+                ],
+
+            "additional_services_total":
+                float(
+                    services_total
+                ),
+
+            "final_total":
+                float(
+                    final_total
+                ),
+
+            "deposit_policy":
+                option[
+                    "deposit_policy"
+                ],
+
+            "cancellation_policy":
+                option[
+                    "cancellation_policy"
+                ],
+
+            "payment_url":
+                option[
+                    "payment_url"
+                ],
+
+            "room_360_url":
+                option[
+                    "room_360_url"
+                ],
+        })
+
+    return database_options
+
+
+def save_quotation_to_supabase(
+    guest_name,
+    guest_email,
+    arrival,
+    departure,
+    nights,
+    adults,
+    children,
+    options,
+    created_by,
+    status="QUOTED",
+):
+
+    config = get_supabase_config()
+
+    if not config:
+        return None
+
+    endpoint = (
+        f"{config['url']}/rest/v1/quotations"
+    )
+
+    headers = get_supabase_headers(
+        "return=representation"
+    )
+
+    database_options = (
+        prepare_options_for_database(
+            options,
+            nights,
+        )
+    )
+
+    quotation_number = (
+        generate_quotation_number()
+    )
+
+    payload = {
+
+        "quotation_number":
+            quotation_number,
+
+        "guest_name":
+            guest_name,
+
+        "guest_email":
+            guest_email,
+
+        "arrival":
+            str(arrival),
+
+        "departure":
+            str(departure),
+
+        "nights":
+            int(nights),
+
+        "adults":
+            int(adults),
+
+        "children":
+            int(children),
+
+        "options":
+            database_options,
+
+        "total_amount":
+            None,
+
+        "payment_url":
+            None,
+
+        "status":
+            status,
+
+        "created_by":
+            created_by,
+    }
+
+    try:
+
+        response = requests.post(
+
+            endpoint,
+
+            headers=headers,
+
+            json=payload,
+
+            timeout=20,
+        )
+
+        if response.status_code not in [
+            200,
+            201,
+        ]:
+
+            st.session_state[
+                "quotation_database_error"
+            ] = (
+                f"HTTP {response.status_code}: "
+                f"{response.text}"
+            )
+
+            return None
+
+        data = response.json()
+
+        if not data:
+            return None
+
+        quotation = data[0]
+
+        return quotation
+
+    except Exception as e:
+
+        st.session_state[
+            "quotation_database_error"
+        ] = str(e)
+
+        return None
+
+
+# ============================================================
 # IDENTIDAD DEL USUARIO
 # ============================================================
 
@@ -599,7 +920,11 @@ def get_logged_in_email():
 
             if email:
 
-                email = email.lower().strip()
+                email = (
+                    email
+                    .lower()
+                    .strip()
+                )
 
                 if not email.endswith(
                     "@casadorada.com"
@@ -676,7 +1001,9 @@ def b64url_encode(data):
 
 def b64url_decode(value):
 
-    padding = "=" * (-len(value) % 4)
+    padding = "=" * (
+        -len(value) % 4
+    )
 
     return base64.urlsafe_b64decode(
         value + padding
@@ -715,9 +1042,11 @@ def verify_state(state):
 
     try:
 
-        encoded, signature = state.split(
-            ".",
-            1,
+        encoded, signature = (
+            state.split(
+                ".",
+                1,
+            )
         )
 
         expected = hmac.new(
@@ -779,10 +1108,14 @@ def get_google_login_url():
         .replace("_", "")
     )
 
-    code_challenge = b64url_encode(
-        hashlib.sha256(
-            code_verifier.encode("utf-8")
-        ).digest()
+    code_challenge = (
+        b64url_encode(
+            hashlib.sha256(
+                code_verifier.encode(
+                    "utf-8"
+                )
+            ).digest()
+        )
     )
 
     payload = {
@@ -812,7 +1145,9 @@ def get_google_login_url():
             "code",
 
         "scope":
-            " ".join(GMAIL_SCOPES),
+            " ".join(
+                GMAIL_SCOPES
+            ),
 
         "access_type":
             "offline",
@@ -844,7 +1179,9 @@ def get_google_login_url():
 # CREDENTIALS TO DICT
 # ============================================================
 
-def credentials_to_dict(credentials):
+def credentials_to_dict(
+    credentials,
+):
 
     return {
 
@@ -1024,7 +1361,11 @@ def process_google_callback():
                 "No fue posible obtener el email de Gmail."
             )
 
-        email = email.lower().strip()
+        email = (
+            email
+            .lower()
+            .strip()
+        )
 
         if not email.endswith(
             "@casadorada.com"
@@ -1039,7 +1380,9 @@ def process_google_callback():
 
             return False
 
-        logged_email = get_logged_in_email()
+        logged_email = (
+            get_logged_in_email()
+        )
 
         if not logged_email:
 
@@ -1157,11 +1500,72 @@ def process_google_callback():
                             ],
                     )
 
-                    st.session_state.pending_quote = None
+                    quotation = (
+                        save_quotation_to_supabase(
 
+                            guest_name=
+                                pending_quote[
+                                    "guest_name"
+                                ],
+
+                            guest_email=
+                                pending_quote[
+                                    "guest_email"
+                                ],
+
+                            arrival=
+                                pending_quote[
+                                    "arrival"
+                                ],
+
+                            departure=
+                                pending_quote[
+                                    "departure"
+                                ],
+
+                            nights=
+                                pending_quote[
+                                    "nights"
+                                ],
+
+                            adults=
+                                pending_quote[
+                                    "adults"
+                                ],
+
+                            children=
+                                pending_quote[
+                                    "children"
+                                ],
+
+                            options=
+                                pending_quote[
+                                    "options"
+                                ],
+
+                            created_by=
+                                logged_email,
+
+                            status="QUOTED",
+                        )
+                    )
+
+                    st.session_state.pending_quote = None
                     st.session_state.pending_action = None
 
-                    st.session_state.auto_draft_success = True
+                    if quotation:
+
+                        st.session_state.auto_draft_success = (
+                            quotation[
+                                "quotation_number"
+                            ]
+                        )
+
+                    else:
+
+                        st.session_state.auto_draft_success = (
+                            "Draft saved successfully in Gmail."
+                        )
 
                 elif pending_action == "send":
 
@@ -1188,18 +1592,80 @@ def process_google_callback():
                             ],
                     )
 
-                    st.session_state.pending_quote = None
+                    quotation = (
+                        save_quotation_to_supabase(
 
+                            guest_name=
+                                pending_quote[
+                                    "guest_name"
+                                ],
+
+                            guest_email=
+                                pending_quote[
+                                    "guest_email"
+                                ],
+
+                            arrival=
+                                pending_quote[
+                                    "arrival"
+                                ],
+
+                            departure=
+                                pending_quote[
+                                    "departure"
+                                ],
+
+                            nights=
+                                pending_quote[
+                                    "nights"
+                                ],
+
+                            adults=
+                                pending_quote[
+                                    "adults"
+                                ],
+
+                            children=
+                                pending_quote[
+                                    "children"
+                                ],
+
+                            options=
+                                pending_quote[
+                                    "options"
+                                ],
+
+                            created_by=
+                                logged_email,
+
+                            status="SENT",
+                        )
+                    )
+
+                    st.session_state.pending_quote = None
                     st.session_state.pending_action = None
 
-                    st.session_state.auto_send_success = True
+                    if quotation:
+
+                        st.session_state.auto_send_success = (
+                            quotation[
+                                "quotation_number"
+                            ]
+                        )
+
+                    else:
+
+                        st.session_state.auto_send_success = (
+                            "Email sent successfully."
+                        )
 
             except Exception as e:
 
-                st.session_state.pending_action_error = str(e)
+                st.session_state.pending_action_error = (
+                    str(e)
+                )
 
                 st.session_state.pending_quote = None
-
                 st.session_state.pending_action = None
 
         return True
@@ -1221,7 +1687,9 @@ def process_google_callback():
 
 def get_credentials():
 
-    logged_email = get_logged_in_email()
+    logged_email = (
+        get_logged_in_email()
+    )
 
     if not logged_email:
         return None
@@ -1232,8 +1700,10 @@ def get_credentials():
         .strip()
     )
 
-    data = st.session_state.get(
-        "google_credentials"
+    data = (
+        st.session_state.get(
+            "google_credentials"
+        )
     )
 
     if data:
@@ -1372,7 +1842,9 @@ def get_credentials():
 
 def get_gmail_service():
 
-    credentials = get_credentials()
+    credentials = (
+        get_credentials()
+    )
 
     if not credentials:
         return None
@@ -1409,7 +1881,9 @@ def get_gmail_service():
 
 def get_connected_email():
 
-    credentials = get_credentials()
+    credentials = (
+        get_credentials()
+    )
 
     if not credentials:
         return None
@@ -1438,14 +1912,20 @@ def get_connected_email():
         if not email:
             return None
 
-        email = email.lower().strip()
+        email = (
+            email
+            .lower()
+            .strip()
+        )
 
         if not email.endswith(
             "@casadorada.com"
         ):
             return None
 
-        logged_email = get_logged_in_email()
+        logged_email = (
+            get_logged_in_email()
+        )
 
         if (
             logged_email
@@ -1500,6 +1980,7 @@ def calculate_rate_values(
         number_nights = 1
 
     if number_nights <= 0:
+
         number_nights = 1
 
     total_before_tax = (
@@ -1626,22 +2107,30 @@ def build_option_html(
     room_360_url,
 ):
 
-    calculations = calculate_rate_values(
-        stay_total_tax_included,
-        nights,
+    calculations = (
+        calculate_rate_values(
+            stay_total_tax_included,
+            nights,
+        )
     )
 
-    total_with_tax = calculations[
-        "total_with_tax"
-    ]
+    total_with_tax = (
+        calculations[
+            "total_with_tax"
+        ]
+    )
 
-    nightly_with_tax = calculations[
-        "nightly_with_tax"
-    ]
+    nightly_with_tax = (
+        calculations[
+            "nightly_with_tax"
+        ]
+    )
 
-    nightly_before_tax = calculations[
-        "nightly_before_tax"
-    ]
+    nightly_before_tax = (
+        calculations[
+            "nightly_before_tax"
+        ]
+    )
 
     inclusions_html = ""
 
@@ -2183,11 +2672,13 @@ def build_plain_text(
         start=1,
     ):
 
-        calculations = calculate_rate_values(
-            option[
-                "stay_total_tax_included"
-            ],
-            nights,
+        calculations = (
+            calculate_rate_values(
+                option[
+                    "stay_total_tax_included"
+                ],
+                nights,
+            )
         )
 
         services_total = sum(
@@ -2203,9 +2694,11 @@ def build_plain_text(
         )
 
         final_total = (
+
             calculations[
                 "total_with_tax"
             ]
+
             + services_total
         )
 
@@ -2352,9 +2845,6 @@ def build_email_html(
 ):
 
     options_html = ""
-
-    # IMPORTANTE:
-    # Se recorren TODAS las opciones.
 
     for index, option in enumerate(
         options,
@@ -2919,36 +3409,54 @@ def send_gmail_message(
 
 SESSION_DEFAULTS = {
 
-    "google_connected": False,
+    "google_connected":
+        False,
 
-    "google_credentials": None,
+    "google_credentials":
+        None,
 
-    "google_email": None,
+    "google_email":
+        None,
 
-    "gmail_auth_error": None,
+    "gmail_auth_error":
+        None,
 
-    "supabase_save_error": None,
+    "supabase_save_error":
+        None,
 
-    "supabase_get_error": None,
+    "supabase_get_error":
+        None,
 
-    "pending_quote": None,
+    "quotation_database_error":
+        None,
 
-    "pending_action": None,
+    "pending_quote":
+        None,
 
-    "auto_draft_success": False,
+    "pending_action":
+        None,
 
-    "auto_send_success": False,
+    "auto_draft_success":
+        False,
 
-    "pending_action_error": None,
+    "auto_send_success":
+        False,
+
+    "pending_action_error":
+        None,
 
 }
 
 
-for key, default_value in SESSION_DEFAULTS.items():
+for key, default_value in (
+    SESSION_DEFAULTS.items()
+):
 
     if key not in st.session_state:
 
-        st.session_state[key] = default_value
+        st.session_state[
+            key
+        ] = default_value
 
 
 # ============================================================
@@ -2974,13 +3482,19 @@ if (
 # RESTORE GMAIL CONNECTION
 # ============================================================
 
-logged_email = get_logged_in_email()
+logged_email = (
+    get_logged_in_email()
+)
 
 if logged_email:
 
-    st.session_state.google_email = logged_email
+    st.session_state.google_email = (
+        logged_email
+    )
 
-    restored_credentials = get_credentials()
+    restored_credentials = (
+        get_credentials()
+    )
 
     if restored_credentials:
 
@@ -2999,9 +3513,24 @@ if st.session_state.get(
     "auto_draft_success"
 ):
 
-    st.success(
-        "Draft saved successfully in Gmail."
+    result = (
+        st.session_state.auto_draft_success
     )
+
+    if isinstance(result, str) and result.startswith(
+        "CD"
+    ):
+
+        st.success(
+            f"Draft saved successfully in Gmail. "
+            f"Quotation #{result}"
+        )
+
+    else:
+
+        st.success(
+            "Draft saved successfully in Gmail."
+        )
 
     st.session_state.auto_draft_success = False
 
@@ -3010,9 +3539,24 @@ if st.session_state.get(
     "auto_send_success"
 ):
 
-    st.success(
-        "Email sent successfully."
+    result = (
+        st.session_state.auto_send_success
     )
+
+    if isinstance(result, str) and result.startswith(
+        "CD"
+    ):
+
+        st.success(
+            f"Email sent successfully. "
+            f"Quotation #{result}"
+        )
+
+    else:
+
+        st.success(
+            "Email sent successfully."
+        )
 
     st.session_state.auto_send_success = False
 
@@ -3035,6 +3579,25 @@ if st.session_state.get(
         )
 
     st.session_state.pending_action_error = None
+
+
+if st.session_state.get(
+    "quotation_database_error"
+):
+
+    with st.expander(
+        "Quotation database diagnostics"
+    ):
+
+        st.code(
+            st.session_state[
+                "quotation_database_error"
+            ]
+        )
+
+    st.session_state[
+        "quotation_database_error"
+    ] = None
 
 
 # ============================================================
@@ -3176,10 +3739,6 @@ with st.sidebar:
     )
 
 
-    # ========================================================
-    # AHORA PERMITE HASTA 5 OPCIONES
-    # ========================================================
-
     number_options = st.selectbox(
 
         "Number of quotation options",
@@ -3227,7 +3786,9 @@ st.caption(
 )
 
 
-guest_col1, guest_col2 = st.columns(2)
+guest_col1, guest_col2 = (
+    st.columns(2)
+)
 
 
 with guest_col1:
@@ -3246,7 +3807,9 @@ with guest_col2:
     )
 
 
-guest_col3, guest_col4 = st.columns(2)
+guest_col3, guest_col4 = (
+    st.columns(2)
+)
 
 
 with guest_col3:
@@ -3370,7 +3933,9 @@ for option_number in range(
     )
 
 
-    rate_col1, rate_col2 = st.columns(2)
+    rate_col1, rate_col2 = (
+        st.columns(2)
+    )
 
 
     with rate_col1:
@@ -3541,7 +4106,9 @@ for option_number in range(
         ] = inclusion_signature
 
 
-    inclusion_columns = st.columns(2)
+    inclusion_columns = (
+        st.columns(2)
+    )
 
 
     selected_inclusions = []
@@ -3589,7 +4156,9 @@ for option_number in range(
     )
 
 
-    service_columns = st.columns(2)
+    service_columns = (
+        st.columns(2)
+    )
 
 
     selected_services = []
@@ -3705,22 +4274,24 @@ for option_number in range(
     )
 
 
-    link_col1, link_col2 = st.columns(2)
+    link_col1, link_col2 = (
+        st.columns(2)
+    )
 
 
-    # ========================================================
+    # --------------------------------------------------------
     # 360 LINK
-    #
-    # SE ACTUALIZA AUTOMÁTICAMENTE SEGÚN LA HABITACIÓN
-    # ========================================================
+    # --------------------------------------------------------
 
     with link_col1:
 
-        room_360_url = ROOM_TYPES[
-            room_type
-        ].get(
-            "360_url",
-            ""
+        room_360_url = (
+            ROOM_TYPES[
+                room_type
+            ].get(
+                "360_url",
+                ""
+            )
         )
 
         st.text_input(
@@ -3741,9 +4312,9 @@ for option_number in range(
         )
 
 
-    # ========================================================
+    # --------------------------------------------------------
     # PAYMENT LINK
-    # ========================================================
+    # --------------------------------------------------------
 
     with link_col2:
 
@@ -3760,14 +4331,9 @@ for option_number in range(
         )
 
 
-    # ========================================================
+    # --------------------------------------------------------
     # SAVE OPTION
-    #
-    # MUY IMPORTANTE:
-    # ESTE BLOQUE ESTÁ DENTRO DEL FOR.
-    #
-    # Por eso se guardan las opciones 1, 2, 3, 4 y 5.
-    # ========================================================
+    # --------------------------------------------------------
 
     option_data = {
 
@@ -3797,7 +4363,6 @@ for option_number in range(
 
         "room_360_url":
             room_360_url,
-
     }
 
 
@@ -3906,16 +4471,56 @@ subject = (
 # ============================================================
 
 def store_pending_quote(
+
     action,
+
+    guest_name,
+
     guest_email,
+
+    arrival,
+
+    departure,
+
+    nights,
+
+    adults,
+
+    children,
+
+    options,
+
     email_html,
+
     plain_text_email,
+
 ):
 
     st.session_state.pending_quote = {
 
+        "guest_name":
+            guest_name,
+
         "guest_email":
             guest_email,
+
+        "arrival":
+            arrival,
+
+        "departure":
+            departure,
+
+        "nights":
+            nights,
+
+        "adults":
+            adults,
+
+        "children":
+            children,
+
+        "options":
+            options,
 
         "subject":
             subject,
@@ -3927,7 +4532,9 @@ def store_pending_quote(
             plain_text_email,
     }
 
-    st.session_state.pending_action = action
+    st.session_state.pending_action = (
+        action
+    )
 
 
 # ============================================================
@@ -3943,7 +4550,13 @@ with action_col1:
         use_container_width=True,
     ):
 
-        if not guest_email:
+        if not guest_name:
+
+            st.error(
+                "Please enter the guest name."
+            )
+
+        elif not guest_email:
 
             st.error(
                 "Please enter the guest email."
@@ -3951,7 +4564,9 @@ with action_col1:
 
         else:
 
-            gmail_service = get_gmail_service()
+            gmail_service = (
+                get_gmail_service()
+            )
 
             if gmail_service:
 
@@ -3970,9 +4585,49 @@ with action_col1:
                         ),
                     )
 
-                    st.success(
-                        "Draft saved successfully in Gmail."
+                    created_by = (
+                        get_logged_in_email()
                     )
+
+                    quotation = (
+                        save_quotation_to_supabase(
+
+                            guest_name=guest_name,
+
+                            guest_email=guest_email,
+
+                            arrival=arrival,
+
+                            departure=departure,
+
+                            nights=nights,
+
+                            adults=adults,
+
+                            children=children,
+
+                            options=all_options,
+
+                            created_by=created_by,
+
+                            status="QUOTED",
+                        )
+                    )
+
+                    if quotation:
+
+                        st.success(
+                            "Draft saved successfully in Gmail. "
+                            f"Quotation #{quotation['quotation_number']}"
+                        )
+
+                    else:
+
+                        st.warning(
+                            "Draft saved successfully in Gmail, "
+                            "but the quotation could not be saved "
+                            "to the database."
+                        )
 
                 except Exception as e:
 
@@ -3986,7 +4641,21 @@ with action_col1:
 
                     action="draft",
 
+                    guest_name=guest_name,
+
                     guest_email=guest_email,
+
+                    arrival=arrival,
+
+                    departure=departure,
+
+                    nights=nights,
+
+                    adults=adults,
+
+                    children=children,
+
+                    options=all_options,
 
                     email_html=email_html,
 
@@ -4064,7 +4733,13 @@ with action_col2:
         use_container_width=True,
     ):
 
-        if not guest_email:
+        if not guest_name:
+
+            st.error(
+                "Please enter the guest name."
+            )
+
+        elif not guest_email:
 
             st.error(
                 "Please enter the guest email."
@@ -4072,7 +4747,9 @@ with action_col2:
 
         else:
 
-            gmail_service = get_gmail_service()
+            gmail_service = (
+                get_gmail_service()
+            )
 
             if gmail_service:
 
@@ -4091,9 +4768,49 @@ with action_col2:
                         ),
                     )
 
-                    st.success(
-                        "Email sent successfully."
+                    created_by = (
+                        get_logged_in_email()
                     )
+
+                    quotation = (
+                        save_quotation_to_supabase(
+
+                            guest_name=guest_name,
+
+                            guest_email=guest_email,
+
+                            arrival=arrival,
+
+                            departure=departure,
+
+                            nights=nights,
+
+                            adults=adults,
+
+                            children=children,
+
+                            options=all_options,
+
+                            created_by=created_by,
+
+                            status="SENT",
+                        )
+                    )
+
+                    if quotation:
+
+                        st.success(
+                            "Email sent successfully. "
+                            f"Quotation #{quotation['quotation_number']}"
+                        )
+
+                    else:
+
+                        st.warning(
+                            "Email sent successfully, "
+                            "but the quotation could not be saved "
+                            "to the database."
+                        )
 
                 except Exception as e:
 
@@ -4107,7 +4824,21 @@ with action_col2:
 
                     action="send",
 
+                    guest_name=guest_name,
+
                     guest_email=guest_email,
+
+                    arrival=arrival,
+
+                    departure=departure,
+
+                    nights=nights,
+
+                    adults=adults,
+
+                    children=children,
+
+                    options=all_options,
 
                     email_html=email_html,
 
