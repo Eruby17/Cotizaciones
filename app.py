@@ -57,27 +57,42 @@ EMAIL_LOGO_URL = (
 # ============================================================
 
 ROOM_TYPES = {
+   "Standard Pool View": {
+        "default_inclusions": [
+            "Free Wi-Fi",
+            "Free Valet Parking",
+        ],
+        "360_url": "",
+    },
+
+    "Standard Two Double Beds Garden View": {
+        "default_inclusions": [
+            "Free Wi-Fi",
+            "Free Valet Parking",
+        ],
+        "360_url": "https://my.matterport.com/show/?m=6Zo1QcjJvS3",
+    },
 
     "Junior Suite": {
         "default_inclusions": [
             "Free Wi-Fi",
-            "Free Breakfast Buffet at Maydan Restaurant",
+            "Free Valet Parking",
         ],
-        "360_url": "",
+        "360_url": "https://my.matterport.com/models/asDp8M3WB35?section=media&mediasection=showcase",
     },
 
     "One Bedroom Suite": {
         "default_inclusions": [
             "Free Wi-Fi",
-            "Free Breakfast Buffet at Maydan Restaurant",
+            "Free Valet Parking",
         ],
-        "360_url": "",
+        "360_url": "https://my.matterport.com/models/Atpb4Tt7URH?section=media&mediasection=showcase",
     },
 
-    "One Bedroom Plus w/ Jacuzzi": {
+    "One Bedroom Plus": {
         "default_inclusions": [
             "Free Wi-Fi",
-            "Free Breakfast Buffet at Maydan Restaurant",
+            "Free Valet Parking",
         ],
         "360_url": "",
     },
@@ -85,25 +100,33 @@ ROOM_TYPES = {
     "Executive Suite": {
         "default_inclusions": [
             "Free Wi-Fi",
-            "Free Breakfast Buffet at Maydan Restaurant",
+            "Free Valet Parking",
         ],
-        "360_url": "",
+        "360_url": "https://linkprotect.cudasvc.com/url?a=https%3a%2f%2fmy.matterport.com%2fshow%2f%3fm%3dKeDqsnXnaMC&c=E,1,sx9k_XvHedOA6JWB_tZlSo_iiNuk_wo33K6i0NtX-mWrkKfLzlSGBzBI7fAG08ARj0-iAH8ut5pRs1n5L5BQ-bWro-tpkDI8OAackkhYOgS41yCLfgtZ4iXgXYk,&typo=1",
     },
 
     "Two Bedroom Suite": {
         "default_inclusions": [
             "Free Wi-Fi",
-            "Free Breakfast Buffet at Maydan Restaurant",
+            "Free Valet Parking",
         ],
-        "360_url": "",
+        "360_url": "https://my.matterport.com/models/v5byckDjTex",
     },
 
     "One Bedroom Penthouse": {
         "default_inclusions": [
             "Free Wi-Fi",
-            "Free Breakfast Buffet at Maydan Restaurant",
+            "Free Valet Parking",
         ],
-        "360_url": "",
+        "360_url": "https://my.matterport.com/show/?m=1fiBeobaV6D",
+    },
+
+     "Two Bedroom Penthouse": {
+        "default_inclusions": [
+            "Free Wi-Fi",
+            "Free Valet Parking",
+        ],
+        "360_url": "https://my.matterport.com/show/?m=oXToa8PNnKL",
     },
 }
 
