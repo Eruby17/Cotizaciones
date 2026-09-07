@@ -804,6 +804,16 @@ def prepare_options_for_database(
                     "room_type"
                 ],
 
+            "adults":
+                int(option.get(
+                    "adults", 2
+                )),
+
+            "children":
+                int(option.get(
+                    "children", 0
+                )),
+
             "valid_until":
                 str(
                     option[
@@ -1452,8 +1462,8 @@ def execute_pending_quote():
                 arrival=pending_quote["arrival"],
                 departure=pending_quote["departure"],
                 nights=pending_quote["nights"],
-                adults=pending_quote["adults"],
-                children=pending_quote["children"],
+                adults=pending_quote["options"][0].get("adults", 2) if pending_quote.get("options") else pending_quote.get("adults", 2),
+                children=pending_quote["options"][0].get("children", 0) if pending_quote.get("options") else pending_quote.get("children", 0),
                 options=pending_quote["options"],
                 created_by=logged_email,
                 status="QUOTED",
@@ -1478,8 +1488,8 @@ def execute_pending_quote():
                 arrival=pending_quote["arrival"],
                 departure=pending_quote["departure"],
                 nights=pending_quote["nights"],
-                adults=pending_quote["adults"],
-                children=pending_quote["children"],
+                adults=pending_quote["options"][0].get("adults", 2) if pending_quote.get("options") else pending_quote.get("adults", 2),
+                children=pending_quote["options"][0].get("children", 0) if pending_quote.get("options") else pending_quote.get("children", 0),
                 options=pending_quote["options"],
                 created_by=logged_email,
                 status="SENT",
@@ -2274,7 +2284,9 @@ def build_option_html(
     payment_url,
     room_360_url,
     lang="en",
-    currency="USD"
+    currency="USD",
+    adults=2,
+    children=0
 ):
 
     t = TRANSLATIONS[lang]
@@ -2303,6 +2315,10 @@ def build_option_html(
             "nightly_before_tax"
         ]
     )
+
+    guest_summary = f"{adults} {t['adults']}"
+    if children > 0:
+        guest_summary += f" + {children} {t['children']}"
 
     inclusions_html = ""
 
@@ -2555,6 +2571,28 @@ def build_option_html(
                     <tr>
 
                         <td style="
+                            padding:6px 0;
+                            color:#555555;
+                            font-size:14px;
+                            text-align:left;
+                        ">
+                            {t["guests"]}
+                        </td>
+
+                        <td style="
+                            padding:6px 0;
+                            color:#222222;
+                            font-size:14px;
+                            text-align:right;
+                        ">
+                            {html_escape(guest_summary)}
+                        </td>
+
+                    </tr>
+
+                    <tr>
+
+                        <td style="
                             border-top:1px solid #eeeeee;
                             padding:10px 0 6px 0;
                             color:#1f4f78;
@@ -2777,8 +2815,6 @@ def build_plain_text(
     guest_name,
     arrival,
     departure,
-    adults,
-    children,
     nights,
     options,
     lang="en",
@@ -2810,16 +2846,6 @@ def build_plain_text(
     lines.append(
         t["your_stay"].upper()
     )
-
-    lines.append(
-        f"{t['guests']}: {adults} {t['adults']}"
-    )
-
-    if children > 0:
-
-        lines.append(
-            f"{t['children']}: {children}"
-        )
 
     lines.append(
         f"{t['nights']}: {nights}"
@@ -2876,12 +2902,25 @@ def build_plain_text(
             + services_total
         )
 
+        opt_adults = option.get("adults", 2)
+        opt_children = option.get("children", 0)
+
+        guest_summary = f"{opt_adults} {t['adults']}"
+
+        if opt_children > 0:
+
+            guest_summary += f", {opt_children} {t['children']}"
+
         lines.append(
             f"{t['option'].upper()} {index}"
         )
 
         lines.append(
             f"{t['room_type']}: {option['room_type']}"
+        )
+
+        lines.append(
+            f"{t['guests']}: {guest_summary}"
         )
 
         lines.append(
@@ -3015,8 +3054,6 @@ def build_email_html(
     guest_name,
     arrival,
     departure,
-    adults,
-    children,
     nights,
     options,
     lang="en",
@@ -3076,17 +3113,15 @@ def build_email_html(
 
             lang=lang,
             
-            currency=currency
-        )
+            currency=currency,
 
-    guest_summary = (
-        f"{adults} {t['adults']}"
-    )
+            adults=option.get(
+                "adults", 2
+            ),
 
-    if children > 0:
-
-        guest_summary += (
-            f" + {children} {t['children']}"
+            children=option.get(
+                "children", 0
+            )
         )
 
     return f"""
@@ -3122,12 +3157,12 @@ def build_email_html(
 <td align="left"
     style="padding:30px 10px;">
 
-<table width="600"
+<table width="750"
        cellpadding="0"
        cellspacing="0"
        border="0"
        style="
-           width:600px;
+           width:750px;
            max-width:100%;
            background:#ffffff;
        ">
@@ -3243,36 +3278,6 @@ def build_email_html(
 <td style="
     padding:10px 14px;
     width:35%;
-    color:#777777;
-    font-size:13px;
-    font-weight:bold;
-    text-align:left;
-    border-bottom:1px solid #e5e7eb;
-">
-
-{t["guests"]}
-
-</td>
-
-<td style="
-    padding:10px 14px;
-    color:#1f2937;
-    font-size:13px;
-    font-weight:bold;
-    text-align:left;
-    border-bottom:1px solid #e5e7eb;
-">
-
-{html_escape(guest_summary)}
-
-</td>
-
-</tr>
-
-<tr>
-
-<td style="
-    padding:10px 14px;
     color:#777777;
     font-size:13px;
     font-weight:bold;
@@ -3594,7 +3599,7 @@ def build_confirmation_email_html(
 <table width="100%" cellpadding="0" cellspacing="0" border="0">
 <tr>
 <td align="left" style="padding:30px 10px;">
-<table width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px; max-width:100%; background:#ffffff;">
+<table width="750" cellpadding="0" cellspacing="0" border="0" style="width:750px; max-width:100%; background:#ffffff;">
 <tr>
 <td align="left" style="background:#ffffff; padding:25px 35px 15px 35px;">
 <img src="{EMAIL_LOGO_URL}" alt="Casa Dorada" style="max-width:220px; width:100%; height:auto; display:block;">
@@ -4322,8 +4327,8 @@ if app_mode == "Create Quotation":
             placeholder="guest@email.com",
         )
 
-    guest_col3, guest_col4 = (
-        st.columns(2)
+    guest_col3, guest_col4, guest_col5 = (
+        st.columns(3)
     )
 
     with guest_col3:
@@ -4340,10 +4345,6 @@ if app_mode == "Create Quotation":
             value=date.today(),
         )
 
-    guest_col5, guest_col6, guest_col7 = (
-        st.columns(3)
-    )
-
     calculated_nights = (
         departure - arrival
     ).days
@@ -4353,26 +4354,6 @@ if app_mode == "Create Quotation":
         calculated_nights = 1
 
     with guest_col5:
-
-        adults = st.number_input(
-            "Adults",
-            min_value=1,
-            max_value=20,
-            value=2,
-            step=1,
-        )
-
-    with guest_col6:
-
-        children = st.number_input(
-            "Children",
-            min_value=0,
-            max_value=20,
-            value=0,
-            step=1,
-        )
-
-    with guest_col7:
 
         nights = st.number_input(
             "Nights",
@@ -4412,6 +4393,36 @@ if app_mode == "Create Quotation":
                 f"{option_number}"
             ),
         )
+
+        st.markdown(
+            "### Guests"
+        )
+
+        opt_g1, opt_g2 = (
+            st.columns(2)
+        )
+
+        with opt_g1:
+
+            opt_adults = st.number_input(
+                "Adults", 
+                min_value=1, 
+                max_value=20, 
+                value=2, 
+                step=1, 
+                key=f"adults_{option_number}"
+            )
+
+        with opt_g2:
+
+            opt_children = st.number_input(
+                "Children", 
+                min_value=0, 
+                max_value=20, 
+                value=0, 
+                step=1, 
+                key=f"children_{option_number}"
+            )
 
         st.markdown(
             "### Rate"
@@ -4767,6 +4778,12 @@ if app_mode == "Create Quotation":
             "room_type":
                 room_type,
 
+            "adults":
+                opt_adults,
+
+            "children":
+                opt_children,
+
             "valid_until":
                 valid_until,
 
@@ -4809,10 +4826,6 @@ if app_mode == "Create Quotation":
 
         departure=departure,
 
-        adults=adults,
-
-        children=children,
-
         nights=nights,
 
         options=all_options,
@@ -4832,10 +4845,6 @@ if app_mode == "Create Quotation":
         arrival=arrival,
 
         departure=departure,
-
-        adults=adults,
-
-        children=children,
 
         nights=nights,
 
@@ -4893,12 +4902,6 @@ if app_mode == "Create Quotation":
 
             "nights":
                 nights,
-
-            "adults":
-                adults,
-
-            "children":
-                children,
 
             "options":
                 all_options,
@@ -5214,6 +5217,8 @@ elif app_mode == "Confirm Quotation":
         )
 
         selected_opt = options[selected_opt_idx]
+        selected_opt_adults = selected_opt.get("adults", selected_quote.get("adults", 2))
+        selected_opt_children = selected_opt.get("children", selected_quote.get("children", 0))
         
         st.markdown(
             "### Payment & Comments"
@@ -5298,10 +5303,10 @@ elif app_mode == "Confirm Quotation":
                     selected_quote["nights"],
 
                 "adults": 
-                    selected_quote["adults"],
+                    selected_opt_adults,
 
                 "children": 
-                    selected_quote["children"],
+                    selected_opt_children,
 
                 "room_type": 
                     selected_opt["room_type"],
@@ -5335,7 +5340,7 @@ elif app_mode == "Confirm Quotation":
 
                 "email_html": build_confirmation_email_html(
                     conf_number, selected_quote["guest_name"], selected_quote["arrival"], 
-                    selected_quote["departure"], selected_quote["adults"], selected_quote["children"], 
+                    selected_quote["departure"], selected_opt_adults, selected_opt_children, 
                     selected_quote["nights"], selected_opt["room_type"], rate_per_night, stay_total, 
                     deposit, balance, payment_status_trans, special_requests, selected_opt["deposit_policy"], 
                     selected_opt["cancellation_policy"], selected_opt.get("selected_inclusions", []), 
@@ -5344,7 +5349,7 @@ elif app_mode == "Confirm Quotation":
 
                 "plain_text_email": build_confirmation_plain_text(
                     conf_number, selected_quote["guest_name"], selected_quote["arrival"], 
-                    selected_quote["departure"], selected_quote["adults"], selected_quote["children"], 
+                    selected_quote["departure"], selected_opt_adults, selected_opt_children, 
                     selected_quote["nights"], selected_opt["room_type"], rate_per_night, stay_total, 
                     deposit, balance, payment_status_trans, special_requests, selected_opt["deposit_policy"], 
                     selected_opt["cancellation_policy"], selected_opt.get("selected_inclusions", []), 
