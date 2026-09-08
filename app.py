@@ -5330,22 +5330,26 @@ elif app_mode == "Confirm Quotation":
             placeholder="e.g. Early check-in, Anniversary setup."
         )
 
-        st.markdown(
+st.markdown(
             "### Confirmation Details"
         )
 
-hotel_conf_number = st.text_input(
+        hotel_conf_number = st.text_input(
             "Hotel Confirmation Number", 
             placeholder="Leave blank to auto-generate (CN...)"
         )
-
+        
         t_ui = TRANSLATIONS[lang_code]
+        
         if payment_status == "Fully Paid":
             conf_deposit_policy = t_ui["fully_paid_policy"]
         else:
             conf_deposit_policy = f"{t_ui['first_night_policy']}{money(balance, curr_code)}"
             
-        st.markdown("### Deposit Policy")
+        st.markdown(
+            "### Deposit Policy"
+        )
+        
         st.info(conf_deposit_policy)
         
         st.markdown(
