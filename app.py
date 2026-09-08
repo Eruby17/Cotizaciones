@@ -3578,9 +3578,7 @@ def build_confirmation_email_html(
     inclusions_html = ""
 
     if selected_inclusions:
-
         for inclusion in selected_inclusions:
-
             inclusions_html += f"""
             <li style="
                 margin-bottom:7px; 
@@ -3591,9 +3589,7 @@ def build_confirmation_email_html(
                 {html_escape(inclusion)}
             </li>
             """
-
     else:
-
         inclusions_html = f"""
         <li style="
             color:#777777; 
@@ -3606,9 +3602,7 @@ def build_confirmation_email_html(
     services_html = ""
 
     if selected_services:
-
         for service in selected_services:
-
             services_html += f"""
             <tr>
                 <td style="
@@ -3621,9 +3615,7 @@ def build_confirmation_email_html(
                 </td>
             </tr>
             """
-
     else:
-
         services_html = f"""
         <tr>
             <td style="
@@ -3640,7 +3632,6 @@ def build_confirmation_email_html(
     special_html = ""
 
     if special_requests:
-
         special_html = f"""
         <div style="
             color:#1f4f78; 
@@ -3663,7 +3654,7 @@ def build_confirmation_email_html(
         </div>
         """
 
-   return f"""
+    return f"""
 <!DOCTYPE html>
 <html>
 <head>
