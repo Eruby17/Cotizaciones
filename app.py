@@ -740,6 +740,7 @@ def generate_quotation_number():
         f"CD{date_part}-{random_part}"
     )
 
+
 def generate_confirmation_number():
 
     today = datetime.now(timezone.utc)
@@ -1027,10 +1028,12 @@ def save_quotation_to_supabase(
 def search_quotations_in_supabase(search_term):
     
     config = get_supabase_config()
+
     if not config:
         return []
 
     endpoint = f"{config['url']}/rest/v1/quotations"
+
     headers = get_supabase_headers()
 
     term = search_term.strip()
@@ -1042,29 +1045,60 @@ def search_quotations_in_supabase(search_term):
     }
     
     try:
-        response = requests.get(endpoint, headers=headers, params=params, timeout=15)
+
+        response = requests.get(
+            endpoint, 
+            headers=headers, 
+            params=params, 
+            timeout=15
+        )
+
         if response.status_code != 200:
+
             st.session_state["quotation_database_error"] = f"HTTP {response.status_code}: {response.text}"
             return []
+
         return response.json()
+
     except Exception as e:
+
         st.session_state["quotation_database_error"] = str(e)
         return []
 
+
 def update_quotation_status(quotation_number, status="CONFIRMED"):
+
     config = get_supabase_config()
+
     if not config:
         return False
         
     endpoint = f"{config['url']}/rest/v1/quotations"
+
     headers = get_supabase_headers()
-    params = {"quotation_number": f"eq.{quotation_number}"}
-    payload = {"status": status}
+
+    params = {
+        "quotation_number": f"eq.{quotation_number}"
+    }
+
+    payload = {
+        "status": status
+    }
     
     try:
-        response = requests.patch(endpoint, headers=headers, params=params, json=payload, timeout=15)
+
+        response = requests.patch(
+            endpoint, 
+            headers=headers, 
+            params=params, 
+            json=payload, 
+            timeout=15
+        )
+
         return response.status_code in [200, 204]
+
     except Exception:
+
         return False
 
 
@@ -1089,11 +1123,14 @@ def save_confirmation_to_supabase(
     additional_services,
     created_by,
 ):
+
     config = get_supabase_config()
+
     if not config:
         return None
 
     endpoint = f"{config['url']}/rest/v1/confirmations"
+
     headers = get_supabase_headers("return=representation")
 
     payload = {
@@ -1121,15 +1158,28 @@ def save_confirmation_to_supabase(
     }
 
     try:
-        response = requests.post(endpoint, headers=headers, json=payload, timeout=20)
+
+        response = requests.post(
+            endpoint, 
+            headers=headers, 
+            json=payload, 
+            timeout=20
+        )
+
         if response.status_code not in [200, 201]:
+
             st.session_state["quotation_database_error"] = f"HTTP {response.status_code}: {response.text}"
             return None
+
         data = response.json()
+
         if not data:
             return None
+
         return data[0]
+
     except Exception as e:
+
         st.session_state["quotation_database_error"] = str(e)
         return None
 
@@ -1441,6 +1491,7 @@ def credentials_to_dict(
 # ============================================================
 
 def execute_pending_quote():
+
     pending_quote = st.session_state.get("pending_quote")
     pending_action = st.session_state.get("pending_action")
     logged_email = get_logged_in_email()
@@ -1449,13 +1500,16 @@ def execute_pending_quote():
         return False
         
     try:
+
         if pending_action == "draft":
+
             save_gmail_draft(
                 to_email=pending_quote["guest_email"],
                 subject=pending_quote["subject"],
                 html_body=pending_quote["email_html"],
                 plain_text_body=pending_quote["plain_text_email"],
             )
+
             quotation = save_quotation_to_supabase(
                 guest_name=pending_quote["guest_name"],
                 guest_email=pending_quote["guest_email"],
@@ -1468,20 +1522,24 @@ def execute_pending_quote():
                 created_by=logged_email,
                 status="QUOTED",
             )
+
             st.session_state.pending_quote = None
             st.session_state.pending_action = None
+
             if quotation:
                 st.session_state.auto_draft_success = quotation["quotation_number"]
             else:
                 st.session_state.auto_draft_success = "Draft saved successfully in Gmail."
 
         elif pending_action == "send":
+
             send_gmail_message(
                 to_email=pending_quote["guest_email"],
                 subject=pending_quote["subject"],
                 html_body=pending_quote["email_html"],
                 plain_text_body=pending_quote["plain_text_email"],
             )
+
             quotation = save_quotation_to_supabase(
                 guest_name=pending_quote["guest_name"],
                 guest_email=pending_quote["guest_email"],
@@ -1494,8 +1552,10 @@ def execute_pending_quote():
                 created_by=logged_email,
                 status="SENT",
             )
+
             st.session_state.pending_quote = None
             st.session_state.pending_action = None
+
             if quotation:
                 st.session_state.auto_send_success = quotation["quotation_number"]
             else:
@@ -1504,6 +1564,7 @@ def execute_pending_quote():
         return True
 
     except Exception as e:
+
         st.session_state.pending_action_error = str(e)
         st.session_state.pending_quote = None
         st.session_state.pending_action = None
@@ -1511,6 +1572,7 @@ def execute_pending_quote():
 
 
 def execute_pending_confirmation():
+
     pending_confirmation = st.session_state.get("pending_confirmation")
     pending_action = st.session_state.get("pending_action")
     logged_email = get_logged_in_email()
@@ -1519,14 +1581,18 @@ def execute_pending_confirmation():
         return False
         
     try:
+
         if pending_action == "draft":
+
             save_gmail_draft(
                 to_email=pending_confirmation["guest_email"],
                 subject=pending_confirmation["subject"],
                 html_body=pending_confirmation["email_html"],
                 plain_text_body=pending_confirmation["plain_text_email"],
             )
+
         elif pending_action == "send":
+
             send_gmail_message(
                 to_email=pending_confirmation["guest_email"],
                 subject=pending_confirmation["subject"],
@@ -1557,17 +1623,21 @@ def execute_pending_confirmation():
         )
         
         if conf and pending_confirmation["quotation_number"]:
+
             update_quotation_status(pending_confirmation["quotation_number"], "CONFIRMED")
             
         st.session_state.pending_confirmation = None
         st.session_state.pending_action = None
         
         if conf:
+
             if pending_action == "draft":
                 st.session_state.conf_auto_draft_success = conf["confirmation_number"]
             else:
                 st.session_state.conf_auto_send_success = conf["confirmation_number"]
+
         else:
+
             if pending_action == "draft":
                 st.session_state.conf_auto_draft_success = "Action completed, but database save failed."
             else:
@@ -1576,6 +1646,7 @@ def execute_pending_confirmation():
         return True
 
     except Exception as e:
+
         st.session_state.pending_action_error = str(e)
         st.session_state.pending_confirmation = None
         st.session_state.pending_action = None
@@ -1834,8 +1905,11 @@ def process_google_callback():
         st.query_params.clear()
 
         if st.session_state.get("pending_quote"):
+
             execute_pending_quote()
+
         elif st.session_state.get("pending_confirmation"):
+
             execute_pending_confirmation()
 
         return True
@@ -2317,7 +2391,9 @@ def build_option_html(
     )
 
     guest_summary = f"{adults} {t['adults']}"
+
     if children > 0:
+
         guest_summary += f" + {children} {t['children']}"
 
     inclusions_html = ""
@@ -4863,7 +4939,6 @@ if app_mode == "Create Quotation":
         "This preview simulates the actual email your guest will receive."
     )
 
-    # Reemplazo de st.components.v1.html por iframe base64 seguro
     b64_email = base64.b64encode(email_html.encode('utf-8')).decode('utf-8')
     iframe_height = 850 + number_options * 750
     iframe_html = f'<iframe src="data:text/html;base64,{b64_email}" width="100%" height="{iframe_height}" style="border:none; border-radius:8px; background:#fff;"></iframe>'
@@ -5192,8 +5267,7 @@ elif app_mode == "Confirm Quotation":
 
         st.write(
             f"**Stay:** {selected_quote['arrival']} to {selected_quote['departure']} "
-            f"({selected_quote['nights']} nights, {selected_quote['adults']} adults, "
-            f"{selected_quote['children']} children)"
+            f"({selected_quote['nights']} nights)"
         )
         
         st.markdown(
@@ -5462,17 +5536,21 @@ elif app_mode == "Manual Confirmation":
     mc_col1, mc_col2 = st.columns(2)
 
     with mc_col1:
+
         m_guest_name = st.text_input("Guest name", placeholder="John Smith", key="m_gname")
 
     with mc_col2:
+
         m_guest_email = st.text_input("Guest email", placeholder="guest@email.com", key="m_gemail")
 
     mc_col3, mc_col4 = st.columns(2)
 
     with mc_col3:
+
         m_arrival = st.date_input("Arrival", value=date.today(), key="m_arr")
 
     with mc_col4:
+
         m_departure = st.date_input("Departure", value=date.today(), key="m_dep")
 
     mc_col5, mc_col6, mc_col7 = st.columns(3)
@@ -5480,12 +5558,15 @@ elif app_mode == "Manual Confirmation":
     m_calculated_nights = max(1, (m_departure - m_arrival).days)
 
     with mc_col5:
+
         m_adults = st.number_input("Adults", min_value=1, max_value=20, value=2, step=1, key="m_adults")
 
     with mc_col6:
+
         m_children = st.number_input("Children", min_value=0, max_value=20, value=0, step=1, key="m_child")
 
     with mc_col7:
+
         m_nights = st.number_input("Nights", min_value=1, max_value=365, value=m_calculated_nights, step=1, key="m_nights")
         
     st.divider()
@@ -5497,9 +5578,11 @@ elif app_mode == "Manual Confirmation":
     r_col1, r_col2 = st.columns(2)
 
     with r_col1:
+
         m_room_type = st.selectbox("Room type", list(ROOM_TYPES.keys()), key="m_rtype")
 
     with r_col2:
+
         m_stay_total = st.number_input(f"Stay Total Taxes Included ({curr_code})", min_value=0.00, value=0.00, step=100.00, format="%.2f", key="m_stotal")
         
     m_calc = calculate_rate_values(m_stay_total, m_nights)
@@ -5524,6 +5607,56 @@ elif app_mode == "Manual Confirmation":
     p_col1.metric("Total Amount", money(m_stay_total, curr_code))
     p_col2.metric("Deposit", money(m_deposit, curr_code))
     p_col3.metric("Balance Due", money(m_balance, curr_code))
+
+    st.markdown(
+        "### Included Benefits"
+    )
+
+    m_defaults = list(
+        ROOM_TYPES[m_room_type]["default_inclusions"]
+    )
+
+    m_inc_signature = (
+        m_room_type 
+        + "|" 
+        + "|".join(AVAILABLE_INCLUSIONS)
+    )
+
+    m_sig_key = "m_inclusion_signature"
+
+    if st.session_state.get(m_sig_key) != m_inc_signature:
+
+        for index, inclusion in enumerate(AVAILABLE_INCLUSIONS):
+
+            st.session_state[f"m_inc_{index}"] = (inclusion in m_defaults)
+
+        st.session_state[m_sig_key] = m_inc_signature
+
+    m_inc_cols = st.columns(2)
+    m_selected_inclusions = []
+
+    for index, inclusion in enumerate(AVAILABLE_INCLUSIONS):
+
+        with m_inc_cols[index % 2]:
+
+            if st.checkbox(inclusion, key=f"m_inc_{index}"):
+
+                m_selected_inclusions.append(inclusion)
+
+    st.markdown(
+        "### Additional Services"
+    )
+
+    m_srv_cols = st.columns(2)
+    m_selected_services = []
+
+    for index, (service, price) in enumerate(ADDITIONAL_SERVICES.items()):
+
+        with m_srv_cols[index % 2]:
+
+            if st.checkbox(f"{service} — {money(price, curr_code)}", key=f"m_srv_{index}"):
+
+                m_selected_services.append(service)
     
     m_comments = st.text_area("Comments (Internal Notes)", key="m_comm")
     m_special = st.text_area("Special Requests (Guest Needs)", key="m_spec")
@@ -5535,9 +5668,11 @@ elif app_mode == "Manual Confirmation":
     po_col1, po_col2 = st.columns(2)
 
     with po_col1:
+
         m_dep_pol = st.selectbox("Deposit Policy", DEPOSIT_POLICIES, key="m_dpol")
 
     with po_col2:
+
         m_can_pol = st.selectbox("Cancellation Policy", CANCELLATION_POLICIES, key="m_cpol")
         
     st.markdown(
@@ -5622,13 +5757,13 @@ elif app_mode == "Manual Confirmation":
             "email_html": build_confirmation_email_html(
                 conf_number, m_guest_name, m_arrival, m_departure, m_adults, m_children, m_nights,
                 m_room_type, m_nightly_rate, m_stay_total, m_deposit, m_balance, payment_status_trans,
-                m_special, m_dep_pol, m_can_pol, ROOM_TYPES[m_room_type]["default_inclusions"], [], lang_code, curr_code
+                m_special, m_dep_pol, m_can_pol, m_selected_inclusions, m_selected_services, lang_code, curr_code
             ),
 
             "plain_text_email": build_confirmation_plain_text(
                 conf_number, m_guest_name, m_arrival, m_departure, m_adults, m_children, m_nights,
                 m_room_type, m_nightly_rate, m_stay_total, m_deposit, m_balance, payment_status_trans,
-                m_special, m_dep_pol, m_can_pol, ROOM_TYPES[m_room_type]["default_inclusions"], [], lang_code, curr_code
+                m_special, m_dep_pol, m_can_pol, m_selected_inclusions, m_selected_services, lang_code, curr_code
             )
 
         }
