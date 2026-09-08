@@ -4760,18 +4760,25 @@ if app_mode == "Create Quotation":
             "### Deposit Policy"
         )
 
+        t_ui = TRANSLATIONS[lang_code]
+        balance_if_first_night = final_total - calculations["nightly_with_tax"]
+        
+        dynamic_policies = [
+            f"{t_ui['first_night_policy']}{money(balance_if_first_night, curr_code)}",
+            t_ui["fully_paid_policy"]
+        ]
+
         deposit_policy = st.selectbox(
 
             "Select deposit policy",
 
-            DEPOSIT_POLICIES,
+            dynamic_policies,
 
             key=(
                 f"deposit_policy_"
                 f"{option_number}"
             ),
         )
-
         st.markdown(
             "### Cancellation Policy"
         )
@@ -5327,10 +5334,19 @@ elif app_mode == "Confirm Quotation":
             "### Confirmation Details"
         )
 
-        hotel_conf_number = st.text_input(
+hotel_conf_number = st.text_input(
             "Hotel Confirmation Number", 
             placeholder="Leave blank to auto-generate (CN...)"
         )
+
+        t_ui = TRANSLATIONS[lang_code]
+        if payment_status == "Fully Paid":
+            conf_deposit_policy = t_ui["fully_paid_policy"]
+        else:
+            conf_deposit_policy = f"{t_ui['first_night_policy']}{money(balance, curr_code)}"
+            
+        st.markdown("### Deposit Policy")
+        st.info(conf_deposit_policy)
         
         st.markdown(
             "### Actions"
@@ -5405,7 +5421,7 @@ elif app_mode == "Confirm Quotation":
                     conf_number, selected_quote["guest_name"], selected_quote["arrival"], 
                     selected_quote["departure"], selected_opt_adults, selected_opt_children, 
                     selected_quote["nights"], selected_opt["room_type"], rate_per_night, stay_total, 
-                    deposit, balance, payment_status_trans, special_requests, selected_opt["deposit_policy"], 
+                    deposit, balance, payment_status_trans, special_requests, conf_deposit_policy, 
                     selected_opt["cancellation_policy"], selected_opt.get("selected_inclusions", []), 
                     selected_opt.get("selected_services", []), lang_code, curr_code
                 ),
@@ -5650,18 +5666,22 @@ elif app_mode == "Manual Confirmation":
     m_comments = st.text_area("Comments (Internal Notes)", key="m_comm")
     m_special = st.text_area("Special Requests (Guest Needs)", key="m_spec")
     
-    st.markdown(
+   st.markdown(
         "### Policies"
     )
 
     po_col1, po_col2 = st.columns(2)
 
     with po_col1:
-
-        m_dep_pol = st.selectbox("Deposit Policy", DEPOSIT_POLICIES, key="m_dpol")
+        t_ui = TRANSLATIONS[lang_code]
+        if m_payment_status == "Fully Paid":
+            dynamic_m_dep = t_ui["fully_paid_policy"]
+        else:
+            dynamic_m_dep = f"{t_ui['first_night_policy']}{money(m_balance, curr_code)}"
+            
+        m_dep_pol = st.text_area("Deposit Policy", value=dynamic_m_dep, key="m_dpol", height=68)
 
     with po_col2:
-
         m_can_pol = st.selectbox("Cancellation Policy", CANCELLATION_POLICIES, key="m_cpol")
         
     st.markdown(
