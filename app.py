@@ -3573,6 +3573,7 @@ def build_confirmation_email_html(
 ):
 
     t = TRANSLATIONS[lang]
+    rate_before_taxes = float(rate_per_night) / (1 + TAX_RATE)
 
     guest_summary = f"{adults} {t['adults']}"
 
@@ -3697,11 +3698,9 @@ def build_confirmation_email_html(
 <tr><td style="padding:6px 0; color:#555555; font-size:14px; text-align:left;">{t['departure']}</td><td style="padding:6px 0; color:#222222; font-size:14px; text-align:right;">{html_escape(format_date_email(departure, lang))}</td></tr>
 <tr><td style="padding:6px 0; color:#555555; font-size:14px; text-align:left;">{t['nights']}</td><td style="padding:6px 0; color:#222222; font-size:14px; text-align:right;">{html_escape(nights)}</td></tr>
 <tr><td style="padding:6px 0; color:#555555; font-size:14px; text-align:left;">{t['room_type']}</td><td style="padding:6px 0; color:#222222; font-size:14px; text-align:right;">{html_escape(room_type)}</td></tr>
+<tr><td style="padding:6px 0; color:#555555; font-size:14px; text-align:left;">{t['rate_before_taxes']}</td><td style="padding:6px 0; color:#222222; font-size:14px; text-align:right;">{money(rate_before_taxes, currency)}</td></tr>
 <tr><td style="padding:6px 0; color:#555555; font-size:14px; text-align:left;">{t['rate_with_taxes']}</td><td style="padding:6px 0; color:#222222; font-size:14px; text-align:right;">{money(rate_per_night, currency)}</td></tr>
 <tr><td style="border-top:1px solid #eeeeee; padding:10px 0 6px 0; color:#1f4f78; font-size:15px; font-weight:bold; text-align:left;">{t['total_amount']}</td><td style="border-top:1px solid #eeeeee; padding:10px 0 6px 0; color:#1f4f78; font-size:16px; text-align:right; font-weight:bold;">{money(stay_total, currency)}</td></tr>
-<tr><td style="padding:6px 0; color:#555555; font-size:14px; text-align:left;">{t['payment_status']}</td><td style="padding:6px 0; color:#222222; font-size:14px; text-align:right;">{html_escape(payment_status)}</td></tr>
-<tr><td style="padding:6px 0; color:#555555; font-size:14px; text-align:left;">{t['deposit']}</td><td style="padding:6px 0; color:#222222; font-size:14px; text-align:right;">{money(first_night_amount, currency)}</td></tr>
-<tr><td style="padding:6px 0; color:#1f4f78; font-size:14px; text-align:left; font-weight:bold;">{t['balance_due']}</td><td style="padding:6px 0; color:#1f4f78; font-size:14px; text-align:right; font-weight:bold;">{money(balance_due, currency)}</td></tr>
 </table>
 <div style="margin-top:20px; color:#1f4f78; font-size:15px; font-weight:bold; text-align:left;">{t['included_benefits']}</div>
 <ul style="padding-left:22px; margin-top:8px; margin-bottom:15px; text-align:left;">{inclusions_html}</ul>
@@ -3731,6 +3730,11 @@ def build_confirmation_email_html(
 </html>
 """
 
+
+# ============================================================
+# PLAIN TEXT EMAIL
+# ============================================================
+
 def build_confirmation_plain_text(
     confirmation_number, 
     guest_name, 
@@ -3755,6 +3759,7 @@ def build_confirmation_plain_text(
 ):
 
     t = TRANSLATIONS[lang]
+    rate_before_taxes = float(rate_per_night) / (1 + TAX_RATE)
 
     lines = []
 
@@ -3775,11 +3780,9 @@ def build_confirmation_plain_text(
     lines.append(f"{t['departure']}: {format_date_email(departure, lang)}")
     lines.append(f"{t['nights']}: {nights}")
     lines.append(f"{t['room_type']}: {room_type}")
+    lines.append(f"{t['rate_before_taxes']}: {money(rate_before_taxes, currency)}")
     lines.append(f"{t['rate_with_taxes']}: {money(rate_per_night, currency)}")
     lines.append(f"{t['total_amount']}: {money(stay_total, currency)}")
-    lines.append(f"{t['payment_status']}: {payment_status}")
-    lines.append(f"{t['deposit']}: {money(first_night_amount, currency)}")
-    lines.append(f"{t['balance_due']}: {money(balance_due, currency)}")
     lines.append("")
     lines.append(f"{t['included_benefits']}:")
 
@@ -3817,7 +3820,6 @@ def build_confirmation_plain_text(
     lines.append("US: 1-866-448-0151")
 
     return "\n".join(lines)
-
 
 # ============================================================
 # GMAIL MESSAGE
