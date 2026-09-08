@@ -316,7 +316,9 @@ TRANSLATIONS = {
         "view_room": "VIEW ROOM",
         "secure_booking": "SECURE YOUR BOOKING",
         "fully_paid": "Fully Paid",
-        "first_night_deposit": "First Night Deposit"
+        "first_night_deposit": "First Night Deposit",
+        "fully_paid_policy": "Reservation is fully paid.",
+        "first_night_policy": "Reservation is guaranteed with the first night deposit, balance to pay due check in: "
     },
     "es": {
         "custom_quotation": "Su Cotización Personalizada",
@@ -359,7 +361,9 @@ TRANSLATIONS = {
         "view_room": "VER HABITACIÓN",
         "secure_booking": "ASEGURE SU RESERVA",
         "fully_paid": "Pagado en su totalidad",
-        "first_night_deposit": "Depósito de la primera noche"
+        "first_night_deposit": "Depósito de la primera noche",
+        "fully_paid_policy": "La reservación está totalmente pagada.",
+        "first_night_policy": "La reservación está garantizada con el depósito de la primera noche, saldo a pagar al check in: "
     }
 }
 
