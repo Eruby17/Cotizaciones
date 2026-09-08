@@ -5341,12 +5341,12 @@ elif app_mode == "Confirm Quotation":
             placeholder="Leave blank to auto-generate (CN...)"
         )
 
-        t_ui = TRANSLATIONS[lang_code]
+        t_ui = TRANSLATIONS.get(lang_code, TRANSLATIONS["en"])
 
         if payment_status == "Fully Paid":
-            conf_deposit_policy = t_ui["fully_paid_policy"]
+            conf_deposit_policy = t_ui.get("fully_paid_policy", "Reservation is fully paid." if lang_code == "en" else "La reservación está totalmente pagada.")
         else:
-            conf_deposit_policy = f"{t_ui['first_night_policy']}{money(balance, curr_code)}"
+            conf_deposit_policy = f"{t_ui.get('first_night_policy', 'Reservation is guaranteed with the first night deposit, balance to pay due check in: ')}{money(balance, curr_code)}"
 
         st.markdown(
             "### Deposit Policy"
@@ -5679,16 +5679,28 @@ elif app_mode == "Manual Confirmation":
     po_col1, po_col2 = st.columns(2)
 
     with po_col1:
-        t_ui = TRANSLATIONS[lang_code]
+
+        t_ui = TRANSLATIONS.get(lang_code, TRANSLATIONS["en"])
+
         if m_payment_status == "Fully Paid":
-            dynamic_m_dep = t_ui["fully_paid_policy"]
+            dynamic_m_dep = t_ui.get("fully_paid_policy", "Reservation is fully paid." if lang_code == "en" else "La reservación está totalmente pagada.")
         else:
-            dynamic_m_dep = f"{t_ui['first_night_policy']}{money(m_balance, curr_code)}"
+            dynamic_m_dep = f"{t_ui.get('first_night_policy', 'Reservation is guaranteed with the first night deposit, balance to pay due check in: ')}{money(m_balance, curr_code)}"
             
-        m_dep_pol = st.text_area("Deposit Policy", value=dynamic_m_dep, key="m_dpol", height=68)
+        m_dep_pol = st.text_area(
+            "Deposit Policy", 
+            value=dynamic_m_dep, 
+            key=f"m_dpol_{m_payment_status}", 
+            height=68
+        )
 
     with po_col2:
-        m_can_pol = st.selectbox("Cancellation Policy", CANCELLATION_POLICIES, key="m_cpol")
+
+        m_can_pol = st.selectbox(
+            "Cancellation Policy", 
+            CANCELLATION_POLICIES, 
+            key="m_cpol"
+        )
         
     st.markdown(
         "### Confirmation Details"
