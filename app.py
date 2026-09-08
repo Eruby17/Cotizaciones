@@ -5670,7 +5670,7 @@ elif app_mode == "Manual Confirmation":
     m_comments = st.text_area("Comments (Internal Notes)", key="m_comm")
     m_special = st.text_area("Special Requests (Guest Needs)", key="m_spec")
     
-   st.markdown(
+    st.markdown(
         "### Policies"
     )
 
