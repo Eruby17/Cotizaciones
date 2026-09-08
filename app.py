@@ -3663,7 +3663,7 @@ def build_confirmation_email_html(
         </div>
         """
 
-    return f"""
+   return f"""
 <!DOCTYPE html>
 <html>
 <head>
@@ -3675,7 +3675,7 @@ def build_confirmation_email_html(
 <table width="100%" cellpadding="0" cellspacing="0" border="0">
 <tr>
 <td align="left" style="padding:30px 10px;">
-<table width="750" cellpadding="0" cellspacing="0" border="0" style="width:750px; max-width:100%; background:#ffffff;">
+<table width="750" cellpadding="0" cellspacing="0" border="0" style="width:750px; max-width:100%; background:#ffffff; border:1px solid #dddddd;">
 <tr>
 <td align="left" style="background:#ffffff; padding:25px 35px 15px 35px;">
 <img src="{EMAIL_LOGO_URL}" alt="Casa Dorada" style="max-width:220px; width:100%; height:auto; display:block;">
@@ -3694,25 +3694,19 @@ def build_confirmation_email_html(
 </td>
 </tr>
 <tr>
-<td style="padding:20px 35px 15px 35px; text-align:left;">
+<td style="padding:20px 35px 20px 35px; text-align:left;">
 <div style="color:#1f4f78; font-size:19px; font-weight:bold; margin-bottom:12px; text-align:left;">{t['reservation_details']}</div>
-<table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f7f8fa; border:1px solid #e5e7eb;">
-<tr><td style="padding:10px 14px; width:35%; color:#777777; font-size:13px; font-weight:bold; text-align:left; border-bottom:1px solid #e5e7eb;">{t['guests']}</td><td style="padding:10px 14px; color:#1f2937; font-size:13px; font-weight:bold; text-align:left; border-bottom:1px solid #e5e7eb;">{html_escape(guest_summary)}</td></tr>
-<tr><td style="padding:10px 14px; color:#777777; font-size:13px; font-weight:bold; text-align:left; border-bottom:1px solid #e5e7eb;">{t['arrival']}</td><td style="padding:10px 14px; color:#1f2937; font-size:13px; font-weight:bold; text-align:left; border-bottom:1px solid #e5e7eb;">{html_escape(format_date_email(arrival, lang))}</td></tr>
-<tr><td style="padding:10px 14px; color:#777777; font-size:13px; font-weight:bold; text-align:left; border-bottom:1px solid #e5e7eb;">{t['departure']}</td><td style="padding:10px 14px; color:#1f2937; font-size:13px; font-weight:bold; text-align:left; border-bottom:1px solid #e5e7eb;">{html_escape(format_date_email(departure, lang))}</td></tr>
-<tr><td style="padding:10px 14px; color:#777777; font-size:13px; font-weight:bold; text-align:left; border-bottom:1px solid #e5e7eb;">{t['nights']}</td><td style="padding:10px 14px; color:#1f2937; font-size:13px; font-weight:bold; text-align:left; border-bottom:1px solid #e5e7eb;">{html_escape(nights)}</td></tr>
-<tr><td style="padding:10px 14px; color:#777777; font-size:13px; font-weight:bold; text-align:left;">{t['room_type']}</td><td style="padding:10px 14px; color:#1f2937; font-size:13px; font-weight:bold; text-align:left;">{html_escape(room_type)}</td></tr>
-</table>
-</td>
-</tr>
-<tr>
-<td style="padding:10px 35px 20px 35px; text-align:left;">
 <table width="100%" cellpadding="0" cellspacing="0" border="0">
+<tr><td style="padding:6px 0; width:45%; color:#555555; font-size:14px; text-align:left;">{t['guests']}</td><td style="padding:6px 0; color:#222222; font-size:14px; text-align:right;">{html_escape(guest_summary)}</td></tr>
+<tr><td style="padding:6px 0; color:#555555; font-size:14px; text-align:left;">{t['arrival']}</td><td style="padding:6px 0; color:#222222; font-size:14px; text-align:right;">{html_escape(format_date_email(arrival, lang))}</td></tr>
+<tr><td style="padding:6px 0; color:#555555; font-size:14px; text-align:left;">{t['departure']}</td><td style="padding:6px 0; color:#222222; font-size:14px; text-align:right;">{html_escape(format_date_email(departure, lang))}</td></tr>
+<tr><td style="padding:6px 0; color:#555555; font-size:14px; text-align:left;">{t['nights']}</td><td style="padding:6px 0; color:#222222; font-size:14px; text-align:right;">{html_escape(nights)}</td></tr>
+<tr><td style="padding:6px 0; color:#555555; font-size:14px; text-align:left;">{t['room_type']}</td><td style="padding:6px 0; color:#222222; font-size:14px; text-align:right;">{html_escape(room_type)}</td></tr>
 <tr><td style="padding:6px 0; color:#555555; font-size:14px; text-align:left;">{t['rate_with_taxes']}</td><td style="padding:6px 0; color:#222222; font-size:14px; text-align:right;">{money(rate_per_night, currency)}</td></tr>
 <tr><td style="border-top:1px solid #eeeeee; padding:10px 0 6px 0; color:#1f4f78; font-size:15px; font-weight:bold; text-align:left;">{t['total_amount']}</td><td style="border-top:1px solid #eeeeee; padding:10px 0 6px 0; color:#1f4f78; font-size:16px; text-align:right; font-weight:bold;">{money(stay_total, currency)}</td></tr>
 <tr><td style="padding:6px 0; color:#555555; font-size:14px; text-align:left;">{t['payment_status']}</td><td style="padding:6px 0; color:#222222; font-size:14px; text-align:right;">{html_escape(payment_status)}</td></tr>
 <tr><td style="padding:6px 0; color:#555555; font-size:14px; text-align:left;">{t['deposit']}</td><td style="padding:6px 0; color:#222222; font-size:14px; text-align:right;">{money(first_night_amount, currency)}</td></tr>
-<tr><td style="padding:6px 0; color:#555555; font-size:14px; text-align:left; font-weight:bold;">{t['balance_due']}</td><td style="padding:6px 0; color:#222222; font-size:14px; text-align:right; font-weight:bold;">{money(balance_due, currency)}</td></tr>
+<tr><td style="padding:6px 0; color:#1f4f78; font-size:14px; text-align:left; font-weight:bold;">{t['balance_due']}</td><td style="padding:6px 0; color:#1f4f78; font-size:14px; text-align:right; font-weight:bold;">{money(balance_due, currency)}</td></tr>
 </table>
 <div style="margin-top:20px; color:#1f4f78; font-size:15px; font-weight:bold; text-align:left;">{t['included_benefits']}</div>
 <ul style="padding-left:22px; margin-top:8px; margin-bottom:15px; text-align:left;">{inclusions_html}</ul>
