@@ -4762,19 +4762,25 @@ if app_mode == "Create Quotation":
             "### Deposit Policy"
         )
 
-        t_ui = TRANSLATIONS[lang_code]
-        balance_if_first_night = final_total - calculations["nightly_with_tax"]
-        
-        dynamic_policies = [
-            f"{t_ui['first_night_policy']}{money(balance_if_first_night, curr_code)}",
-            t_ui["fully_paid_policy"]
-        ]
+        if lang_code == "es":
+
+            quotation_deposit_policies = [
+                "Se requiere el depósito de la primera noche con impuestos incluidos al momento de reservar.",
+                "Se requiere el pago total de la estadía con impuestos incluidos al momento de reservar."
+            ]
+
+        else:
+
+            quotation_deposit_policies = [
+                "The deposit for the first night with taxes included is required upon booking.",
+                "The deposit for the whole stay with taxes included is required upon booking."
+            ]
 
         deposit_policy = st.selectbox(
 
             "Select deposit policy",
 
-            dynamic_policies,
+            quotation_deposit_policies,
 
             key=(
                 f"deposit_policy_"
