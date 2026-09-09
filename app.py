@@ -5268,7 +5268,7 @@ elif app_mode == "Confirm Quotation":
             f"({selected_quote['nights']} nights)"
         )
         
-st.markdown(
+        st.markdown(
             "### Select Options to Confirm"
         )
 
