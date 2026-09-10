@@ -5719,6 +5719,32 @@ elif app_mode == "Manual Confirmation":
         key="m_hconf"
     )
 
+st.markdown(
+        "### Payment & Comments"
+    )
+
+    m_comments = st.text_area(
+        "Comments (Internal Notes)", 
+        placeholder="e.g. Payment received by transfer.", 
+        key="m_comm"
+    )
+    
+    m_special = st.text_area(
+        "Special Requests (Guest Needs)", 
+        placeholder="e.g. Early check-in, Anniversary setup.", 
+        key="m_spec"
+    )
+    
+    st.markdown(
+        "### Confirmation Details"
+    )
+
+    m_hotel_conf_number = st.text_input(
+        "Hotel Confirmation Number", 
+        placeholder="Leave blank to auto-generate (CN...)", 
+        key="m_hconf"
+    )
+
     st.markdown(
         "### Deposit Policy"
     )
