@@ -4765,15 +4765,15 @@ if app_mode == "Create Quotation":
         if lang_code == "es":
 
             quotation_deposit_policies = [
-                "Se requiere el depósito de la primera noche con impuestos incluidos al momento de reservar.",
-                "Se requiere el pago total de la estadía con impuestos incluidos al momento de reservar."
+                "Se requiere el pago total de la estadía con impuestos incluidos al momento de reservar.",
+                "Se requiere el depósito de la primera noche con impuestos incluidos al momento de reservar."
             ]
 
         else:
 
             quotation_deposit_policies = [
-                "The deposit for the first night with taxes included is required upon booking.",
-                "The deposit for the whole stay with taxes included is required upon booking."
+                "The deposit for the whole stay with taxes included is required upon booking.",
+                "The deposit for the first night with taxes included is required upon booking."
             ]
 
         deposit_policy = st.selectbox(
