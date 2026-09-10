@@ -5851,7 +5851,7 @@ elif app_mode == "Manual Confirmation":
 
         }
 
-        st.session_state.pending_action = action
+    st.session_state.pending_action = action
 
     with m_act1:
 
