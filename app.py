@@ -5697,48 +5697,35 @@ elif app_mode == "Manual Confirmation":
     m_special = st.text_area("Special Requests (Guest Needs)", key="m_spec")
     
     st.markdown(
-        "### Policies"
+        "### Deposit Policy"
     )
 
-    po_col1, po_col2 = st.columns(2)
+    t_ui = TRANSLATIONS.get(lang_code, TRANSLATIONS["en"])
 
-    with po_col1:
-
-        t_ui = TRANSLATIONS.get(lang_code, TRANSLATIONS["en"])
-
-        if m_payment_status == "Fully Paid":
-            dynamic_m_dep = t_ui.get("fully_paid_policy", "Reservation is fully paid." if lang_code == "en" else "La reservación está totalmente pagada.")
-        else:
-            dynamic_m_dep = f"{t_ui.get('first_night_policy', 'Reservation is guaranteed with the first night deposit, balance to pay due check in: ')}{money(m_balance, curr_code)}"
+    if m_payment_status == "Fully Paid":
+        dynamic_m_dep = t_ui.get("fully_paid_policy", "Reservation is fully paid." if lang_code == "en" else "La reservación está totalmente pagada.")
+    else:
+        dynamic_m_dep = f"{t_ui.get('first_night_policy', 'Reservation is guaranteed with the first night deposit, balance to pay due check in: ')}{money(m_balance, curr_code)}"
             
-        m_dep_pol = st.text_area(
-            "Deposit Policy", 
-            value=dynamic_m_dep, 
-            key=f"m_dpol_{m_payment_status}", 
-            height=68
-        )
+    m_dep_pol = dynamic_m_dep
+    
+    st.info(m_dep_pol)
 
-    with po_col2:
-
-        m_can_pol = st.selectbox(
-            "Cancellation Policy", 
-            CANCELLATION_POLICIES, 
-            key="m_cpol"
-        )
-        
     st.markdown(
-        "### Confirmation Details"
+        "### Cancellation Policy"
     )
 
-    m_hotel_conf_number = st.text_input(
-        "Hotel Confirmation Number", 
-        placeholder="Leave blank to auto-generate (CN...)", 
-        key="m_hconf"
+    m_can_pol = st.selectbox(
+        "Select cancellation policy", 
+        CANCELLATION_POLICIES, 
+        key="m_cpol"
     )
 
     st.markdown(
         "### Actions"
     )
+
+    m_act1, m_act2 = st.columns(2)
 
     m_act1, m_act2 = st.columns(2)
     
