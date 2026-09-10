@@ -5720,32 +5720,6 @@ elif app_mode == "Manual Confirmation":
     )
 
     st.markdown(
-        "### Payment & Comments"
-    )
-
-    m_comments = st.text_area(
-        "Comments (Internal Notes)", 
-        placeholder="e.g. Payment received by transfer.", 
-        key="m_comm"
-    )
-    
-    m_special = st.text_area(
-        "Special Requests (Guest Needs)", 
-        placeholder="e.g. Early check-in, Anniversary setup.", 
-        key="m_spec"
-    )
-    
-    st.markdown(
-        "### Confirmation Details"
-    )
-
-    m_hotel_conf_number = st.text_input(
-        "Hotel Confirmation Number", 
-        placeholder="Leave blank to auto-generate (CN...)", 
-        key="m_hconf"
-    )
-
-    st.markdown(
         "### Deposit Policy"
     )
 
@@ -5776,104 +5750,53 @@ elif app_mode == "Manual Confirmation":
 
     m_act1, m_act2 = st.columns(2)
 
-    conf_number = m_hotel_conf_number.strip() if m_hotel_conf_number.strip() else generate_confirmation_number()
+    def store_manual_pending_ui(action):
+        conf_number = m_hotel_conf_number.strip() if m_hotel_conf_number.strip() else generate_confirmation_number()
 
-    st.session_state.pending_confirmation = {
-
-            "confirmation_number": 
-                conf_number,
-
-            "quotation_number": 
-                None,
-
-            "guest_name": 
-                m_guest_name,
-
-            "guest_email": 
-                m_guest_email,
-
-            "arrival": 
-                m_arrival,
-
-            "departure": 
-                m_departure,
-
-            "nights": 
-                m_nights,
-
-            "adults": 
-                m_adults,
-
-            "children": 
-                m_children,
-
-            "room_type": 
-                m_room_type,
-
-            "rate_per_night": 
-                m_nightly_rate,
-
-            "stay_total": 
-                m_stay_total,
-
-            "first_night_amount": 
-                m_deposit,
-
-            "balance_due": 
-                m_balance,
-
-            "payment_status": 
-                payment_status_trans,
-
-            "comments": 
-                m_comments,
-
-            "special_requests": 
-                m_special,
-
-            "additional_services": 
-                {"source": "manual"},
-
-            "subject": 
-                f"Booking Confirmation #{conf_number} | Casa Dorada Los Cabos",
-
+        st.session_state.pending_confirmation = {
+            "confirmation_number": conf_number,
+            "quotation_number": None,
+            "guest_name": m_guest_name,
+            "guest_email": m_guest_email,
+            "arrival": m_arrival,
+            "departure": m_departure,
+            "nights": m_nights,
+            "adults": m_adults,
+            "children": m_children,
+            "room_type": m_room_type,
+            "rate_per_night": m_nightly_rate,
+            "stay_total": m_stay_total,
+            "first_night_amount": m_deposit,
+            "balance_due": m_balance,
+            "payment_status": payment_status_trans,
+            "comments": m_comments,
+            "special_requests": m_special,
+            "additional_services": {"source": "manual"},
+            "subject": f"Booking Confirmation #{conf_number} | Casa Dorada Los Cabos",
             "email_html": build_confirmation_email_html(
                 conf_number, m_guest_name, m_arrival, m_departure, m_adults, m_children, m_nights,
                 m_room_type, m_nightly_rate, m_stay_total, m_deposit, m_balance, payment_status_trans,
                 m_special, m_dep_pol, m_can_pol, m_selected_inclusions, m_selected_services, lang_code, curr_code
             ),
-
             "plain_text_email": build_confirmation_plain_text(
                 conf_number, m_guest_name, m_arrival, m_departure, m_adults, m_children, m_nights,
                 m_room_type, m_nightly_rate, m_stay_total, m_deposit, m_balance, payment_status_trans,
                 m_special, m_dep_pol, m_can_pol, m_selected_inclusions, m_selected_services, lang_code, curr_code
             )
-
         }
-
-    st.session_state.pending_action = action
+        st.session_state.pending_action = action
 
     with m_act1:
-
         if st.button("💾 Generate Manual Draft", use_container_width=True):
-
             if not m_guest_name or not m_guest_email:
-
                 st.error("Guest name and email are required.")
-
             else:
-
                 store_manual_pending_ui("draft")
-
                 if get_gmail_service():
-
                     execute_pending_confirmation()
                     st.rerun()
-
                 else:
-
                     st.warning("Connect Gmail to generate confirmation.")
-
                     st.markdown(
                         f"""
                         <a href="{get_google_login_url()}" 
@@ -5885,41 +5808,25 @@ elif app_mode == "Manual Confirmation":
                     )
 
         if st.session_state.get("conf_auto_draft_success"):
-
             result = st.session_state.conf_auto_draft_success
-
             if isinstance(result, str) and "failed" in result:
-
                 st.warning(result)
-
             else:
-
                 st.success(f"✅ Reservation Confirmed! Draft saved successfully. Confirmation #{result}")
                 st.balloons()
-
             st.session_state.conf_auto_draft_success = False
 
     with m_act2:
-
         if st.button("📤 Generate & Send Email", use_container_width=True):
-
             if not m_guest_name or not m_guest_email:
-
                 st.error("Guest name and email are required.")
-
             else:
-
                 store_manual_pending_ui("send")
-
                 if get_gmail_service():
-
                     execute_pending_confirmation()
                     st.rerun()
-
                 else:
-
                     st.warning("Connect Gmail to generate confirmation.")
-
                     st.markdown(
                         f"""
                         <a href="{get_google_login_url()}" 
@@ -5931,16 +5838,10 @@ elif app_mode == "Manual Confirmation":
                     )
 
         if st.session_state.get("conf_auto_send_success"):
-
             result = st.session_state.conf_auto_send_success
-
             if isinstance(result, str) and "failed" in result:
-
                 st.warning(result)
-
             else:
-
                 st.success(f"✅ Reservation Confirmed! Email sent successfully. Confirmation #{result}")
                 st.balloons()
-
             st.session_state.conf_auto_send_success = False
