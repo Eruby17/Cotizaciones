@@ -5778,7 +5778,7 @@ elif app_mode == "Manual Confirmation":
 
     conf_number = m_hotel_conf_number.strip() if m_hotel_conf_number.strip() else generate_confirmation_number()
 
-        st.session_state.pending_confirmation = {
+    st.session_state.pending_confirmation = {
 
             "confirmation_number": 
                 conf_number,
