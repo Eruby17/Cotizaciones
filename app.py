@@ -3148,400 +3148,118 @@ def build_email_html(
         options,
         start=1,
     ):
-
         options_html += build_option_html(
-
             option_number=index,
-
-            room_type=option[
-                "room_type"
-            ],
-
-            valid_until=option[
-                "valid_until"
-            ],
-
+            room_type=option["room_type"],
+            valid_until=option["valid_until"],
             nights=nights,
-
-            stay_total_tax_included=option[
-                "stay_total_tax_included"
-            ],
-
-            selected_inclusions=option[
-                "selected_inclusions"
-            ],
-
-            selected_services=option[
-                "selected_services"
-            ],
-
-            deposit_policy=option[
-                "deposit_policy"
-            ],
-
-            cancellation_policy=option[
-                "cancellation_policy"
-            ],
-
-            payment_url=option[
-                "payment_url"
-            ],
-
-            room_360_url=option[
-                "room_360_url"
-            ],
-
+            stay_total_tax_included=option["stay_total_tax_included"],
+            selected_inclusions=option["selected_inclusions"],
+            selected_services=option["selected_services"],
+            deposit_policy=option["deposit_policy"],
+            cancellation_policy=option["cancellation_policy"],
+            payment_url=option["payment_url"],
+            room_360_url=option["room_360_url"],
             lang=lang,
-            
             currency=currency,
-
-            adults=option.get(
-                "adults", 2
-            ),
-
-            children=option.get(
-                "children", 0
-            )
+            adults=option.get("adults", 2),
+            children=option.get("children", 0)
         )
 
     return f"""
 <!DOCTYPE html>
-
 <html>
-
 <head>
-
 <meta charset="UTF-8">
-
-<meta name="viewport"
-      content="width=device-width, initial-scale=1.0">
-
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>{t["custom_quotation"]}</title>
-
 </head>
-
-<body style="
-    margin:0;
-    padding:0;
-    background:#f3f4f6;
-    font-family:Arial,Helvetica,sans-serif;
-">
-
-<table width="100%"
-       cellpadding="0"
-       cellspacing="0"
-       border="0">
-
+<body style="margin:0; padding:0; background:#f3f4f6; font-family:Arial,Helvetica,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" border="0">
 <tr>
-
-<td align="left"
-    style="padding:30px 10px;">
-
-<table width="750"
-       cellpadding="0"
-       cellspacing="0"
-       border="0"
-       style="
-           width:750px;
-           max-width:100%;
-           background:#ffffff;
-       ">
-
+<td align="left" style="padding:30px 10px;">
+<table width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px; max-width:100%; background:#ffffff; border:1px solid #dddddd;">
 <tr>
-
-<td align="left"
-    style="
-        background:#ffffff;
-        padding:25px 35px 15px 35px;
-    ">
-
-<img src="{EMAIL_LOGO_URL}"
-     alt="Casa Dorada"
-     style="
-         max-width:220px;
-         width:100%;
-         height:auto;
-         display:block;
-     ">
-
+<td align="left" style="background:#ffffff; padding:25px 35px 15px 35px;">
+<img src="{EMAIL_LOGO_URL}" alt="Casa Dorada" style="max-width:220px; width:100%; height:auto; display:block;">
 </td>
-
 </tr>
-
 <tr>
-
-<td style="
-    padding:15px 35px 5px 35px;
-    text-align:left;
-">
-
-<div style="
-    color:#1f4f78;
-    font-size:25px;
-    font-weight:bold;
-    text-align:left;
-">
-
+<td style="padding:15px 35px 5px 35px; text-align:left;">
+<div style="color:#1f4f78; font-size:25px; font-weight:bold; text-align:left;">
 {t["custom_quotation"]}
-
 </div>
-
 </td>
-
 </tr>
-
 <tr>
-
-<td style="
-    padding:15px 35px 10px 35px;
-    text-align:left;
-">
-
-<p style="
-    color:#333333;
-    font-size:15px;
-    line-height:1.6;
-    margin:0 0 12px 0;
-    text-align:left;
-">
-
+<td style="padding:15px 35px 10px 35px; text-align:left;">
+<p style="color:#333333; font-size:15px; line-height:1.6; margin:0 0 12px 0; text-align:left;">
 {t["dear"]} {html_escape(guest_name)},
-
 </p>
-
-<p style="
-    color:#555555;
-    font-size:14px;
-    line-height:1.6;
-    margin:0;
-    text-align:left;
-">
-
+<p style="color:#555555; font-size:14px; line-height:1.6; margin:0; text-align:left;">
 {t["quote_intro"]}
-
 </p>
-
 </td>
-
 </tr>
-
 <tr>
-
-<td style="
-    padding:20px 35px 15px 35px;
-    text-align:left;
-">
-
-<div style="
-    color:#1f4f78;
-    font-size:19px;
-    font-weight:bold;
-    margin-bottom:12px;
-    text-align:left;
-">
-
+<td style="padding:20px 35px 15px 35px; text-align:left;">
+<div style="color:#1f4f78; font-size:19px; font-weight:bold; margin-bottom:12px; text-align:left;">
 {t["your_stay"]}
-
 </div>
-
-<table width="100%"
-       cellpadding="0"
-       cellspacing="0"
-       border="0"
-       style="
-           background:#f7f8fa;
-           border:1px solid #e5e7eb;
-       ">
-
+<table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f7f8fa; border:1px solid #e5e7eb;">
 <tr>
-
-<td style="
-    padding:10px 14px;
-    width:35%;
-    color:#777777;
-    font-size:13px;
-    font-weight:bold;
-    text-align:left;
-    border-bottom:1px solid #e5e7eb;
-">
-
+<td style="padding:10px 14px; width:45%; color:#777777; font-size:13px; font-weight:bold; text-align:left; border-bottom:1px solid #e5e7eb;">
 {t["nights"]}
-
 </td>
-
-<td style="
-    padding:10px 14px;
-    color:#1f2937;
-    font-size:13px;
-    font-weight:bold;
-    text-align:left;
-    border-bottom:1px solid #e5e7eb;
-">
-
-{html_escape(nights)}
-{(" " + t["night"]) if nights == 1 else (" " + t["nights"])}
-
+<td style="padding:10px 14px; color:#1f2937; font-size:13px; font-weight:bold; text-align:right; border-bottom:1px solid #e5e7eb;">
+{html_escape(nights)}{(" " + t["night"]) if nights == 1 else (" " + t["nights"])}
 </td>
-
 </tr>
-
 <tr>
-
-<td style="
-    padding:10px 14px;
-    color:#777777;
-    font-size:13px;
-    font-weight:bold;
-    text-align:left;
-    border-bottom:1px solid #e5e7eb;
-">
-
+<td style="padding:10px 14px; width:45%; color:#777777; font-size:13px; font-weight:bold; text-align:left; border-bottom:1px solid #e5e7eb;">
 {t["arrival"]}
-
 </td>
-
-<td style="
-    padding:10px 14px;
-    color:#1f2937;
-    font-size:13px;
-    font-weight:bold;
-    text-align:left;
-    border-bottom:1px solid #e5e7eb;
-">
-
-{html_escape(
-    format_date_email(arrival, lang)
-)}
-
+<td style="padding:10px 14px; color:#1f2937; font-size:13px; font-weight:bold; text-align:right; border-bottom:1px solid #e5e7eb;">
+{html_escape(format_date_email(arrival, lang))}
 </td>
-
 </tr>
-
 <tr>
-
-<td style="
-    padding:10px 14px;
-    color:#777777;
-    font-size:13px;
-    font-weight:bold;
-    text-align:left;
-">
-
+<td style="padding:10px 14px; width:45%; color:#777777; font-size:13px; font-weight:bold; text-align:left;">
 {t["departure"]}
-
 </td>
-
-<td style="
-    padding:10px 14px;
-    color:#1f2937;
-    font-size:13px;
-    font-weight:bold;
-    text-align:left;
-">
-
-{html_escape(
-    format_date_email(departure, lang)
-)}
-
+<td style="padding:10px 14px; color:#1f2937; font-size:13px; font-weight:bold; text-align:right;">
+{html_escape(format_date_email(departure, lang))}
 </td>
-
 </tr>
-
 </table>
-
 </td>
-
 </tr>
-
 <tr>
-
-<td style="
-    padding:15px 35px 5px 35px;
-    text-align:left;
-">
-
-<div style="
-    color:#1f4f78;
-    font-size:19px;
-    font-weight:bold;
-    margin-bottom:15px;
-    text-align:left;
-">
-
+<td style="padding:15px 35px 5px 35px; text-align:left;">
+<div style="color:#1f4f78; font-size:19px; font-weight:bold; margin-bottom:15px; text-align:left;">
 {t["available_options"]}
-
 </div>
-
 {options_html}
-
 </td>
-
 </tr>
-
 <tr>
-
-<td style="
-    background:#1f4f78;
-    padding:22px 30px;
-    text-align:left;
-">
-
-<div style="
-    color:#ffffff;
-    font-size:14px;
-    font-weight:bold;
-    margin-bottom:6px;
-    text-align:left;
-">
-
+<td style="background:#1f4f78; padding:22px 30px; text-align:left;">
+<div style="color:#ffffff; font-size:14px; font-weight:bold; margin-bottom:6px; text-align:left;">
 Casa Dorada Los Cabos Resort & Spa
-
 </div>
-
-<div style="
-    color:#dbeafe;
-    font-size:12px;
-    line-height:1.5;
-    text-align:left;
-">
-
-Av. del Pescador s/n,
-Cabo San Lucas, B.C.S.
-
+<div style="color:#dbeafe; font-size:12px; line-height:1.5; text-align:left;">
+Av. del Pescador s/n, Cabo San Lucas, B.C.S.
 </div>
-
-<div style="
-    color:#dbeafe;
-    font-size:12px;
-    line-height:1.5;
-    text-align:left;
-">
-
-US:
-<a href="tel:18664480151"
-   style="
-       color:#ffffff;
-       text-decoration:none;
-   ">
-1-866-448-0151
-</a>
-
+<div style="color:#dbeafe; font-size:12px; line-height:1.5; text-align:left;">
+US: <a href="tel:18664480151" style="color:#ffffff; text-decoration:none;">1-866-448-0151</a>
 </div>
-
 </td>
-
 </tr>
-
 </table>
-
 </td>
-
 </tr>
-
 </table>
-
 </body>
-
 </html>
 """
 
