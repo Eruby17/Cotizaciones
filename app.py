@@ -5384,7 +5384,7 @@ elif app_mode == "Manual Confirmation":
 
         m_children = st.number_input("Children", min_value=0, max_value=20, value=0, step=1, key="m_child")
 
-   with mc_col7:
+    with mc_col7:
 
         m_nights = m_calculated_nights st.number_input("Nights", min_value=1, value=m_nights, step=1, disabled=True,)
         
