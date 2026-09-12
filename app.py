@@ -3435,15 +3435,39 @@ def build_confirmation_email_html(
 <tr>
 <td style="padding:20px 35px 20px 35px; text-align:left;">
 <div style="color:#1f4f78; font-size:19px; font-weight:bold; margin-bottom:12px; text-align:left;">{t['reservation_details']}</div>
-<table width="100%" cellpadding="0" cellspacing="0" border="0">
-<tr><td style="padding:6px 0; width:45%; color:#555555; font-size:14px; text-align:left;">{t['guests']}</td><td style="padding:6px 0; color:#222222; font-size:14px; text-align:right;">{html_escape(guest_summary)}</td></tr>
-<tr><td style="padding:6px 0; color:#555555; font-size:14px; text-align:left;">{t['arrival']}</td><td style="padding:6px 0; color:#222222; font-size:14px; text-align:right;">{html_escape(format_date_email(arrival, lang))}</td></tr>
-<tr><td style="padding:6px 0; color:#555555; font-size:14px; text-align:left;">{t['departure']}</td><td style="padding:6px 0; color:#222222; font-size:14px; text-align:right;">{html_escape(format_date_email(departure, lang))}</td></tr>
-<tr><td style="padding:6px 0; color:#555555; font-size:14px; text-align:left;">{t['nights']}</td><td style="padding:6px 0; color:#222222; font-size:14px; text-align:right;">{html_escape(nights)}</td></tr>
-<tr><td style="padding:6px 0; color:#555555; font-size:14px; text-align:left;">{t['room_type']}</td><td style="padding:6px 0; color:#222222; font-size:14px; text-align:right;">{html_escape(room_type)}</td></tr>
-<tr><td style="padding:6px 0; color:#555555; font-size:14px; text-align:left;">{t['rate_before_taxes']}</td><td style="padding:6px 0; color:#222222; font-size:14px; text-align:right;">{money(rate_before_taxes, currency)}</td></tr>
-<tr><td style="padding:6px 0; color:#555555; font-size:14px; text-align:left;">{t['rate_with_taxes']}</td><td style="padding:6px 0; color:#222222; font-size:14px; text-align:right;">{money(rate_per_night, currency)}</td></tr>
-<tr><td style="border-top:1px solid #eeeeee; padding:10px 0 6px 0; color:#1f4f78; font-size:15px; font-weight:bold; text-align:left;">{t['total_amount']}</td><td style="border-top:1px solid #eeeeee; padding:10px 0 6px 0; color:#1f4f78; font-size:16px; text-align:right; font-weight:bold;">{money(stay_total, currency)}</td></tr>
+<table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px;">
+    <tr>
+        <td style="padding:12px 15px; width:45%; color:#64748b; font-size:13px; font-weight:bold; text-align:left; border-bottom:1px solid #e2e8f0;">{t['guests']}</td>
+        <td style="padding:12px 15px; color:#0f172a; font-size:14px; font-weight:bold; text-align:right; border-bottom:1px solid #e2e8f0;">{html_escape(guest_summary)}</td>
+    </tr>
+    <tr>
+        <td style="padding:12px 15px; color:#64748b; font-size:13px; font-weight:bold; text-align:left; border-bottom:1px solid #e2e8f0;">{t['arrival']}</td>
+        <td style="padding:12px 15px; color:#0f172a; font-size:14px; font-weight:bold; text-align:right; border-bottom:1px solid #e2e8f0;">{html_escape(format_date_email(arrival, lang))}</td>
+    </tr>
+    <tr>
+        <td style="padding:12px 15px; color:#64748b; font-size:13px; font-weight:bold; text-align:left; border-bottom:1px solid #e2e8f0;">{t['departure']}</td>
+        <td style="padding:12px 15px; color:#0f172a; font-size:14px; font-weight:bold; text-align:right; border-bottom:1px solid #e2e8f0;">{html_escape(format_date_email(departure, lang))}</td>
+    </tr>
+    <tr>
+        <td style="padding:12px 15px; color:#64748b; font-size:13px; font-weight:bold; text-align:left; border-bottom:1px solid #e2e8f0;">{t['nights']}</td>
+        <td style="padding:12px 15px; color:#0f172a; font-size:14px; font-weight:bold; text-align:right; border-bottom:1px solid #e2e8f0;">{html_escape(nights)}</td>
+    </tr>
+    <tr>
+        <td style="padding:12px 15px; color:#64748b; font-size:13px; font-weight:bold; text-align:left; border-bottom:1px solid #e2e8f0;">{t['room_type']}</td>
+        <td style="padding:12px 15px; color:#0f172a; font-size:14px; font-weight:bold; text-align:right; border-bottom:1px solid #e2e8f0;">{html_escape(room_type)}</td>
+    </tr>
+    <tr>
+        <td style="padding:12px 15px; color:#64748b; font-size:13px; font-weight:bold; text-align:left; border-bottom:1px solid #e2e8f0;">{t['rate_before_taxes']}</td>
+        <td style="padding:12px 15px; color:#0f172a; font-size:14px; text-align:right; border-bottom:1px solid #e2e8f0;">{money(rate_before_taxes, currency)}</td>
+    </tr>
+    <tr>
+        <td style="padding:12px 15px; color:#64748b; font-size:13px; font-weight:bold; text-align:left; border-bottom:1px solid #e2e8f0;">{t['rate_with_taxes']}</td>
+        <td style="padding:12px 15px; color:#0f172a; font-size:14px; text-align:right; border-bottom:1px solid #e2e8f0;">{money(rate_per_night, currency)}</td>
+    </tr>
+    <tr>
+        <td style="padding:15px; background:#f1f5f9; color:#1f4f78; font-size:15px; font-weight:bold; text-align:left;">{t['total_amount']}</td>
+        <td style="padding:15px; background:#f1f5f9; color:#1f4f78; font-size:17px; text-align:right; font-weight:bold;">{money(stay_total, currency)}</td>
+    </tr>
 </table>
 <div style="margin-top:20px; color:#1f4f78; font-size:15px; font-weight:bold; text-align:left;">{t['included_benefits']}</div>
 <ul style="padding-left:22px; margin-top:8px; margin-bottom:15px; text-align:left;">{inclusions_html}</ul>
