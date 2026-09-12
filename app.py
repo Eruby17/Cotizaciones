@@ -5386,7 +5386,7 @@ elif app_mode == "Manual Confirmation":
 
     with mc_col7:
 
-        m_nights = st.number_input("Nights", min_value=1, max_value=365, value=m_calculated_nights, step=1, key="m_nights")
+        m_nights = st.number_input("Nights", min_value=1, max_value=365, value=m_calculated_nights, step=1, key="m_nights"disabled=True)
         
     st.divider()
 
