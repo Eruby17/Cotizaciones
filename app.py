@@ -3659,6 +3659,32 @@ def build_confirmation_email_html(
         </div>
         """
 
+    # --- NUEVAS POLÍTICAS DEL RESORT BILINGÜES ---
+    if lang == "es":
+        resort_policies_title = "Políticas del Resort"
+        eco_tax = "<strong>Impuesto de Saneamiento Ambiental:</strong> El gobierno del municipio de Los Cabos implementa un impuesto de $82.12 MXN por habitación por noche (~$4.71 USD). Esta cantidad no está incluida en su tarifa prepagada, se reflejará en su cuenta final y debe pagarse al momento del check-in."
+        incidental = "<strong>Depósito para Incidentales:</strong> Tenga en cuenta que se solicitará una tarjeta de crédito válida al momento del check-in para cubrir cualquier cargo incidental."
+        cashless = "<strong>Política sin Efectivo (Cashless):</strong> Casa Dorada es un resort sin uso de efectivo. No se aceptan pagos en efectivo en nuestros restaurantes o bares."
+        checkin_out = "<strong>Check-in:</strong> 3:00 p.m. | <strong>Check-out:</strong> 12:00 p.m. (mediodía)"
+    else:
+        resort_policies_title = "Resort Policies"
+        eco_tax = "<strong>Environmental Sanitation Tax:</strong> The County of Los Cabos government implements a tax of MXN $82.12 per room per night (~USD $4.71). This amount is not included in your prepaid rate, will be reflected on your final statement, and is payable at check-in."
+        incidental = "<strong>Incidental Deposit:</strong> Please note that a valid credit card will be requested upon check-in to cover any incidental charges."
+        cashless = "<strong>Cashless Policy:</strong> Casa Dorada is a cashless resort. Cash payments are not accepted at our restaurants or bars."
+        checkin_out = "<strong>Check-in:</strong> 3:00 p.m. | <strong>Check-out:</strong> 12:00 noon"
+
+    resort_policies_html = f"""
+        <div style="color:#1f4f78; font-size:14px; font-weight:bold; margin-top:20px; margin-bottom:6px; text-align:left;">
+            {resort_policies_title}
+        </div>
+        <ul style="color:#555555; font-size:13px; line-height:1.5; text-align:left; padding-left:20px; margin-top:0;">
+            <li style="margin-bottom:6px;">{eco_tax}</li>
+            <li style="margin-bottom:6px;">{incidental}</li>
+            <li style="margin-bottom:6px;">{cashless}</li>
+            <li style="margin-bottom:0;">{checkin_out}</li>
+        </ul>
+    """
+
     return f"""
 <!DOCTYPE html>
 <html>
@@ -3671,8 +3697,7 @@ def build_confirmation_email_html(
 <table width="100%" cellpadding="0" cellspacing="0" border="0">
 <tr>
 <td align="left" style="padding:30px 10px;">
-<table width="750" cellpadding="0" cellspacing="0" border="0" style="width:750px; max-width:100%; background:#ffffff; border:1px solid #dddddd;">
-<tr>
+<table width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px; max-width:100%; background:#ffffff; border:1px solid #dddddd;"><tr>
 <td align="left" style="background:#ffffff; padding:25px 35px 15px 35px;">
 <img src="{EMAIL_LOGO_URL}" alt="Casa Dorada" style="max-width:220px; width:100%; height:auto; display:block;">
 </td>
@@ -3712,6 +3737,7 @@ def build_confirmation_email_html(
 <div style="color:#1f4f78; font-size:14px; font-weight:bold; margin-top:15px; margin-bottom:6px; text-align:left;">{t['cancellation_policy']}</div>
 <div style="color:#555555; font-size:13px; line-height:1.5; text-align:left;">{html_escape(cancellation_policy)}</div>
 {special_html}
+{resort_policies_html}
 </div>
 </td>
 </tr>
@@ -3812,6 +3838,22 @@ def build_confirmation_plain_text(
         lines.append("")
         lines.append(f"{t['special_requests']}:")
         lines.append(special_requests)
+
+    # --- NUEVAS POLÍTICAS DEL RESORT TEXTO PLANO ---
+    if lang == "es":
+        lines.append("")
+        lines.append("POLÍTICAS DEL RESORT:")
+        lines.append("• Impuesto de Saneamiento Ambiental: El gobierno del municipio de Los Cabos implementa un impuesto de $82.12 MXN por habitación por noche (~$4.71 USD). Esta cantidad no está incluida en su tarifa prepagada, se reflejará en su cuenta final y debe pagarse al momento del check-in.")
+        lines.append("• Depósito para Incidentales: Tenga en cuenta que se solicitará una tarjeta de crédito válida al momento del check-in para cubrir cualquier cargo incidental.")
+        lines.append("• Política sin Efectivo (Cashless): Casa Dorada es un resort sin uso de efectivo. No se aceptan pagos en efectivo en nuestros restaurantes o bares.")
+        lines.append("• Check-in: 3:00 p.m. | Check-out: 12:00 p.m. (mediodía)")
+    else:
+        lines.append("")
+        lines.append("RESORT POLICIES:")
+        lines.append("• Environmental Sanitation Tax: The County of Los Cabos government implements a tax of MXN $82.12 per room per night (~USD $4.71). This amount is not included in your prepaid rate, will be reflected on your final statement, and is payable at check-in.")
+        lines.append("• Incidental Deposit: Please note that a valid credit card will be requested upon check-in to cover any incidental charges.")
+        lines.append("• Cashless Policy: Casa Dorada is a cashless resort. Cash payments are not accepted at our restaurants or bars.")
+        lines.append("• Check-in: 3:00 p.m. | Check-out: 12:00 noon")
 
     lines.append("")
     lines.append("----------------------------------------")
