@@ -278,7 +278,7 @@ TRANSLATIONS = {
     "en": {
         "custom_quotation": "Your Custom Quotation",
         "reservation_confirmation": "Reservation Confirmation",
-        "dear": "Dear",
+        "Hola": "Hola",
         "quote_intro": "Thank you for considering Casa Dorada Los Cabos Resort & Spa for your upcoming stay. Please find below your personalized quotation and available options.",
         "conf_intro": "We are delighted to confirm your reservation at Casa Dorada Los Cabos Resort & Spa.",
         "your_stay": "Your Stay",
@@ -323,7 +323,7 @@ TRANSLATIONS = {
     "es": {
         "custom_quotation": "Su Cotización Personalizada",
         "reservation_confirmation": "Confirmación de Reservación",
-        "dear": "Estimado/a",
+        "Hola": "Hola",
         "quote_intro": "Gracias por considerar a Casa Dorada Los Cabos Resort & Spa para su próxima estadía. A continuación encontrará su cotización personalizada y las opciones disponibles.",
         "conf_intro": "Estamos encantados de confirmar su reservación en Casa Dorada Los Cabos Resort & Spa.",
         "your_stay": "Su Estadía",
@@ -2912,7 +2912,7 @@ def build_plain_text(
     lines.append("")
 
     lines.append(
-        f"{t['dear']} {guest_name},"
+        f"{t['Hola']} {guest_name},"
     )
 
     lines.append("")
@@ -3194,7 +3194,7 @@ def build_email_html(
 <tr>
 <td style="padding:15px 35px 10px 35px; text-align:left;">
 <p style="color:#333333; font-size:15px; line-height:1.6; margin:0 0 12px 0; text-align:left;">
-{t["dear"]} {html_escape(guest_name)},
+{t["Hola"]} {html_escape(guest_name)},
 </p>
 <p style="color:#555555; font-size:14px; line-height:1.6; margin:0; text-align:left;">
 {t["quote_intro"]}
@@ -3428,7 +3428,7 @@ def build_confirmation_email_html(
 </tr>
 <tr>
 <td style="padding:15px 35px 10px 35px; text-align:left;">
-<p style="color:#333333; font-size:15px; line-height:1.6; margin:0 0 12px 0; text-align:left;">{t['dear']} {html_escape(guest_name)},</p>
+<p style="color:#333333; font-size:15px; line-height:1.6; margin:0 0 12px 0; text-align:left;">{t['Hola']} {html_escape(guest_name)},</p>
 <p style="color:#555555; font-size:14px; line-height:1.6; margin:0; text-align:left;">{t['conf_intro']}</p>
 </td>
 </tr>
@@ -3534,7 +3534,7 @@ def build_confirmation_plain_text(
     lines.append(t["reservation_confirmation"].upper())
     lines.append(f"{t['conf_number']}: {confirmation_number}")
     lines.append("")
-    lines.append(f"{t['dear']} {guest_name},")
+    lines.append(f"{t['Hola']} {guest_name},")
     lines.append(t["conf_intro"])
     lines.append("")
     lines.append(t["reservation_details"].upper())
