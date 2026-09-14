@@ -2443,521 +2443,164 @@ def build_option_html(
 
     t = TRANSLATIONS[lang]
 
-    calculations = (
-        calculate_rate_values(
-            stay_total_tax_included,
-            nights,
-        )
-    )
-
-    total_with_tax = (
-        calculations[
-            "total_with_tax"
-        ]
-    )
-
-    nightly_with_tax = (
-        calculations[
-            "nightly_with_tax"
-        ]
-    )
-
-    nightly_before_tax = (
-        calculations[
-            "nightly_before_tax"
-        ]
-    )
+    calculations = calculate_rate_values(stay_total_tax_included, nights)
+    total_with_tax = calculations["total_with_tax"]
+    nightly_with_tax = calculations["nightly_with_tax"]
+    nightly_before_tax = calculations["nightly_before_tax"]
 
     guest_summary = f"{adults} {t['adults']}"
-
     if children > 0:
-
         guest_summary += f" + {children} {t['children']}"
 
+    # --- TRADUCCIÓN DE INCLUSIONES ---
     inclusions_html = ""
-
     for inclusion in selected_inclusions:
-
+        translated_inc = t.get('inclusions_map', {}).get(inclusion, inclusion)
         inclusions_html += f"""
-        <li style="
-            margin-bottom:7px;
-            color:#444444;
-            font-size:14px;
-            line-height:1.4;
-        ">
-            {html_escape(inclusion)}
+        <li style="margin-bottom:7px; color:#444444; font-size:14px; line-height:1.4;">
+            {html_escape(translated_inc)}
         </li>
         """
 
     if not inclusions_html:
-
         inclusions_html = f"""
-        <li style="
-            color:#777777;
-            font-size:14px;
-        ">
+        <li style="color:#777777; font-size:14px;">
             {t["no_inclusions"]}
         </li>
         """
 
+    # --- TRADUCCIÓN DE SERVICIOS ADICIONALES ---
     services_html = ""
-
     additional_services_total = 0.0
 
     for service in selected_services:
-
-        price = ADDITIONAL_SERVICES[
-            service
-        ]
-
+        price = ADDITIONAL_SERVICES[service]
         additional_services_total += price
-
+        translated_srv = t.get('services_map', {}).get(service, service)
+        
         services_html += f"""
         <tr>
-
-            <td style="
-                padding:6px 0;
-                color:#555555;
-                font-size:14px;
-                text-align:left;
-            ">
-                {html_escape(service)}
+            <td style="padding:6px 0; color:#555555; font-size:14px; text-align:left;">
+                {html_escape(translated_srv)}
             </td>
-
-            <td style="
-                padding:6px 0;
-                color:#222222;
-                font-size:14px;
-                text-align:right;
-            ">
+            <td style="padding:6px 0; color:#222222; font-size:14px; text-align:right;">
                 {money(price, currency)}
             </td>
-
         </tr>
         """
 
     if not services_html:
-
         services_html = f"""
         <tr>
-
-            <td colspan="2"
-                style="
-                    padding:6px 0;
-                    color:#777777;
-                    font-size:14px;
-                    text-align:left;
-                ">
+            <td colspan="2" style="padding:6px 0; color:#777777; font-size:14px; text-align:left;">
                 {t["no_services"]}
             </td>
-
         </tr>
         """
 
-    final_total = (
-        total_with_tax
-        + additional_services_total
-    )
+    # --- TRADUCCIÓN DE CANCELACIÓN ---
+    translated_cancel = t.get('cancel_map', {}).get(cancellation_policy, cancellation_policy)
+
+    final_total = total_with_tax + additional_services_total
 
     buttons_html = ""
-
     if room_360_url:
-
         buttons_html += f"""
-        <a href="{html_escape(room_360_url)}"
-           target="_blank"
-           style="
-               display:inline-block;
-               background:#ffffff;
-               color:#1f4f78;
-               border:1px solid #1f4f78;
-               text-decoration:none;
-               padding:11px 18px;
-               border-radius:5px;
-               font-size:13px;
-               font-weight:bold;
-               margin-right:7px;
-           ">
+        <a href="{html_escape(room_360_url)}" target="_blank"
+           style="display:inline-block; background:#ffffff; color:#1f4f78; border:1px solid #1f4f78; text-decoration:none; padding:11px 18px; border-radius:5px; font-size:13px; font-weight:bold; margin-right:7px;">
            {t["view_room"]}
         </a>
         """
 
     if payment_url:
-
         buttons_html += f"""
-        <a href="{html_escape(payment_url)}"
-           target="_blank"
-           style="
-               display:inline-block;
-               background:#c9a227;
-               color:#ffffff;
-               text-decoration:none;
-               padding:12px 18px;
-               border-radius:5px;
-               font-size:13px;
-               font-weight:bold;
-           ">
+        <a href="{html_escape(payment_url)}" target="_blank"
+           style="display:inline-block; background:#c9a227; color:#ffffff; text-decoration:none; padding:12px 18px; border-radius:5px; font-size:13px; font-weight:bold;">
            {t["secure_booking"]}
         </a>
         """
 
     return f"""
-
-    <table width="100%"
-           cellpadding="0"
-           cellspacing="0"
-           border="0"
-           style="
-               border:1px solid #dddddd;
-               background:#ffffff;
-               margin-bottom:22px;
-           ">
-
+    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid #dddddd; background:#ffffff; margin-bottom:22px;">
         <tr>
-
-            <td style="
-                padding:20px;
-                text-align:left;
-            ">
-
-                <div style="
-                    color:#1f4f78;
-                    font-size:18px;
-                    font-weight:bold;
-                    margin-bottom:5px;
-                    text-align:left;
-                ">
+            <td style="padding:20px; text-align:left;">
+                <div style="color:#1f4f78; font-size:18px; font-weight:bold; margin-bottom:5px; text-align:left;">
                     {t["option"]} {option_number}
                 </div>
-
-                <div style="
-                    color:#333333;
-                    font-size:20px;
-                    font-weight:bold;
-                    margin-bottom:18px;
-                    text-align:left;
-                ">
+                <div style="color:#333333; font-size:20px; font-weight:bold; margin-bottom:18px; text-align:left;">
                     {html_escape(room_type)}
                 </div>
-
-                <div style="
-                    color:#1f4f78;
-                    font-size:15px;
-                    font-weight:bold;
-                    margin-bottom:8px;
-                    text-align:left;
-                ">
+                <div style="color:#1f4f78; font-size:15px; font-weight:bold; margin-bottom:8px; text-align:left;">
                     {t["rate_details"]}
                 </div>
-
-                <table width="100%"
-                       cellpadding="0"
-                       cellspacing="0"
-                       border="0">
-
+                <table width="100%" cellpadding="0" cellspacing="0" border="0">
                     <tr>
-
-                        <td style="
-                            padding:6px 0;
-                            color:#555555;
-                            font-size:14px;
-                            text-align:left;
-                        ">
-                            {t["rate_before_taxes"]}
-                        </td>
-
-                        <td style="
-                            padding:6px 0;
-                            color:#222222;
-                            font-size:14px;
-                            text-align:right;
-                        ">
-                            {money(nightly_before_tax, currency)}
-                        </td>
-
+                        <td style="padding:6px 0; color:#555555; font-size:14px; text-align:left;">{t["rate_before_taxes"]}</td>
+                        <td style="padding:6px 0; color:#222222; font-size:14px; text-align:right;">{money(nightly_before_tax, currency)}</td>
                     </tr>
-
                     <tr>
-
-                        <td style="
-                            padding:6px 0;
-                            color:#555555;
-                            font-size:14px;
-                            text-align:left;
-                        ">
-                            {t["rate_with_taxes"]}
-                        </td>
-
-                        <td style="
-                            padding:6px 0;
-                            color:#222222;
-                            font-size:14px;
-                            text-align:right;
-                            font-weight:bold;
-                        ">
-                            {money(nightly_with_tax, currency)}
-                        </td>
-
+                        <td style="padding:6px 0; color:#555555; font-size:14px; text-align:left;">{t["rate_with_taxes"]}</td>
+                        <td style="padding:6px 0; color:#222222; font-size:14px; text-align:right; font-weight:bold;">{money(nightly_with_tax, currency)}</td>
                     </tr>
-
                     <tr>
-
-                        <td style="
-                            padding:6px 0;
-                            color:#555555;
-                            font-size:14px;
-                            text-align:left;
-                        ">
-                            {t["number_nights"]}
-                        </td>
-
-                        <td style="
-                            padding:6px 0;
-                            color:#222222;
-                            font-size:14px;
-                            text-align:right;
-                        ">
-                            {html_escape(nights)}
-                        </td>
-
+                        <td style="padding:6px 0; color:#555555; font-size:14px; text-align:left;">{t["number_nights"]}</td>
+                        <td style="padding:6px 0; color:#222222; font-size:14px; text-align:right;">{html_escape(nights)}</td>
                     </tr>
-
                     <tr>
-
-                        <td style="
-                            padding:6px 0;
-                            color:#555555;
-                            font-size:14px;
-                            text-align:left;
-                        ">
-                            {t["guests"]}
-                        </td>
-
-                        <td style="
-                            padding:6px 0;
-                            color:#222222;
-                            font-size:14px;
-                            text-align:right;
-                        ">
-                            {html_escape(guest_summary)}
-                        </td>
-
+                        <td style="padding:6px 0; color:#555555; font-size:14px; text-align:left;">{t["guests"]}</td>
+                        <td style="padding:6px 0; color:#222222; font-size:14px; text-align:right;">{html_escape(guest_summary)}</td>
                     </tr>
-
                     <tr>
-
-                        <td style="
-                            border-top:1px solid #eeeeee;
-                            padding:10px 0 6px 0;
-                            color:#1f4f78;
-                            font-size:15px;
-                            font-weight:bold;
-                            text-align:left;
-                        ">
-                            {t["stay_total"]}
-                        </td>
-
-                        <td style="
-                            border-top:1px solid #eeeeee;
-                            padding:10px 0 6px 0;
-                            color:#1f4f78;
-                            font-size:16px;
-                            text-align:right;
-                            font-weight:bold;
-                        ">
-                            {money(total_with_tax, currency)}
-                        </td>
-
+                        <td style="border-top:1px solid #eeeeee; padding:10px 0 6px 0; color:#1f4f78; font-size:15px; font-weight:bold; text-align:left;">{t["stay_total"]}</td>
+                        <td style="border-top:1px solid #eeeeee; padding:10px 0 6px 0; color:#1f4f78; font-size:16px; text-align:right; font-weight:bold;">{money(total_with_tax, currency)}</td>
                     </tr>
-
                 </table>
 
-                <div style="
-                    margin-top:20px;
-                    margin-bottom:8px;
-                    color:#1f4f78;
-                    font-size:15px;
-                    font-weight:bold;
-                    text-align:left;
-                ">
+                <div style="margin-top:20px; margin-bottom:8px; color:#1f4f78; font-size:15px; font-weight:bold; text-align:left;">
                     {t["included"]}
                 </div>
-
-                <ul style="
-                    padding-left:22px;
-                    margin-top:8px;
-                    margin-bottom:20px;
-                    text-align:left;
-                ">
-
+                <ul style="padding-left:22px; margin-top:8px; margin-bottom:20px; text-align:left;">
                     {inclusions_html}
-
                 </ul>
 
-                <div style="
-                    margin-top:20px;
-                    margin-bottom:8px;
-                    color:#1f4f78;
-                    font-size:15px;
-                    font-weight:bold;
-                    text-align:left;
-                ">
+                <div style="margin-top:20px; margin-bottom:8px; color:#1f4f78; font-size:15px; font-weight:bold; text-align:left;">
                     {t["additional_services"]}
                 </div>
-
-                <table width="100%"
-                       cellpadding="0"
-                       cellspacing="0"
-                       border="0">
-
+                <table width="100%" cellpadding="0" cellspacing="0" border="0">
                     {services_html}
-
                     <tr>
-
-                        <td style="
-                            border-top:1px solid #eeeeee;
-                            padding-top:10px;
-                            color:#555555;
-                            font-size:14px;
-                            font-weight:bold;
-                            text-align:left;
-                        ">
-                            {t["additional_total"]}
-                        </td>
-
-                        <td style="
-                            border-top:1px solid #eeeeee;
-                            padding-top:10px;
-                            color:#222222;
-                            font-size:14px;
-                            text-align:right;
-                            font-weight:bold;
-                        ">
-                            {money(additional_services_total, currency)}
-                        </td>
-
+                        <td style="border-top:1px solid #eeeeee; padding-top:10px; color:#555555; font-size:14px; font-weight:bold; text-align:left;">{t["additional_total"]}</td>
+                        <td style="border-top:1px solid #eeeeee; padding-top:10px; color:#222222; font-size:14px; text-align:right; font-weight:bold;">{money(additional_services_total, currency)}</td>
                     </tr>
-
                 </table>
 
-                <div style="
-                    margin-top:18px;
-                    padding:15px;
-                    background:#f5f7fa;
-                ">
-
-                    <table width="100%"
-                           cellpadding="0"
-                           cellspacing="0"
-                           border="0">
-
+                <div style="margin-top:18px; padding:15px; background:#f5f7fa;">
+                    <table width="100%" cellpadding="0" cellspacing="0" border="0">
                         <tr>
-
-                            <td style="
-                                color:#1f4f78;
-                                font-size:17px;
-                                font-weight:bold;
-                                text-align:left;
-                            ">
-                                {t["total_amount"]}
-                            </td>
-
-                            <td style="
-                                color:#1f4f78;
-                                font-size:20px;
-                                font-weight:bold;
-                                text-align:right;
-                            ">
-                                {money(final_total, currency)}
-                            </td>
-
+                            <td style="color:#1f4f78; font-size:17px; font-weight:bold; text-align:left;">{t["total_amount"]}</td>
+                            <td style="color:#1f4f78; font-size:20px; font-weight:bold; text-align:right;">{money(final_total, currency)}</td>
                         </tr>
-
                     </table>
-
                 </div>
 
-                <div style="
-                    margin-top:20px;
-                    padding-top:15px;
-                    border-top:1px solid #eeeeee;
-                    text-align:left;
-                ">
-
-                    <div style="
-                        color:#1f4f78;
-                        font-size:14px;
-                        font-weight:bold;
-                        margin-bottom:6px;
-                        text-align:left;
-                    ">
-                        {t["deposit_policy"]}
-                    </div>
-
-                    <div style="
-                        color:#555555;
-                        font-size:13px;
-                        line-height:1.5;
-                        text-align:left;
-                    ">
-                        {html_escape(deposit_policy)}
-                    </div>
-
-                    <div style="
-                        color:#1f4f78;
-                        font-size:14px;
-                        font-weight:bold;
-                        margin-top:15px;
-                        margin-bottom:6px;
-                        text-align:left;
-                    ">
-                        {t["cancellation_policy"]}
-                    </div>
-
-                    <div style="
-                        color:#555555;
-                        font-size:13px;
-                        line-height:1.5;
-                        text-align:left;
-                    ">
-                        {html_escape(cancellation_policy)}
-                    </div>
-
+                <div style="margin-top:20px; padding-top:15px; border-top:1px solid #eeeeee; text-align:left;">
+                    <div style="color:#1f4f78; font-size:14px; font-weight:bold; margin-bottom:6px; text-align:left;">{t["deposit_policy"]}</div>
+                    <div style="color:#555555; font-size:13px; line-height:1.5; text-align:left;">{html_escape(deposit_policy)}</div>
+                    
+                    <div style="color:#1f4f78; font-size:14px; font-weight:bold; margin-top:15px; margin-bottom:6px; text-align:left;">{t["cancellation_policy"]}</div>
+                    <div style="color:#555555; font-size:13px; line-height:1.5; text-align:left;">{html_escape(translated_cancel)}</div>
                 </div>
 
-                <div style="
-                    margin-top:20px;
-                    text-align:left;
-                ">
-
+                <div style="margin-top:20px; text-align:left;">
                     {buttons_html}
-
                 </div>
 
-                <div style="
-                    margin-top:16px;
-                    color:#777777;
-                    font-size:12px;
-                    text-align:left;
-                ">
-
-                    {t["quote_valid"]}: 
-                    <strong>
-                        {html_escape(
-                            format_date_email(
-                                valid_until, lang
-                            )
-                        )}
-                    </strong>
-
+                <div style="margin-top:16px; color:#777777; font-size:12px; text-align:left;">
+                    {t["quote_valid"]}: <strong>{html_escape(format_date_email(valid_until, lang))}</strong>
                 </div>
-
             </td>
-
         </tr>
-
     </table>
-
     """
 
 
