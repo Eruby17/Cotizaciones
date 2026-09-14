@@ -282,7 +282,7 @@ TRANSLATIONS = {
     "en": {
         "custom_quotation": "Your Custom Quotation",
         "reservation_confirmation": "Reservation Confirmation",
-        "Hola": "Hola",
+        "dear": "Hola",
         "quote_intro": "Thank you for considering Casa Dorada Los Cabos Resort & Spa for your upcoming stay. Please find below your personalized quotation and available options.",
         "conf_intro": "Thank you for choosing Casa Dorada Los Cabos Resort & Spa, please find below the details of your reservation.",
         "your_stay": "Your Stay",
@@ -362,7 +362,7 @@ TRANSLATIONS = {
     "es": {
         "custom_quotation": "Su Cotización Personalizada",
         "reservation_confirmation": "Confirmación de Reservación",
-        "Hola": "Hola",
+        "dear": "Hola",
         "quote_intro": "Gracias por considerar a Casa Dorada Los Cabos Resort & Spa para su próxima estadía. A continuación encontrará su cotización personalizada y las opciones disponibles.",
         "conf_intro": "Estamos encantados de confirmar su reservación en Casa Dorada Los Cabos Resort & Spa.",
         "your_stay": "Su Estadía",
