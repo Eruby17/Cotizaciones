@@ -2867,7 +2867,6 @@ def build_confirmation_email_html(
     rate_before_taxes = float(rate_per_night) / (1 + TAX_RATE)
 
     guest_summary = f"{adults} {t['adults']}"
-
     if children > 0:
         guest_summary += f" + {children} {t['children']}"
 
@@ -2888,26 +2887,45 @@ def build_confirmation_email_html(
         </li>
         """
 
-    # --- TRADUCCIÓN DE SERVICIOS ---
+    # --- TRADUCCIÓN DE SERVICIOS Y SUMA DE PRECIOS ---
     services_html = ""
+    additional_services_total = 0.0
+
     if selected_services:
         for service in selected_services:
+            # Buscar el precio en el diccionario global (si no existe, usa 0.0)
+            price = ADDITIONAL_SERVICES.get(service, 0.0)
+            additional_services_total += price
             translated_srv = t.get('services_map', {}).get(service, service)
+            
             services_html += f"""
             <tr>
                 <td style="padding:6px 0; color:#555555; font-size:14px; text-align:left;">
                     • {html_escape(translated_srv)}
                 </td>
+                <td style="padding:6px 0; color:#222222; font-size:14px; text-align:right;">
+                    {money(price, currency)}
+                </td>
             </tr>
             """
+            
+        services_html += f"""
+        <tr>
+            <td style="border-top:1px solid #eeeeee; padding-top:10px; color:#555555; font-size:14px; font-weight:bold; text-align:left;">{t['additional_total']}</td>
+            <td style="border-top:1px solid #eeeeee; padding-top:10px; color:#222222; font-size:14px; text-align:right; font-weight:bold;">{money(additional_services_total, currency)}</td>
+        </tr>
+        """
     else:
         services_html = f"""
         <tr>
-            <td style="padding:6px 0; color:#777777; font-size:14px; text-align:left;">
+            <td colspan="2" style="padding:6px 0; color:#777777; font-size:14px; text-align:left;">
                 {t['no_services']}
             </td>
         </tr>
         """
+
+    # --- CÁLCULO DEL GRAN TOTAL ---
+    final_total = float(stay_total) + additional_services_total
 
     # --- TRADUCCIÓN DE CANCELACIÓN ---
     translated_cancel = t.get('cancel_map', {}).get(cancellation_policy, cancellation_policy)
@@ -3013,7 +3031,7 @@ def build_confirmation_email_html(
         <td style="padding:12px 15px; color:#0f172a; font-size:14px; text-align:right; border-bottom:1px solid #e2e8f0;">{money(rate_per_night, currency)}</td>
     </tr>
     <tr>
-        <td style="padding:15px; background:#f1f5f9; color:#1f4f78; font-size:15px; font-weight:bold; text-align:left; border-radius:0 0 0 6px;">{t['total_amount']}</td>
+        <td style="padding:15px; background:#f1f5f9; color:#1f4f78; font-size:15px; font-weight:bold; text-align:left; border-radius:0 0 0 6px;">{t['stay_total']}</td>
         <td style="padding:15px; background:#f1f5f9; color:#1f4f78; font-size:17px; text-align:right; font-weight:bold; border-radius:0 0 6px 0;">{money(stay_total, currency)}</td>
     </tr>
 </table>
@@ -3023,6 +3041,15 @@ def build_confirmation_email_html(
 
 <div style="margin-top:15px; color:#1f4f78; font-size:15px; font-weight:bold; text-align:left;">{t['additional_services']}</div>
 <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:8px;">{services_html}</table>
+
+<div style="margin-top:18px; padding:15px; background:#f5f7fa; border-radius:6px;">
+    <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+            <td style="color:#1f4f78; font-size:17px; font-weight:bold; text-align:left;">{t['total_amount']}</td>
+            <td style="color:#1f4f78; font-size:20px; font-weight:bold; text-align:right;">{money(final_total, currency)}</td>
+        </tr>
+    </table>
+</div>
 
 <div style="margin-top:20px; padding-top:15px; border-top:1px solid #eeeeee;">
 <div style="color:#1f4f78; font-size:14px; font-weight:bold; margin-bottom:6px; text-align:left;">{t['deposit_policy']}</div>
@@ -3049,7 +3076,6 @@ def build_confirmation_email_html(
 </body>
 </html>
 """
-
 
 # ============================================================
 # PLAIN TEXT EMAIL
@@ -3103,10 +3129,10 @@ def build_confirmation_plain_text(
     lines.append(f"{t['room_type']}: {room_type}")
     lines.append(f"{t['rate_before_taxes']}: {money(rate_before_taxes, currency)}")
     lines.append(f"{t['rate_with_taxes']}: {money(rate_per_night, currency)}")
-    lines.append(f"{t['total_amount']}: {money(stay_total, currency)}")
+    lines.append(f"{t['stay_total']}: {money(stay_total, currency)}")
     lines.append("")
+    
     lines.append(f"{t['included_benefits']}:")
-
     if selected_inclusions:
         for inc in selected_inclusions:
             translated_inc = t.get('inclusions_map', {}).get(inc, inc)
@@ -3116,15 +3142,23 @@ def build_confirmation_plain_text(
 
     lines.append("")
     lines.append(f"{t['additional_services']}:")
-
+    
+    additional_services_total = 0.0
     if selected_services:
         for srv in selected_services:
+            price = ADDITIONAL_SERVICES.get(srv, 0.0)
+            additional_services_total += price
             translated_srv = t.get('services_map', {}).get(srv, srv)
-            lines.append(f"• {translated_srv}")
+            lines.append(f"• {translated_srv}: {money(price, currency)}")
     else:
         lines.append(t["no_services"])
 
+    final_total = float(stay_total) + additional_services_total
+
     lines.append("")
+    lines.append(f"{t['total_amount']}: {money(final_total, currency)}")
+    lines.append("")
+    
     lines.append(f"{t['deposit_policy']}:")
     lines.append(deposit_policy)
     lines.append("")
