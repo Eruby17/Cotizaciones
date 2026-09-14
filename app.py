@@ -3124,7 +3124,7 @@ def build_email_html(
 <tr>
 <td style="padding:15px 35px 10px 35px; text-align:left;">
 <p style="color:#333333; font-size:15px; line-height:1.6; margin:0 0 12px 0; text-align:left;">
-{t["Hola"]} {html_escape(guest_name)},
+{t["dear"]} {html_escape(guest_name)},
 </p>
 <p style="color:#555555; font-size:14px; line-height:1.6; margin:0; text-align:left;">
 {t["quote_intro"]}
