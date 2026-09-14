@@ -2482,12 +2482,12 @@ def build_option_html(
         </li>
         """
 
-# --- TRADUCCIÓN DE SERVICIOS ADICIONALES ---
+    # --- TRADUCCIÓN DE SERVICIOS ADICIONALES Y CALCULADORA ---
     services_html = ""
     additional_services_total = 0.0
 
     for service in selected_services:
-        # AQUÍ ESTÁ EL CAMBIO:
+        # AQUÍ USAMOS LA CALCULADORA NUEVA
         price = get_service_price(service, currency)
         
         additional_services_total += price
@@ -2652,7 +2652,9 @@ def build_plain_text(
 
     for index, option in enumerate(options, start=1):
         calculations = calculate_rate_values(option["stay_total_tax_included"], nights)
-        services_total = sum(ADDITIONAL_SERVICES[service] for service in option["selected_services"])
+        
+        # AQUÍ USAMOS LA CALCULADORA NUEVA PARA SUMAR LOS TOTALES
+        services_total = sum(get_service_price(service, currency) for service in option["selected_services"])
         final_total = calculations["total_with_tax"] + services_total
 
         opt_adults = option.get("adults", 2)
@@ -2685,7 +2687,9 @@ def build_plain_text(
         if option["selected_services"]:
             for service in option["selected_services"]:
                 translated_srv = t.get('services_map', {}).get(service, service)
-                lines.append(f"• {translated_srv}: {money(ADDITIONAL_SERVICES[service], currency)}")
+                
+                # AQUÍ USAMOS LA CALCULADORA NUEVA PARA IMPRIMIR EL PRECIO
+                lines.append(f"• {translated_srv}: {money(get_service_price(service, currency), currency)}")
         else:
             lines.append(t["no_services"])
 
