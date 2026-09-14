@@ -228,6 +228,19 @@ ADDITIONAL_SERVICES = {
 
 }
 
+# ============================================================
+# TIPO DE CAMBIO Y CALCULADORA DE SERVICIOS
+# ============================================================
+EXCHANGE_RATE = 17.00  # Puedes cambiar este número o enlazarlo a la interfaz después
+
+def get_service_price(service, currency):
+    """Obtiene el precio del servicio y lo convierte a MXN si es necesario."""
+    base_price_usd = ADDITIONAL_SERVICES.get(service, 0.0)
+    
+    if currency == "MXN":
+        return base_price_usd * EXCHANGE_RATE
+    else:
+        return base_price_usd
 
 # ============================================================
 # DEPOSIT POLICIES
@@ -2469,12 +2482,14 @@ def build_option_html(
         </li>
         """
 
-    # --- TRADUCCIÓN DE SERVICIOS ADICIONALES ---
+# --- TRADUCCIÓN DE SERVICIOS ADICIONALES ---
     services_html = ""
     additional_services_total = 0.0
 
     for service in selected_services:
-        price = ADDITIONAL_SERVICES[service]
+        # AQUÍ ESTÁ EL CAMBIO:
+        price = get_service_price(service, currency)
+        
         additional_services_total += price
         translated_srv = t.get('services_map', {}).get(service, service)
         
@@ -2887,14 +2902,15 @@ def build_confirmation_email_html(
         </li>
         """
 
-    # --- TRADUCCIÓN DE SERVICIOS Y SUMA DE PRECIOS ---
+   # --- TRADUCCIÓN DE SERVICIOS Y SUMA DE PRECIOS ---
     services_html = ""
     additional_services_total = 0.0
 
     if selected_services:
         for service in selected_services:
-            # Buscar el precio en el diccionario global (si no existe, usa 0.0)
-            price = ADDITIONAL_SERVICES.get(service, 0.0)
+            # AQUÍ ESTÁ EL CAMBIO: Usamos la nueva función para calcular el tipo de cambio
+            price = get_service_price(service, currency)
+            
             additional_services_total += price
             translated_srv = t.get('services_map', {}).get(service, service)
             
