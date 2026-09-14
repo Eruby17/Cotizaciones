@@ -5117,12 +5117,32 @@ elif app_mode == "Manual Confirmation":
     )
 
     st.markdown(
-        "### Actions"
+        "### Email Preview & Actions"
     )
+
+    import streamlit.components.v1 as components
+
+    # --- INICIO DEL PREVIEW ---
+    with st.expander("👀 View Email Preview", expanded=False):
+        if not m_guest_name:
+            st.info("☝️ Enter the guest's name to generate the preview.")
+        else:
+            # Usamos un número temporal si aún no han escrito uno
+            preview_conf_number = m_hotel_conf_number.strip() if m_hotel_conf_number.strip() else "CN-PREVIEW"
+            
+            preview_html = build_confirmation_email_html(
+                preview_conf_number, m_guest_name, m_arrival, m_departure, m_adults, m_children, m_nights,
+                m_room_type, m_nightly_rate, m_stay_total, m_deposit, m_balance, payment_status_trans,
+                m_special, m_dep_pol, m_can_pol, m_selected_inclusions, m_selected_services, lang_code, curr_code
+            )
+            
+            components.html(preview_html, height=650, scrolling=True)
+    # --- FIN DEL PREVIEW ---
 
     m_act1, m_act2 = st.columns(2)
 
     def store_manual_pending_ui(action):
+        # ... (aquí sigue tu código normal de store_manual_pending_ui) ...
         conf_number = m_hotel_conf_number.strip() if m_hotel_conf_number.strip() else generate_confirmation_number()
 
         st.session_state.pending_confirmation = {
