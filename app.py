@@ -2976,226 +2976,82 @@ def build_plain_text(
 ):
 
     t = TRANSLATIONS[lang]
-
     lines = []
 
-    lines.append(
-        t["custom_quotation"].upper()
-    )
-
+    lines.append(t["custom_quotation"].upper())
+    lines.append("")
+    lines.append(f"{t['dear']} {guest_name},")
+    lines.append("")
+    lines.append(t["quote_intro"])
+    lines.append("")
+    lines.append(t["your_stay"].upper())
+    lines.append(f"{t['nights']}: {nights}")
+    lines.append(f"{t['arrival']}: {format_date_email(arrival, lang)}")
+    lines.append(f"{t['departure']}: {format_date_email(departure, lang)}")
+    lines.append("")
+    lines.append(t["available_options"].upper())
     lines.append("")
 
-    lines.append(
-        f"{t['Hola']} {guest_name},"
-    )
-
-    lines.append("")
-
-    lines.append(
-        t["quote_intro"]
-    )
-
-    lines.append("")
-
-    lines.append(
-        t["your_stay"].upper()
-    )
-
-    lines.append(
-        f"{t['nights']}: {nights}"
-    )
-
-    lines.append(
-        f"{t['arrival']}: {format_date_email(arrival, lang)}"
-    )
-
-    lines.append(
-        f"{t['departure']}: {format_date_email(departure, lang)}"
-    )
-
-    lines.append("")
-
-    lines.append(
-        t["available_options"].upper()
-    )
-
-    lines.append("")
-
-    for index, option in enumerate(
-        options,
-        start=1,
-    ):
-
-        calculations = (
-            calculate_rate_values(
-                option[
-                    "stay_total_tax_included"
-                ],
-                nights,
-            )
-        )
-
-        services_total = sum(
-
-            ADDITIONAL_SERVICES[
-                service
-            ]
-
-            for service in option[
-                "selected_services"
-            ]
-
-        )
-
-        final_total = (
-
-            calculations[
-                "total_with_tax"
-            ]
-
-            + services_total
-        )
+    for index, option in enumerate(options, start=1):
+        calculations = calculate_rate_values(option["stay_total_tax_included"], nights)
+        services_total = sum(ADDITIONAL_SERVICES[service] for service in option["selected_services"])
+        final_total = calculations["total_with_tax"] + services_total
 
         opt_adults = option.get("adults", 2)
         opt_children = option.get("children", 0)
 
         guest_summary = f"{opt_adults} {t['adults']}"
-
         if opt_children > 0:
-
             guest_summary += f", {opt_children} {t['children']}"
 
-        lines.append(
-            f"{t['option'].upper()} {index}"
-        )
-
-        lines.append(
-            f"{t['room_type']}: {option['room_type']}"
-        )
-
-        lines.append(
-            f"{t['guests']}: {guest_summary}"
-        )
-
-        lines.append(
-            f"{t['rate_before_taxes']}: "
-            f"{money(calculations['nightly_before_tax'], currency)}"
-        )
-
-        lines.append(
-            f"{t['rate_with_taxes']}: "
-            f"{money(calculations['nightly_with_tax'], currency)}"
-        )
-
-        lines.append(
-            f"{t['number_nights']}: {nights}"
-        )
-
-        lines.append(
-            f"{t['stay_total']}: "
-            f"{money(calculations['total_with_tax'], currency)}"
-        )
-
+        lines.append(f"{t['option'].upper()} {index}")
+        lines.append(f"{t['room_type']}: {option['room_type']}")
+        lines.append(f"{t['guests']}: {guest_summary}")
+        lines.append(f"{t['rate_before_taxes']}: {money(calculations['nightly_before_tax'], currency)}")
+        lines.append(f"{t['rate_with_taxes']}: {money(calculations['nightly_with_tax'], currency)}")
+        lines.append(f"{t['number_nights']}: {nights}")
+        lines.append(f"{t['stay_total']}: {money(calculations['total_with_tax'], currency)}")
         lines.append("")
-
-        lines.append(
-            f"{t['included']}:"
-        )
+        lines.append(f"{t['included']}:")
 
         if option["selected_inclusions"]:
-            for inclusion in option[
-                "selected_inclusions"
-            ]:
-
-                lines.append(
-                    f"• {inclusion}"
-                )
+            for inclusion in option["selected_inclusions"]:
+                translated_inc = t.get('inclusions_map', {}).get(inclusion, inclusion)
+                lines.append(f"• {translated_inc}")
         else:
             lines.append(t["no_inclusions"])
 
         lines.append("")
+        lines.append(f"{t['additional_services']}:")
 
-        lines.append(
-            f"{t['additional_services']}:"
-        )
-
-        if option[
-            "selected_services"
-        ]:
-
-            for service in option[
-                "selected_services"
-            ]:
-
-                lines.append(
-                    f"• {service}: "
-                    f"{money(ADDITIONAL_SERVICES[service], currency)}"
-                )
-
+        if option["selected_services"]:
+            for service in option["selected_services"]:
+                translated_srv = t.get('services_map', {}).get(service, service)
+                lines.append(f"• {translated_srv}: {money(ADDITIONAL_SERVICES[service], currency)}")
         else:
-
-            lines.append(
-                t["no_services"]
-            )
+            lines.append(t["no_services"])
 
         lines.append("")
-
-        lines.append(
-            f"{t['total_amount']}: "
-            f"{money(final_total, currency)}"
-        )
-
+        lines.append(f"{t['total_amount']}: {money(final_total, currency)}")
+        lines.append("")
+        
+        lines.append(f"{t['deposit_policy']}:")
+        lines.append(option["deposit_policy"])
+        lines.append("")
+        
+        translated_cancel = t.get('cancel_map', {}).get(option["cancellation_policy"], option["cancellation_policy"])
+        lines.append(f"{t['cancellation_policy']}:")
+        lines.append(translated_cancel)
+        
+        lines.append("")
+        lines.append(f"{t['quote_valid']}: {format_date_email(option['valid_until'], lang)}")
+        lines.append("")
+        lines.append("----------------------------------------")
         lines.append("")
 
-        lines.append(
-            f"{t['deposit_policy']}:"
-        )
-
-        lines.append(
-            option[
-                "deposit_policy"
-            ]
-        )
-
-        lines.append("")
-
-        lines.append(
-            f"{t['cancellation_policy']}:"
-        )
-
-        lines.append(
-            option[
-                "cancellation_policy"
-            ]
-        )
-
-        lines.append("")
-
-        lines.append(
-            f"{t['quote_valid']}: "
-            f"{format_date_email(option['valid_until'], lang)}"
-        )
-
-        lines.append("")
-
-        lines.append(
-            "----------------------------------------"
-        )
-
-        lines.append("")
-
-    lines.append(
-        "Casa Dorada Los Cabos Resort & Spa"
-    )
-
-    lines.append(
-        "Av. del Pescador s/n, "
-        "Cabo San Lucas, B.C.S."
-    )
-
-    lines.append(
-        "US: 1-866-448-0151"
-    )
+    lines.append("Casa Dorada Los Cabos Resort & Spa")
+    lines.append("Av. del Pescador s/n, Cabo San Lucas, B.C.S.")
+    lines.append("US: 1-866-448-0151")
 
     return "\n".join(lines)
 
