@@ -248,6 +248,10 @@ DEPOSIT_POLICIES = [
 # CANCELLATION POLICIES
 # ============================================================
 
+# ============================================================
+# CANCELLATION POLICIES
+# ============================================================
+
 CANCELLATION_POLICIES = [
 
     "Non-refundable, no modifications are allowed. "
@@ -280,7 +284,7 @@ TRANSLATIONS = {
         "reservation_confirmation": "Reservation Confirmation",
         "Hola": "Hola",
         "quote_intro": "Thank you for considering Casa Dorada Los Cabos Resort & Spa for your upcoming stay. Please find below your personalized quotation and available options.",
-        "conf_intro": "Thank you for choosing Casa Dorada Los Cabos Resort & Spa., please find below the details of your reservation",
+        "conf_intro": "Thank you for choosing Casa Dorada Los Cabos Resort & Spa, please find below the details of your reservation.",
         "your_stay": "Your Stay",
         "reservation_details": "Reservation Details",
         "guests": "Guests",
@@ -318,7 +322,42 @@ TRANSLATIONS = {
         "fully_paid": "Fully Paid",
         "first_night_deposit": "First Night Deposit",
         "fully_paid_policy": "Reservation is fully paid.",
-        "first_night_policy": "Reservation is guaranteed with the first night deposit, balance to pay due check in: "
+        "first_night_policy": "Reservation is guaranteed with the first night deposit, balance to pay due check in: ",
+        "cancel_map": {
+            "Non-refundable, no modifications are allowed. In case of early departure or no show, no reimbursement will apply.": "Non-refundable, no modifications are allowed. In case of early departure or no show, no reimbursement will apply.",
+            "Reservations can be canceled 4 days before arrival free of charge. 1 night stay (tax included) penalty charge if canceled less than 4 days before arrival.": "Reservations can be canceled 4 days before arrival free of charge. 1 night stay (tax included) penalty charge if canceled less than 4 days before arrival.",
+            "Reservations can be canceled 14 days before arrival free of charge. 1 night stay (tax included) penalty charge if canceled less than 14 days before arrival.": "Reservations can be canceled 14 days before arrival free of charge. 1 night stay (tax included) penalty charge if canceled less than 14 days before arrival.",
+            "Reservations can be cancelled 45 days prior to arrival without charge. Full stay (tax included) charges penalty if cancelled less than 45 days prior to arrival. Time is based on the property's local time.": "Reservations can be cancelled 45 days prior to arrival without charge. Full stay (tax included) charges penalty if cancelled less than 45 days prior to arrival. Time is based on the property's local time."
+        },
+        "inclusions_map": {
+            "Free Wi-Fi": "Free Wi-Fi",
+            "Free Valet Parking": "Free Valet Parking",
+            "Free Breakfast Buffet at Maydan Restaurant": "Free Breakfast Buffet at Maydan Restaurant",
+            "30% discount on food and beverages (does not apply to room service, minibar, or other promotions)": "30% discount on food and beverages (does not apply to room service, minibar, or other promotions)",
+            "25% discount on food and beverages (does not apply to room service, minibar, or other promotions)": "25% discount on food and beverages (does not apply to room service, minibar, or other promotions)",
+            "25% discount at Saltwater Spa (50 and 80 minute massages)": "25% discount at Saltwater Spa (50 and 80 minute massages)",
+            "30% discount at Saltwater Spa (50 and 80 minute massages)": "30% discount at Saltwater Spa (50 and 80 minute massages)",
+            "All Inclusive Package": "All Inclusive Package",
+            "30% Discount for Room Service": "30% Discount for Room Service",
+            "Free Spa Access (Wet Areas)": "Free Spa Access (Wet Areas)",
+            "20% discount at Saltwater Spa (No Salon Services)": "20% discount at Saltwater Spa (No Salon Services)",
+            "Buy one Full Body Massage 80 minutes at Saltwater Spa and the second is free": "Buy one Full Body Massage 80 minutes at Saltwater Spa and the second is free",
+            "USD $100.00 Food and Beverage Credit (This credit is non-transferable and non-redeemable for cash, credits are non-cumulative, per reservation)": "USD $100.00 Food and Beverage Credit (This credit is non-transferable and non-redeemable for cash, credits are non-cumulative, per reservation)",
+            "USD $100.00 Dining Credit (This credit is non-transferable and non-redeemable for cash, credits are non-cumulative, per reservation)": "USD $100.00 Dining Credit (This credit is non-transferable and non-redeemable for cash, credits are non-cumulative, per reservation)",
+            "$100.00 USD Dinner Credit at 12 Tribes (This credit is non-transferable and non-redeemable for cash, credits are non-cumulative, per reservation)": "$100.00 USD Dinner Credit at 12 Tribes (This credit is non-transferable and non-redeemable for cash, credits are non-cumulative, per reservation)",
+            "Round Trip Transportation": "Round Trip Transportation",
+            "One Way Transportation": "One Way Transportation",
+            "Romantic Three-Course Dinner on the Beach": "Romantic Three-Course Dinner on the Beach",
+            "1 Seasonal Fruit Amenity per Stay": "1 Seasonal Fruit Amenity per Stay",
+            "12 drinks included per day (4 beers, 4 soft drinks and 4 bottles of water)": "12 drinks included per day (4 beers, 4 soft drinks and 4 bottles of water)",
+            "1 bottle of house wine upon arrival per stay (bottle available in stock)": "1 bottle of house wine upon arrival per stay (bottle available in stock)"
+        },
+        "services_map": {
+            "Round Trip Transportation": "Round Trip Transportation",
+            "One Way Transportation": "One Way Transportation",
+            "Early Check In": "Early Check In",
+            "Late Check Out": "Late Check Out"
+        }
     },
     "es": {
         "custom_quotation": "Su Cotización Personalizada",
@@ -363,7 +402,42 @@ TRANSLATIONS = {
         "fully_paid": "Pagado en su totalidad",
         "first_night_deposit": "Depósito de la primera noche",
         "fully_paid_policy": "La reservación está totalmente pagada.",
-        "first_night_policy": "La reservación está garantizada con el depósito de la primera noche, saldo a pagar al check in: "
+        "first_night_policy": "La reservación está garantizada con el depósito de la primera noche, saldo a pagar al check in: ",
+        "cancel_map": {
+            "Non-refundable, no modifications are allowed. In case of early departure or no show, no reimbursement will apply.": "No reembolsable, no se permiten modificaciones. En caso de salida anticipada o no presentarse (no show), no aplicará ningún reembolso.",
+            "Reservations can be canceled 4 days before arrival free of charge. 1 night stay (tax included) penalty charge if canceled less than 4 days before arrival.": "Puede cancelar sin cargo hasta 4 días antes de su llegada. Si cancela con menos de 4 días de anticipación, aplicará una penalidad de 1 noche de estancia (impuestos incluidos).",
+            "Reservations can be canceled 14 days before arrival free of charge. 1 night stay (tax included) penalty charge if canceled less than 14 days before arrival.": "Puede cancelar sin cargo hasta 14 días antes de su llegada. Si cancela con menos de 14 días de anticipación, aplicará una penalidad de 1 noche de estancia (impuestos incluidos).",
+            "Reservations can be cancelled 45 days prior to arrival without charge. Full stay (tax included) charges penalty if cancelled less than 45 days prior to arrival. Time is based on the property's local time.": "Puede cancelar sin cargo hasta 45 días antes de su llegada. Si cancela con menos de 45 días de anticipación, aplicará una penalidad por el total de la estancia (impuestos incluidos). El horario se basa en la hora local del hotel."
+        },
+        "inclusions_map": {
+            "Free Wi-Fi": "Wi-Fi gratis",
+            "Free Valet Parking": "Valet Parking gratis",
+            "Free Breakfast Buffet at Maydan Restaurant": "Desayuno Buffet gratis en el Restaurante Maydan",
+            "30% discount on food and beverages (does not apply to room service, minibar, or other promotions)": "30% de descuento en alimentos y bebidas (no aplica en room service, minibar ni otras promociones)",
+            "25% discount on food and beverages (does not apply to room service, minibar, or other promotions)": "25% de descuento en alimentos y bebidas (no aplica en room service, minibar ni otras promociones)",
+            "25% discount at Saltwater Spa (50 and 80 minute massages)": "25% de descuento en Saltwater Spa (masajes de 50 y 80 minutos)",
+            "30% discount at Saltwater Spa (50 and 80 minute massages)": "30% de descuento en Saltwater Spa (masajes de 50 y 80 minutos)",
+            "All Inclusive Package": "Paquete Todo Incluido",
+            "30% Discount for Room Service": "30% de descuento en Room Service",
+            "Free Spa Access (Wet Areas)": "Acceso gratis al Spa (Áreas húmedas)",
+            "20% discount at Saltwater Spa (No Salon Services)": "20% de descuento en Saltwater Spa (No aplica en servicios de salón)",
+            "Buy one Full Body Massage 80 minutes at Saltwater Spa and the second is free": "Compre un Masaje de Cuerpo Completo de 80 min en Saltwater Spa y el segundo es gratis",
+            "USD $100.00 Food and Beverage Credit (This credit is non-transferable and non-redeemable for cash, credits are non-cumulative, per reservation)": "$100.00 USD de Crédito en Alimentos y Bebidas (Intransferible, no canjeable por efectivo, no acumulable)",
+            "USD $100.00 Dining Credit (This credit is non-transferable and non-redeemable for cash, credits are non-cumulative, per reservation)": "$100.00 USD de Crédito para Cenas (Intransferible, no canjeable por efectivo, no acumulable)",
+            "$100.00 USD Dinner Credit at 12 Tribes (This credit is non-transferable and non-redeemable for cash, credits are non-cumulative, per reservation)": "$100.00 USD de Crédito para Cena en 12 Tribes (Intransferible, no canjeable por efectivo, no acumulable)",
+            "Round Trip Transportation": "Transportación Redonda",
+            "One Way Transportation": "Transportación Sencilla",
+            "Romantic Three-Course Dinner on the Beach": "Cena Romántica de Tres Tiempos en la Playa",
+            "1 Seasonal Fruit Amenity per Stay": "1 Amenidad de Fruta de Temporada por Estancia",
+            "12 drinks included per day (4 beers, 4 soft drinks and 4 bottles of water)": "12 bebidas incluidas por día (4 cervezas, 4 refrescos y 4 botellas de agua)",
+            "1 bottle of house wine upon arrival per stay (bottle available in stock)": "1 botella de vino de la casa a la llegada por estancia"
+        },
+        "services_map": {
+            "Round Trip Transportation": "Transportación Redonda",
+            "One Way Transportation": "Transportación Sencilla",
+            "Early Check In": "Check In Anticipado",
+            "Late Check Out": "Check Out Tardío"
+        }
     }
 }
 
@@ -3298,86 +3372,59 @@ def build_confirmation_email_html(
     if children > 0:
         guest_summary += f" + {children} {t['children']}"
 
+    # --- TRADUCCIÓN DE INCLUSIONES ---
     inclusions_html = ""
-
     if selected_inclusions:
         for inclusion in selected_inclusions:
+            translated_inc = t.get('inclusions_map', {}).get(inclusion, inclusion)
             inclusions_html += f"""
-            <li style="
-                margin-bottom:7px; 
-                color:#444444; 
-                font-size:14px; 
-                line-height:1.4;
-            ">
-                {html_escape(inclusion)}
+            <li style="margin-bottom:7px; color:#444444; font-size:14px; line-height:1.4;">
+                {html_escape(translated_inc)}
             </li>
             """
     else:
         inclusions_html = f"""
-        <li style="
-            color:#777777; 
-            font-size:14px;
-        ">
+        <li style="color:#777777; font-size:14px;">
             {t['no_inclusions']}
         </li>
         """
 
+    # --- TRADUCCIÓN DE SERVICIOS ---
     services_html = ""
-
     if selected_services:
         for service in selected_services:
+            translated_srv = t.get('services_map', {}).get(service, service)
             services_html += f"""
             <tr>
-                <td style="
-                    padding:6px 0; 
-                    color:#555555; 
-                    font-size:14px; 
-                    text-align:left;
-                ">
-                    • {html_escape(service)}
+                <td style="padding:6px 0; color:#555555; font-size:14px; text-align:left;">
+                    • {html_escape(translated_srv)}
                 </td>
             </tr>
             """
     else:
         services_html = f"""
         <tr>
-            <td style="
-                padding:6px 0; 
-                color:#777777; 
-                font-size:14px; 
-                text-align:left;
-            ">
+            <td style="padding:6px 0; color:#777777; font-size:14px; text-align:left;">
                 {t['no_services']}
             </td>
         </tr>
         """
 
-    special_html = ""
+    # --- TRADUCCIÓN DE CANCELACIÓN ---
+    translated_cancel = t.get('cancel_map', {}).get(cancellation_policy, cancellation_policy)
 
+    special_html = ""
     if special_requests:
         special_html = f"""
-        <div style="
-            color:#1f4f78; 
-            font-size:14px; 
-            font-weight:bold; 
-            margin-top:15px; 
-            margin-bottom:6px; 
-            text-align:left;
-        ">
+        <div style="color:#1f4f78; font-size:14px; font-weight:bold; margin-top:15px; margin-bottom:6px; text-align:left;">
             {t['special_requests']}
         </div>
-
-        <div style="
-            color:#555555; 
-            font-size:13px; 
-            line-height:1.5; 
-            text-align:left;
-        ">
+        <div style="color:#555555; font-size:13px; line-height:1.5; text-align:left;">
             {html_escape(special_requests)}
         </div>
         """
 
-    # --- NUEVAS POLÍTICAS DEL RESORT BILINGÜES ---
+    # --- POLÍTICAS DEL RESORT BILINGÜES ---
     if lang == "es":
         resort_policies_title = "Políticas del Resort"
         eco_tax = "<strong>Impuesto de Saneamiento Ambiental:</strong> El gobierno del municipio de Los Cabos implementa un impuesto de $82.12 MXN por habitación por noche (~$4.71 USD). Esta cantidad no está incluida en su tarifa prepagada, se reflejará en su cuenta final y debe pagarse al momento del check-in."
@@ -3415,7 +3462,8 @@ def build_confirmation_email_html(
 <table width="100%" cellpadding="0" cellspacing="0" border="0">
 <tr>
 <td align="left" style="padding:30px 10px;">
-<table width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px; max-width:100%; background:#ffffff; border:1px solid #dddddd;"><tr>
+<table width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px; max-width:100%; background:#ffffff; border:1px solid #dddddd;">
+<tr>
 <td align="left" style="background:#ffffff; padding:25px 35px 15px 35px;">
 <img src="{EMAIL_LOGO_URL}" alt="Casa Dorada" style="max-width:220px; width:100%; height:auto; display:block;">
 </td>
@@ -3428,13 +3476,14 @@ def build_confirmation_email_html(
 </tr>
 <tr>
 <td style="padding:15px 35px 10px 35px; text-align:left;">
-<p style="color:#333333; font-size:15px; line-height:1.6; margin:0 0 12px 0; text-align:left;">{t['Hola']} {html_escape(guest_name)},</p>
+<p style="color:#333333; font-size:15px; line-height:1.6; margin:0 0 12px 0; text-align:left;">{t['dear']} {html_escape(guest_name)},</p>
 <p style="color:#555555; font-size:14px; line-height:1.6; margin:0; text-align:left;">{t['conf_intro']}</p>
 </td>
 </tr>
 <tr>
 <td style="padding:20px 35px 20px 35px; text-align:left;">
 <div style="color:#1f4f78; font-size:19px; font-weight:bold; margin-bottom:12px; text-align:left;">{t['reservation_details']}</div>
+
 <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px;">
     <tr>
         <td style="padding:12px 15px; width:45%; color:#64748b; font-size:13px; font-weight:bold; text-align:left; border-bottom:1px solid #e2e8f0;">{t['guests']}</td>
@@ -3465,22 +3514,26 @@ def build_confirmation_email_html(
         <td style="padding:12px 15px; color:#0f172a; font-size:14px; text-align:right; border-bottom:1px solid #e2e8f0;">{money(rate_per_night, currency)}</td>
     </tr>
     <tr>
-        <td style="padding:15px; background:#f1f5f9; color:#1f4f78; font-size:15px; font-weight:bold; text-align:left;">{t['total_amount']}</td>
-        <td style="padding:15px; background:#f1f5f9; color:#1f4f78; font-size:17px; text-align:right; font-weight:bold;">{money(stay_total, currency)}</td>
+        <td style="padding:15px; background:#f1f5f9; color:#1f4f78; font-size:15px; font-weight:bold; text-align:left; border-radius:0 0 0 6px;">{t['total_amount']}</td>
+        <td style="padding:15px; background:#f1f5f9; color:#1f4f78; font-size:17px; text-align:right; font-weight:bold; border-radius:0 0 6px 0;">{money(stay_total, currency)}</td>
     </tr>
 </table>
+
 <div style="margin-top:20px; color:#1f4f78; font-size:15px; font-weight:bold; text-align:left;">{t['included_benefits']}</div>
 <ul style="padding-left:22px; margin-top:8px; margin-bottom:15px; text-align:left;">{inclusions_html}</ul>
+
 <div style="margin-top:15px; color:#1f4f78; font-size:15px; font-weight:bold; text-align:left;">{t['additional_services']}</div>
 <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:8px;">{services_html}</table>
+
 <div style="margin-top:20px; padding-top:15px; border-top:1px solid #eeeeee;">
 <div style="color:#1f4f78; font-size:14px; font-weight:bold; margin-bottom:6px; text-align:left;">{t['deposit_policy']}</div>
 <div style="color:#555555; font-size:13px; line-height:1.5; text-align:left;">{html_escape(deposit_policy)}</div>
 <div style="color:#1f4f78; font-size:14px; font-weight:bold; margin-top:15px; margin-bottom:6px; text-align:left;">{t['cancellation_policy']}</div>
-<div style="color:#555555; font-size:13px; line-height:1.5; text-align:left;">{html_escape(cancellation_policy)}</div>
+<div style="color:#555555; font-size:13px; line-height:1.5; text-align:left;">{html_escape(translated_cancel)}</div>
 {special_html}
 {resort_policies_html}
 </div>
+
 </td>
 </tr>
 <tr>
@@ -3528,13 +3581,14 @@ def build_confirmation_plain_text(
 
     t = TRANSLATIONS[lang]
     rate_before_taxes = float(rate_per_night) / (1 + TAX_RATE)
+    translated_cancel = t.get('cancel_map', {}).get(cancellation_policy, cancellation_policy)
 
     lines = []
 
     lines.append(t["reservation_confirmation"].upper())
     lines.append(f"{t['conf_number']}: {confirmation_number}")
     lines.append("")
-    lines.append(f"{t['Hola']} {guest_name},")
+    lines.append(f"{t['dear']} {guest_name},")
     lines.append(t["conf_intro"])
     lines.append("")
     lines.append(t["reservation_details"].upper())
@@ -3556,7 +3610,8 @@ def build_confirmation_plain_text(
 
     if selected_inclusions:
         for inc in selected_inclusions:
-            lines.append(f"• {inc}")
+            translated_inc = t.get('inclusions_map', {}).get(inc, inc)
+            lines.append(f"• {translated_inc}")
     else:
         lines.append(t["no_inclusions"])
 
@@ -3565,7 +3620,8 @@ def build_confirmation_plain_text(
 
     if selected_services:
         for srv in selected_services:
-            lines.append(f"• {srv}")
+            translated_srv = t.get('services_map', {}).get(srv, srv)
+            lines.append(f"• {translated_srv}")
     else:
         lines.append(t["no_services"])
 
@@ -3574,14 +3630,13 @@ def build_confirmation_plain_text(
     lines.append(deposit_policy)
     lines.append("")
     lines.append(f"{t['cancellation_policy']}:")
-    lines.append(cancellation_policy)
+    lines.append(translated_cancel)
 
     if special_requests:
         lines.append("")
         lines.append(f"{t['special_requests']}:")
         lines.append(special_requests)
 
-    # --- NUEVAS POLÍTICAS DEL RESORT TEXTO PLANO ---
     if lang == "es":
         lines.append("")
         lines.append("POLÍTICAS DEL RESORT:")
@@ -3604,7 +3659,6 @@ def build_confirmation_plain_text(
     lines.append("US: 1-866-448-0151")
 
     return "\n".join(lines)
-
 # ============================================================
 # GMAIL MESSAGE
 # ============================================================
