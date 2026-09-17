@@ -163,7 +163,7 @@ AVAILABLE_INCLUSIONS = [
     "30% discount on food and beverages "
     "(does not apply to room service, minibar, or other promotions)",
 
-    "25% discount on food and beverages "
+    "20% discount on food and beverages "
     "(does not apply to room service, minibar, or other promotions)",
 
     "25% discount at Saltwater Spa "
@@ -204,7 +204,9 @@ AVAILABLE_INCLUSIONS = [
 
     "1 Seasonal Fruit Amenity per Stay",
 
-    "12 drinks included per day "
+    "Minibar includes" " (8 soft drinks, 4 bottles of water, 6 domestic beers and 2 daily coffee kits)" ,
+
+    "Minibar 12 drinks included per day "
     "(4 beers, 4 soft drinks and 4 bottles of water)",
 
     "1 bottle of house wine upon arrival per stay "
