@@ -4689,254 +4689,351 @@ elif app_mode == "Confirm Quotation":
 
         else:
 
-            # Sumar huéspedes, totales y combinar cuartos
-            selected_opt_adults = sum(opt.get("adults", selected_quote.get("adults", 2)) for opt in selected_options)
-            selected_opt_children = sum(opt.get("children", selected_quote.get("children", 0)) for opt in selected_options)
-            
-            room_type_str = " + ".join([opt["room_type"] for opt in selected_options])
-            
-            stay_total = sum(opt["final_total"] for opt in selected_options)
-            rate_per_night = sum(opt["nightly_taxes_included"] for opt in selected_options)
+            # ============================================================
+            # MULTIPLE ROOMS / SELECTED OPTIONS
+            # ============================================================
 
-            # Combinar inclusiones y servicios sin duplicados
+            confirmation_rooms = []
+
+            for opt in selected_options:
+
+                confirmation_rooms.append({
+                    "room_type": opt.get("room_type", ""),
+                    "adults": int(
+                        opt.get(
+                            "adults",
+                            selected_quote.get("adults", 2),
+                        )
+                    ),
+                    "children": int(
+                        opt.get(
+                            "children",
+                            selected_quote.get("children", 0),
+                        )
+                    ),
+                    "nights": int(selected_quote.get("nights", 1)),
+                    "rate_per_night": float(
+                        opt.get("nightly_taxes_included", 0)
+                    ),
+                    # Base de habitación únicamente. Los servicios se agregan después
+                    # para evitar contarlos dos veces.
+                    "stay_total": float(
+                        opt.get(
+                            "stay_total_tax_included",
+                            opt.get("final_total", 0)
+                            - opt.get("additional_services_total", 0),
+                        )
+                    ),
+                    "selected_inclusions": opt.get(
+                        "selected_inclusions", []
+                    ),
+                    "selected_services": opt.get(
+                        "selected_services", []
+                    ),
+                })
+
+            selected_opt_adults = sum(
+                room["adults"] for room in confirmation_rooms
+            )
+
+            selected_opt_children = sum(
+                room["children"] for room in confirmation_rooms
+            )
+
+            stay_total = sum(
+                room["stay_total"] for room in confirmation_rooms
+            )
+
+            rate_per_night = sum(
+                room["rate_per_night"] for room in confirmation_rooms
+            )
+
+            room_type_str = " + ".join(
+                room["room_type"]
+                for room in confirmation_rooms
+                if room.get("room_type")
+            )
+
+            # Combinar inclusiones y servicios sin duplicados.
             comb_inclusions = []
             comb_services = []
 
-            for opt in selected_options:
-                for inc in opt.get("selected_inclusions", []):
+            for room in confirmation_rooms:
+                for inc in room.get("selected_inclusions", []):
                     if inc not in comb_inclusions:
                         comb_inclusions.append(inc)
-                for srv in opt.get("selected_services", []):
+
+                for srv in room.get("selected_services", []):
                     if srv not in comb_services:
                         comb_services.append(srv)
 
-            can_policy_default = selected_options[0].get("cancellation_policy", CANCELLATION_POLICIES[0])
-
-            st.markdown(
-                "### Payment & Comments"
+            can_policy_default = selected_options[0].get(
+                "cancellation_policy",
+                CANCELLATION_POLICIES[0],
             )
+
+            st.markdown("### Payment & Comments")
 
             payment_status = st.radio(
-                "Payment Status", 
-                ["First Night Deposit", "Fully Paid"]
+                "Payment Status",
+                ["First Night Deposit", "Fully Paid"],
             )
-            
+
+            # ============================================================
+            # ADDITIONAL SERVICES TOTAL
+            # ============================================================
+
+            additional_services_total = 0.00
+
+            for room in confirmation_rooms:
+                for service in room.get("selected_services", []):
+                    additional_services_total += get_service_price(
+                        service,
+                        curr_code,
+                    )
+
+            # ============================================================
+            # GRAND TOTAL
+            # ============================================================
+
+            grand_total = stay_total + additional_services_total
+
+            # ============================================================
+            # PAYMENT STATUS
+            # ============================================================
+
             if payment_status == "Fully Paid":
-
-                deposit = stay_total
+                deposit = grand_total
                 balance = 0.00
-                payment_status_trans = TRANSLATIONS[lang_code]["fully_paid"]
-
+                payment_status_trans = TRANSLATIONS[lang_code][
+                    "fully_paid"
+                ]
             else:
-
+                # First night deposit = suma de la primera noche
+                # de TODOS los cuartos. Los servicios NO forman parte
+                # del depósito inicial.
                 deposit = rate_per_night
-                balance = stay_total - deposit
-                payment_status_trans = TRANSLATIONS[lang_code]["first_night_deposit"]
-                
+                balance = max(grand_total - deposit, 0.00)
+                payment_status_trans = TRANSLATIONS[lang_code][
+                    "first_night_deposit"
+                ]
+
             col1, col2, col3 = st.columns(3)
 
-            col1.metric("Total Amount", money(stay_total, curr_code))
-            col2.metric("Deposit", money(deposit, curr_code))
-            col3.metric("Balance Due", money(balance, curr_code))
-            
+            col1.metric(
+                "Total Amount",
+                money(grand_total, curr_code),
+            )
+            col2.metric(
+                "Deposit",
+                money(deposit, curr_code),
+            )
+            col3.metric(
+                "Balance Due",
+                money(balance, curr_code),
+            )
+
             comments = st.text_area(
-                "Comments (Internal Notes)", 
-                placeholder="e.g. Payment received by transfer."
+                "Comments (Internal Notes)",
+                placeholder="e.g. Payment received by transfer.",
             )
 
             special_requests = st.text_area(
-                "Special Requests (Guest Needs)", 
-                placeholder="e.g. Early check-in, Anniversary setup."
+                "Special Requests (Guest Needs)",
+                placeholder="e.g. Early check-in, Anniversary setup.",
             )
 
-            st.markdown(
-                "### Confirmation Details"
-            )
+            st.markdown("### Confirmation Details")
 
             hotel_conf_number = st.text_input(
-                "Hotel Confirmation Number", 
-                placeholder="Leave blank to auto-generate (CN...)"
+                "Hotel Confirmation Number",
+                placeholder="Leave blank to auto-generate (CN...)",
             )
 
-            t_ui = TRANSLATIONS.get(lang_code, TRANSLATIONS["en"])
+            t_ui = TRANSLATIONS.get(
+                lang_code,
+                TRANSLATIONS["en"],
+            )
 
             if payment_status == "Fully Paid":
-                conf_deposit_policy = t_ui.get("fully_paid_policy", "Reservation is fully paid." if lang_code == "en" else "La reservación está totalmente pagada.")
+                conf_deposit_policy = t_ui.get(
+                    "fully_paid_policy",
+                    "Reservation is fully paid."
+                    if lang_code == "en"
+                    else "La reservación está totalmente pagada.",
+                )
             else:
-                conf_deposit_policy = f"{t_ui.get('first_night_policy', 'Reservation is guaranteed with the first night deposit, balance to pay due check in: ')}{money(balance, curr_code)}"
+                conf_deposit_policy = (
+                    t_ui.get(
+                        "first_night_policy",
+                        "Reservation is guaranteed with the first night deposit, "
+                        "balance to pay due check in: ",
+                    )
+                    + money(balance, curr_code)
+                )
 
-            st.markdown(
-                "### Deposit Policy"
-            )
-
+            st.markdown("### Deposit Policy")
             st.info(conf_deposit_policy)
 
-            st.markdown(
-                "### Actions"
-            )
-
+            st.markdown("### Actions")
             col_act1, col_act2 = st.columns(2)
-            
-            def store_pending_confirmation_ui(action):
 
-                conf_number = hotel_conf_number.strip() if hotel_conf_number.strip() else generate_confirmation_number()
+            def store_pending_confirmation_ui(action):
+                conf_number = (
+                    hotel_conf_number.strip()
+                    if hotel_conf_number.strip()
+                    else generate_confirmation_number()
+                )
 
                 st.session_state.pending_confirmation = {
-
-                    "confirmation_number": 
-                        conf_number,
-
-                    "quotation_number": 
-                        selected_quote["quotation_number"],
-
-                    "guest_name": 
-                        selected_quote["guest_name"],
-
-                    "guest_email": 
-                        selected_quote["guest_email"],
-
-                    "arrival": 
-                        selected_quote["arrival"],
-
-                    "departure": 
-                        selected_quote["departure"],
-
-                    "nights": 
-                        selected_quote["nights"],
-
-                    "adults": 
-                        selected_opt_adults,
-
-                    "children": 
-                        selected_opt_children,
-
-                    "room_type": 
-                        room_type_str,
-
-                    "rate_per_night": 
-                        rate_per_night,
-
-                    "stay_total": 
-                        stay_total,
-
-                    "first_night_amount": 
-                        deposit,
-
-                    "balance_due": 
-                        balance,
-
-                    "payment_status": 
-                        payment_status_trans,
-
-                    "comments": 
-                        comments,
-
-                    "special_requests": 
-                        special_requests,
-
-                    "additional_services": 
-                        selected_options,
-
-                    "subject": 
-                        f"Booking Confirmation #{conf_number} | Casa Dorada Los Cabos",
-
-                    "email_html": build_confirmation_email_html(
-                        conf_number, selected_quote["guest_name"], selected_quote["arrival"], 
-                        selected_quote["departure"], selected_opt_adults, selected_opt_children, 
-                        selected_quote["nights"], room_type_str, rate_per_night, stay_total, 
-                        deposit, balance, payment_status_trans, special_requests, 
-                        conf_deposit_policy, can_policy_default, comb_inclusions, 
-                        comb_services, lang_code, curr_code
+                    "confirmation_number": conf_number,
+                    "quotation_number": selected_quote[
+                        "quotation_number"
+                    ],
+                    "guest_name": selected_quote["guest_name"],
+                    "guest_email": selected_quote["guest_email"],
+                    "arrival": selected_quote["arrival"],
+                    "departure": selected_quote["departure"],
+                    "nights": selected_quote["nights"],
+                    "adults": selected_opt_adults,
+                    "children": selected_opt_children,
+                    "room_type": room_type_str,
+                    "rate_per_night": rate_per_night,
+                    "stay_total": stay_total,
+                    "first_night_amount": deposit,
+                    "rooms": confirmation_rooms,
+                    "total_amount": grand_total,
+                    "balance_due": balance,
+                    "payment_status": payment_status_trans,
+                    "comments": comments,
+                    "special_requests": special_requests,
+                    # Conservamos cada opción original para mantener
+                    # los detalles de habitaciones/servicios en Supabase.
+                    "additional_services": selected_options,
+                    "subject": (
+                        f"Booking Confirmation #{conf_number} | "
+                        "Casa Dorada Los Cabos"
                     ),
-
+                    "email_html": build_confirmation_email_html(
+                        conf_number,
+                        selected_quote["guest_name"],
+                        selected_quote["arrival"],
+                        selected_quote["departure"],
+                        selected_opt_adults,
+                        selected_opt_children,
+                        selected_quote["nights"],
+                        room_type_str,
+                        rate_per_night,
+                        stay_total,
+                        deposit,
+                        balance,
+                        payment_status_trans,
+                        special_requests,
+                        conf_deposit_policy,
+                        can_policy_default,
+                        comb_inclusions,
+                        comb_services,
+                        lang_code,
+                        curr_code,
+                    ),
                     "plain_text_email": build_confirmation_plain_text(
-                        conf_number, selected_quote["guest_name"], selected_quote["arrival"], 
-                        selected_quote["departure"], selected_opt_adults, selected_opt_children, 
-                        selected_quote["nights"], room_type_str, rate_per_night, stay_total, 
-                        deposit, balance, payment_status_trans, special_requests, 
-                        conf_deposit_policy, can_policy_default, comb_inclusions, 
-                        comb_services, lang_code, curr_code
-                    )
+                        conf_number,
+                        selected_quote["guest_name"],
+                        selected_quote["arrival"],
+                        selected_quote["departure"],
+                        selected_opt_adults,
+                        selected_opt_children,
+                        selected_quote["nights"],
+                        room_type_str,
+                        rate_per_night,
+                        stay_total,
+                        deposit,
+                        balance,
+                        payment_status_trans,
+                        special_requests,
+                        conf_deposit_policy,
+                        can_policy_default,
+                        comb_inclusions,
+                        comb_services,
+                        lang_code,
+                        curr_code,
+                    ),
                 }
 
                 st.session_state.pending_action = action
-                
+
             with col_act1:
-
-                if st.button("💾 Generate & Save Draft", use_container_width=True):
-
+                if st.button(
+                    "💾 Generate & Save Draft",
+                    use_container_width=True,
+                ):
                     store_pending_confirmation_ui("draft")
 
                     if get_gmail_service():
-
                         execute_pending_confirmation()
                         st.rerun()
-
                     else:
-
-                        st.warning("Connect Gmail to generate confirmation.")
-
+                        st.warning(
+                            "Connect Gmail to generate confirmation."
+                        )
                         st.markdown(
                             f"""
-                            <a href="{get_google_login_url()}" 
+                            <a href="{get_google_login_url()}"
                                style="display:inline-block; background:#2563eb; color:#ffffff; padding:13px 22px; border-radius:9px; text-decoration:none;">
                                Connect Google
                             </a>
-                            """, 
-                            unsafe_allow_html=True
+                            """,
+                            unsafe_allow_html=True,
                         )
 
                 if st.session_state.get("conf_auto_draft_success"):
-
                     result = st.session_state.conf_auto_draft_success
 
                     if isinstance(result, str) and "failed" in result:
-
                         st.warning(result)
-
                     else:
-
-                        st.success(f"✅ Reservation Confirmed! Draft saved successfully. Confirmation #{result}")
+                        st.success(
+                            "✅ Reservation Confirmed! Draft saved "
+                            f"successfully. Confirmation #{result}"
+                        )
                         st.balloons()
 
                     st.session_state.conf_auto_draft_success = False
 
             with col_act2:
-
-                if st.button("📤 Generate & Send Email", use_container_width=True):
-
+                if st.button(
+                    "📤 Generate & Send Email",
+                    use_container_width=True,
+                ):
                     store_pending_confirmation_ui("send")
 
                     if get_gmail_service():
-
                         execute_pending_confirmation()
                         st.rerun()
-
                     else:
-
-                        st.warning("Connect Gmail to generate confirmation.")
-
+                        st.warning(
+                            "Connect Gmail to generate confirmation."
+                        )
                         st.markdown(
                             f"""
-                            <a href="{get_google_login_url()}" 
+                            <a href="{get_google_login_url()}"
                                style="display:inline-block; background:#2563eb; color:#ffffff; padding:13px 22px; border-radius:9px; text-decoration:none;">
                                Connect Google
                             </a>
-                            """, 
-                            unsafe_allow_html=True
+                            """,
+                            unsafe_allow_html=True,
                         )
 
                 if st.session_state.get("conf_auto_send_success"):
-
                     result = st.session_state.conf_auto_send_success
 
                     if isinstance(result, str) and "failed" in result:
-
                         st.warning(result)
-
                     else:
-
-                        st.success(f"✅ Reservation Confirmed! Email sent successfully. Confirmation #{result}")
+                        st.success(
+                            "✅ Reservation Confirmed! Email sent "
+                            f"successfully. Confirmation #{result}"
+                        )
                         st.balloons()
 
                     st.session_state.conf_auto_send_success = False
