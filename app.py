@@ -1215,6 +1215,7 @@ def save_confirmation_to_supabase(
     special_requests,
     additional_services,
     created_by,
+    rooms=None,
 ):
 
     config = get_supabase_config()
@@ -1237,6 +1238,7 @@ def save_confirmation_to_supabase(
         "adults": int(adults),
         "children": int(children),
         "room_type": room_type,
+        "rooms": rooms,
         "rate_per_night": float(rate_per_night),
         "stay_total": float(stay_total),
         "first_night_amount": float(first_night_amount),
@@ -1713,6 +1715,7 @@ def execute_pending_confirmation():
             special_requests=pending_confirmation["special_requests"],
             additional_services=pending_confirmation["additional_services"],
             created_by=logged_email,
+            rooms=pending_confirmation.get("rooms"),
         )
         
         if conf and pending_confirmation["quotation_number"]:
@@ -2881,21 +2884,114 @@ def build_confirmation_email_html(
     selected_inclusions,
     selected_services,
     lang="en",
-    currency="USD"
+    currency="USD",
+    rooms=None,
+    total_amount=None,
 ):
 
     t = TRANSLATIONS[lang]
-    rate_before_taxes = float(rate_per_night) / (1 + TAX_RATE)
 
-    guest_summary = f"{adults} {t['adults']}"
-    if children > 0:
-        guest_summary += f" + {children} {t['children']}"
+    # ============================================================
+    # NORMALIZE ROOMS
+    # ============================================================
+    normalized_rooms = []
 
-    # --- TRADUCCIÓN DE INCLUSIONES ---
+    if rooms:
+        for room in rooms:
+            normalized_rooms.append({
+                "room_type": room.get("room_type", ""),
+                "adults": int(room.get("adults", 0) or 0),
+                "children": int(room.get("children", 0) or 0),
+                "nights": int(room.get("nights", nights) or nights),
+                "rate_per_night": float(room.get("rate_per_night", 0) or 0),
+                "stay_total": float(room.get("stay_total", 0) or 0),
+                "selected_inclusions": room.get("selected_inclusions", []) or [],
+                "selected_services": room.get("selected_services", []) or [],
+            })
+    else:
+        normalized_rooms = [{
+            "room_type": room_type,
+            "adults": int(adults or 0),
+            "children": int(children or 0),
+            "nights": int(nights or 1),
+            "rate_per_night": float(rate_per_night or 0),
+            "stay_total": float(stay_total or 0),
+            "selected_inclusions": selected_inclusions or [],
+            "selected_services": selected_services or [],
+        }]
+
+    accommodation_total = sum(
+        room["stay_total"] for room in normalized_rooms
+    )
+
+    # ============================================================
+    # ROOM CARDS - EACH ROOM IS SHOWN SEPARATELY
+    # ============================================================
+    room_label = "Habitación" if lang == "es" else "Room"
+    room_total_label = "Total de la habitación" if lang == "es" else "Room Total"
+
+    rooms_html = ""
+
+    for index, room in enumerate(normalized_rooms, start=1):
+        room_rate = float(room["rate_per_night"])
+        room_rate_before_tax = room_rate / (1 + TAX_RATE)
+
+        room_guest_summary = f"{room['adults']} {t['adults']}"
+        if room["children"] > 0:
+            room_guest_summary += f" + {room['children']} {t['children']}"
+
+        rooms_html += f"""
+        <div style="margin-top:{'0' if index == 1 else '14px'}; border:1px solid #e2e8f0; border-radius:7px; overflow:hidden;">
+            <div style="background:#eef4f8; padding:11px 15px; color:#1f4f78; font-size:15px; font-weight:bold; text-align:left;">
+                {room_label} {index} — {html_escape(room['room_type'])}
+            </div>
+            <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#ffffff;">
+                <tr>
+                    <td style="padding:10px 15px; width:48%; color:#64748b; font-size:13px; font-weight:bold; border-bottom:1px solid #edf2f7;">{t['guests']}</td>
+                    <td style="padding:10px 15px; color:#0f172a; font-size:14px; text-align:right; border-bottom:1px solid #edf2f7;">{html_escape(room_guest_summary)}</td>
+                </tr>
+                <tr>
+                    <td style="padding:10px 15px; color:#64748b; font-size:13px; font-weight:bold; border-bottom:1px solid #edf2f7;">{t['nights']}</td>
+                    <td style="padding:10px 15px; color:#0f172a; font-size:14px; text-align:right; border-bottom:1px solid #edf2f7;">{room['nights']}</td>
+                </tr>
+                <tr>
+                    <td style="padding:10px 15px; color:#64748b; font-size:13px; font-weight:bold; border-bottom:1px solid #edf2f7;">{t['rate_before_taxes']}</td>
+                    <td style="padding:10px 15px; color:#0f172a; font-size:14px; text-align:right; border-bottom:1px solid #edf2f7;">{money(room_rate_before_tax, currency)}</td>
+                </tr>
+                <tr>
+                    <td style="padding:10px 15px; color:#64748b; font-size:13px; font-weight:bold; border-bottom:1px solid #edf2f7;">{t['rate_with_taxes']}</td>
+                    <td style="padding:10px 15px; color:#0f172a; font-size:14px; text-align:right; border-bottom:1px solid #edf2f7;">{money(room_rate, currency)}</td>
+                </tr>
+                <tr>
+                    <td style="padding:12px 15px; background:#f8fafc; color:#1f4f78; font-size:14px; font-weight:bold;">{room_total_label}</td>
+                    <td style="padding:12px 15px; background:#f8fafc; color:#1f4f78; font-size:16px; font-weight:bold; text-align:right;">{money(room['stay_total'], currency)}</td>
+                </tr>
+            </table>
+        </div>
+        """
+
+    # ============================================================
+    # COMBINED INCLUSIONS
+    # ============================================================
+    combined_inclusions = []
+
+    for room in normalized_rooms:
+        for inclusion in room.get("selected_inclusions", []):
+            if inclusion not in combined_inclusions:
+                combined_inclusions.append(inclusion)
+
+    # Fallback for legacy/manual flow.
+    if not combined_inclusions:
+        combined_inclusions = list(selected_inclusions or [])
+
     inclusions_html = ""
-    if selected_inclusions:
-        for inclusion in selected_inclusions:
-            translated_inc = t.get('inclusions_map', {}).get(inclusion, inclusion)
+
+    if combined_inclusions:
+        for inclusion in combined_inclusions:
+            translated_inc = t.get("inclusions_map", {}).get(
+                inclusion,
+                inclusion,
+            )
             inclusions_html += f"""
             <li style="margin-bottom:7px; color:#444444; font-size:14px; line-height:1.4;">
                 {html_escape(translated_inc)}
@@ -2908,49 +3004,69 @@ def build_confirmation_email_html(
         </li>
         """
 
-   # --- TRADUCCIÓN DE SERVICIOS Y SUMA DE PRECIOS ---
-    services_html = ""
+    # ============================================================
+    # ADDITIONAL SERVICES
+    # For multi-room confirmations, services are taken from each
+    # room so repeated services are not accidentally lost.
+    # ============================================================
+    service_entries = []
+
+    if rooms:
+        for room_index, room in enumerate(normalized_rooms, start=1):
+            for service in room.get("selected_services", []):
+                service_entries.append((room_index, service))
+    else:
+        for service in selected_services or []:
+            service_entries.append((None, service))
+
+    services_rows = ""
     additional_services_total = 0.0
 
-    if selected_services:
-        for service in selected_services:
-            # AQUÍ ESTÁ EL CAMBIO: Usamos la nueva función para calcular el tipo de cambio
-            price = get_service_price(service, currency)
-            
-            additional_services_total += price
-            translated_srv = t.get('services_map', {}).get(service, service)
-            
-            services_html += f"""
-            <tr>
-                <td style="padding:6px 0; color:#555555; font-size:14px; text-align:left;">
-                    • {html_escape(translated_srv)}
-                </td>
-                <td style="padding:6px 0; color:#222222; font-size:14px; text-align:right;">
-                    {money(price, currency)}
-                </td>
-            </tr>
-            """
-            
-        services_html += f"""
+    for room_index, service in service_entries:
+        price = get_service_price(service, currency)
+        additional_services_total += price
+        translated_srv = t.get("services_map", {}).get(service, service)
+
+        if room_index is not None and len(normalized_rooms) > 1:
+            service_name = f"{translated_srv} ({room_label} {room_index})"
+        else:
+            service_name = translated_srv
+
+        services_rows += f"""
+        <tr>
+            <td style="padding:6px 0; color:#555555; font-size:14px; text-align:left;">
+                • {html_escape(service_name)}
+            </td>
+            <td style="padding:6px 0; color:#222222; font-size:14px; text-align:right;">
+                {money(price, currency)}
+            </td>
+        </tr>
+        """
+
+    if service_entries:
+        services_rows += f"""
         <tr>
             <td style="border-top:1px solid #eeeeee; padding-top:10px; color:#555555; font-size:14px; font-weight:bold; text-align:left;">{t['additional_total']}</td>
             <td style="border-top:1px solid #eeeeee; padding-top:10px; color:#222222; font-size:14px; text-align:right; font-weight:bold;">{money(additional_services_total, currency)}</td>
         </tr>
         """
-    else:
-        services_html = f"""
-        <tr>
-            <td colspan="2" style="padding:6px 0; color:#777777; font-size:14px; text-align:left;">
-                {t['no_services']}
-            </td>
-        </tr>
+
+        services_section_html = f"""
+        <div style="margin-top:15px; color:#1f4f78; font-size:15px; font-weight:bold; text-align:left;">{t['additional_services']}</div>
+        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:8px;">{services_rows}</table>
         """
+    else:
+        services_section_html = ""
 
-    # --- CÁLCULO DEL GRAN TOTAL ---
-    final_total = float(stay_total) + additional_services_total
+    if total_amount is None:
+        final_total = accommodation_total + additional_services_total
+    else:
+        final_total = float(total_amount)
 
-    # --- TRADUCCIÓN DE CANCELACIÓN ---
-    translated_cancel = t.get('cancel_map', {}).get(cancellation_policy, cancellation_policy)
+    translated_cancel = t.get("cancel_map", {}).get(
+        cancellation_policy,
+        cancellation_policy,
+    )
 
     special_html = ""
     if special_requests:
@@ -2963,19 +3079,20 @@ def build_confirmation_email_html(
         </div>
         """
 
-    # --- POLÍTICAS DEL RESORT BILINGÜES ---
     if lang == "es":
         resort_policies_title = "Políticas del Resort"
         eco_tax = "<strong>Impuesto de Saneamiento Ambiental:</strong> El gobierno del municipio de Los Cabos implementa un impuesto de $82.12 MXN por habitación por noche (~$4.71 USD). Esta cantidad no está incluida en su tarifa prepagada, se reflejará en su cuenta final y debe pagarse al momento del check-in."
         incidental = "<strong>Depósito para Incidentales:</strong> Tenga en cuenta que se solicitará una tarjeta de crédito válida al momento del check-in para cubrir cualquier cargo incidental."
         cashless = "<strong>Política sin Efectivo (Cashless):</strong> Casa Dorada es un resort sin uso de efectivo. No se aceptan pagos en efectivo en nuestros restaurantes o bares."
         checkin_out = "<strong>Check-in:</strong> 3:00 p.m. | <strong>Check-out:</strong> 12:00 p.m. (mediodía)"
+        accommodation_label = "Alojamiento"
     else:
         resort_policies_title = "Resort Policies"
         eco_tax = "<strong>Environmental Sanitation Tax:</strong> The County of Los Cabos government implements a tax of MXN $82.12 per room per night (~USD $4.71). This amount is not included in your prepaid rate, will be reflected on your final statement, and is payable at check-in."
         incidental = "<strong>Incidental Deposit:</strong> Please note that a valid credit card will be requested upon check-in to cover any incidental charges."
         cashless = "<strong>Cashless Policy:</strong> Casa Dorada is a cashless resort. Cash payments are not accepted at our restaurants or bars."
         checkin_out = "<strong>Check-in:</strong> 3:00 p.m. | <strong>Check-out:</strong> 12:00 noon"
+        accommodation_label = "Accommodation"
 
     resort_policies_html = f"""
         <div style="color:#1f4f78; font-size:14px; font-weight:bold; margin-top:20px; margin-bottom:6px; text-align:left;">
@@ -2988,6 +3105,19 @@ def build_confirmation_email_html(
             <li style="margin-bottom:0;">{checkin_out}</li>
         </ul>
     """
+
+    guest_summary = f"{adults} {t['adults']}"
+    if children > 0:
+        guest_summary += f" + {children} {t['children']}"
+
+    services_total_summary_row = ""
+    if service_entries:
+        services_total_summary_row = (
+            f'<tr>'
+            f'<td style="color:#555555; font-size:14px; text-align:left; padding-bottom:10px;">{t["additional_services"]}</td>'
+            f'<td style="color:#222222; font-size:14px; text-align:right; padding-bottom:10px;">{money(additional_services_total, currency)}</td>'
+            f'</tr>'
+        )
 
     return f"""
 <!DOCTYPE html>
@@ -3023,7 +3153,7 @@ def build_confirmation_email_html(
 <td style="padding:20px 35px 20px 35px; text-align:left;">
 <div style="color:#1f4f78; font-size:19px; font-weight:bold; margin-bottom:12px; text-align:left;">{t['reservation_details']}</div>
 
-<table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px;">
+<table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; margin-bottom:18px;">
     <tr>
         <td style="padding:12px 15px; width:45%; color:#64748b; font-size:13px; font-weight:bold; text-align:left; border-bottom:1px solid #e2e8f0;">{t['guests']}</td>
         <td style="padding:12px 15px; color:#0f172a; font-size:14px; font-weight:bold; text-align:right; border-bottom:1px solid #e2e8f0;">{html_escape(guest_summary)}</td>
@@ -3037,38 +3167,28 @@ def build_confirmation_email_html(
         <td style="padding:12px 15px; color:#0f172a; font-size:14px; font-weight:bold; text-align:right; border-bottom:1px solid #e2e8f0;">{html_escape(format_date_email(departure, lang))}</td>
     </tr>
     <tr>
-        <td style="padding:12px 15px; color:#64748b; font-size:13px; font-weight:bold; text-align:left; border-bottom:1px solid #e2e8f0;">{t['nights']}</td>
-        <td style="padding:12px 15px; color:#0f172a; font-size:14px; font-weight:bold; text-align:right; border-bottom:1px solid #e2e8f0;">{html_escape(nights)}</td>
-    </tr>
-    <tr>
-        <td style="padding:12px 15px; color:#64748b; font-size:13px; font-weight:bold; text-align:left; border-bottom:1px solid #e2e8f0;">{t['room_type']}</td>
-        <td style="padding:12px 15px; color:#0f172a; font-size:14px; font-weight:bold; text-align:right; border-bottom:1px solid #e2e8f0;">{html_escape(room_type)}</td>
-    </tr>
-    <tr>
-        <td style="padding:12px 15px; color:#64748b; font-size:13px; font-weight:bold; text-align:left; border-bottom:1px solid #e2e8f0;">{t['rate_before_taxes']}</td>
-        <td style="padding:12px 15px; color:#0f172a; font-size:14px; text-align:right; border-bottom:1px solid #e2e8f0;">{money(rate_before_taxes, currency)}</td>
-    </tr>
-    <tr>
-        <td style="padding:12px 15px; color:#64748b; font-size:13px; font-weight:bold; text-align:left; border-bottom:1px solid #e2e8f0;">{t['rate_with_taxes']}</td>
-        <td style="padding:12px 15px; color:#0f172a; font-size:14px; text-align:right; border-bottom:1px solid #e2e8f0;">{money(rate_per_night, currency)}</td>
-    </tr>
-    <tr>
-        <td style="padding:15px; background:#f1f5f9; color:#1f4f78; font-size:15px; font-weight:bold; text-align:left; border-radius:0 0 0 6px;">{t['stay_total']}</td>
-        <td style="padding:15px; background:#f1f5f9; color:#1f4f78; font-size:17px; text-align:right; font-weight:bold; border-radius:0 0 6px 0;">{money(stay_total, currency)}</td>
+        <td style="padding:12px 15px; color:#64748b; font-size:13px; font-weight:bold; text-align:left;">{t['nights']}</td>
+        <td style="padding:12px 15px; color:#0f172a; font-size:14px; font-weight:bold; text-align:right;">{html_escape(nights)}</td>
     </tr>
 </table>
+
+{rooms_html}
 
 <div style="margin-top:20px; color:#1f4f78; font-size:15px; font-weight:bold; text-align:left;">{t['included_benefits']}</div>
 <ul style="padding-left:22px; margin-top:8px; margin-bottom:15px; text-align:left;">{inclusions_html}</ul>
 
-<div style="margin-top:15px; color:#1f4f78; font-size:15px; font-weight:bold; text-align:left;">{t['additional_services']}</div>
-<table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:8px;">{services_html}</table>
+{services_section_html}
 
 <div style="margin-top:18px; padding:15px; background:#f5f7fa; border-radius:6px;">
     <table width="100%" cellpadding="0" cellspacing="0" border="0">
         <tr>
-            <td style="color:#1f4f78; font-size:17px; font-weight:bold; text-align:left;">{t['total_amount']}</td>
-            <td style="color:#1f4f78; font-size:20px; font-weight:bold; text-align:right;">{money(final_total, currency)}</td>
+            <td style="color:#555555; font-size:14px; text-align:left; padding-bottom:7px;">{accommodation_label}</td>
+            <td style="color:#222222; font-size:14px; text-align:right; padding-bottom:7px;">{money(accommodation_total, currency)}</td>
+        </tr>
+        {services_total_summary_row}
+        <tr>
+            <td style="border-top:1px solid #d8dee7; padding-top:11px; color:#1f4f78; font-size:17px; font-weight:bold; text-align:left;">{t['total_amount']}</td>
+            <td style="border-top:1px solid #d8dee7; padding-top:11px; color:#1f4f78; font-size:20px; font-weight:bold; text-align:right;">{money(final_total, currency)}</td>
         </tr>
     </table>
 </div>
@@ -3099,39 +3219,73 @@ def build_confirmation_email_html(
 </html>
 """
 
+
 # ============================================================
 # PLAIN TEXT EMAIL
 # ============================================================
 
 def build_confirmation_plain_text(
-    confirmation_number, 
-    guest_name, 
-    arrival, 
-    departure, 
-    adults, 
-    children, 
+    confirmation_number,
+    guest_name,
+    arrival,
+    departure,
+    adults,
+    children,
     nights,
-    room_type, 
-    rate_per_night, 
-    stay_total, 
-    first_night_amount, 
+    room_type,
+    rate_per_night,
+    stay_total,
+    first_night_amount,
     balance_due,
-    payment_status, 
-    special_requests, 
-    deposit_policy, 
+    payment_status,
+    special_requests,
+    deposit_policy,
     cancellation_policy,
-    selected_inclusions, 
+    selected_inclusions,
     selected_services,
     lang="en",
-    currency="USD"
+    currency="USD",
+    rooms=None,
+    total_amount=None,
 ):
 
     t = TRANSLATIONS[lang]
-    rate_before_taxes = float(rate_per_night) / (1 + TAX_RATE)
-    translated_cancel = t.get('cancel_map', {}).get(cancellation_policy, cancellation_policy)
+    translated_cancel = t.get("cancel_map", {}).get(
+        cancellation_policy,
+        cancellation_policy,
+    )
+
+    normalized_rooms = []
+
+    if rooms:
+        for room in rooms:
+            normalized_rooms.append({
+                "room_type": room.get("room_type", ""),
+                "adults": int(room.get("adults", 0) or 0),
+                "children": int(room.get("children", 0) or 0),
+                "nights": int(room.get("nights", nights) or nights),
+                "rate_per_night": float(room.get("rate_per_night", 0) or 0),
+                "stay_total": float(room.get("stay_total", 0) or 0),
+                "selected_inclusions": room.get("selected_inclusions", []) or [],
+                "selected_services": room.get("selected_services", []) or [],
+            })
+    else:
+        normalized_rooms = [{
+            "room_type": room_type,
+            "adults": int(adults or 0),
+            "children": int(children or 0),
+            "nights": int(nights or 1),
+            "rate_per_night": float(rate_per_night or 0),
+            "stay_total": float(stay_total or 0),
+            "selected_inclusions": selected_inclusions or [],
+            "selected_services": selected_services or [],
+        }]
+
+    accommodation_total = sum(
+        room["stay_total"] for room in normalized_rooms
+    )
 
     lines = []
-
     lines.append(t["reservation_confirmation"].upper())
     lines.append(f"{t['conf_number']}: {confirmation_number}")
     lines.append("")
@@ -3139,48 +3293,116 @@ def build_confirmation_plain_text(
     lines.append(t["conf_intro"])
     lines.append("")
     lines.append(t["reservation_details"].upper())
-    
+
     if children > 0:
-        lines.append(f"{t['guests']}: {adults} {t['adults']}, {children} {t['children']}")
+        lines.append(
+            f"{t['guests']}: {adults} {t['adults']}, "
+            f"{children} {t['children']}"
+        )
     else:
         lines.append(f"{t['guests']}: {adults} {t['adults']}")
 
     lines.append(f"{t['arrival']}: {format_date_email(arrival, lang)}")
     lines.append(f"{t['departure']}: {format_date_email(departure, lang)}")
     lines.append(f"{t['nights']}: {nights}")
-    lines.append(f"{t['room_type']}: {room_type}")
-    lines.append(f"{t['rate_before_taxes']}: {money(rate_before_taxes, currency)}")
-    lines.append(f"{t['rate_with_taxes']}: {money(rate_per_night, currency)}")
-    lines.append(f"{t['stay_total']}: {money(stay_total, currency)}")
     lines.append("")
-    
+
+    room_label = "HABITACIÓN" if lang == "es" else "ROOM"
+    room_total_label = "Total de la habitación" if lang == "es" else "Room Total"
+
+    for index, room in enumerate(normalized_rooms, start=1):
+        room_rate_before_tax = room["rate_per_night"] / (1 + TAX_RATE)
+
+        lines.append(f"{room_label} {index}")
+        lines.append(f"{t['room_type']}: {room['room_type']}")
+
+        room_guests = f"{room['adults']} {t['adults']}"
+        if room["children"] > 0:
+            room_guests += f", {room['children']} {t['children']}"
+
+        lines.append(f"{t['guests']}: {room_guests}")
+        lines.append(f"{t['nights']}: {room['nights']}")
+        lines.append(
+            f"{t['rate_before_taxes']}: "
+            f"{money(room_rate_before_tax, currency)}"
+        )
+        lines.append(
+            f"{t['rate_with_taxes']}: "
+            f"{money(room['rate_per_night'], currency)}"
+        )
+        lines.append(
+            f"{room_total_label}: {money(room['stay_total'], currency)}"
+        )
+        lines.append("")
+
+    combined_inclusions = []
+    for room in normalized_rooms:
+        for inc in room.get("selected_inclusions", []):
+            if inc not in combined_inclusions:
+                combined_inclusions.append(inc)
+
+    if not combined_inclusions:
+        combined_inclusions = list(selected_inclusions or [])
+
     lines.append(f"{t['included_benefits']}:")
-    if selected_inclusions:
-        for inc in selected_inclusions:
-            translated_inc = t.get('inclusions_map', {}).get(inc, inc)
+
+    if combined_inclusions:
+        for inc in combined_inclusions:
+            translated_inc = t.get("inclusions_map", {}).get(inc, inc)
             lines.append(f"• {translated_inc}")
     else:
         lines.append(t["no_inclusions"])
 
-    lines.append("")
-    lines.append(f"{t['additional_services']}:")
-    
-    additional_services_total = 0.0
-    if selected_services:
-        for srv in selected_services:
-            price = ADDITIONAL_SERVICES.get(srv, 0.0)
-            additional_services_total += price
-            translated_srv = t.get('services_map', {}).get(srv, srv)
-            lines.append(f"• {translated_srv}: {money(price, currency)}")
+    service_entries = []
+
+    if rooms:
+        for room_index, room in enumerate(normalized_rooms, start=1):
+            for srv in room.get("selected_services", []):
+                service_entries.append((room_index, srv))
     else:
-        lines.append(t["no_services"])
+        for srv in selected_services or []:
+            service_entries.append((None, srv))
 
-    final_total = float(stay_total) + additional_services_total
+    additional_services_total = 0.0
+
+    if service_entries:
+        lines.append("")
+        lines.append(f"{t['additional_services']}:")
+
+        for room_index, srv in service_entries:
+            price = get_service_price(srv, currency)
+            additional_services_total += price
+            translated_srv = t.get("services_map", {}).get(srv, srv)
+
+            if room_index is not None and len(normalized_rooms) > 1:
+                suffix = (
+                    f" ({'Habitación' if lang == 'es' else 'Room'} "
+                    f"{room_index})"
+                )
+            else:
+                suffix = ""
+
+            lines.append(
+                f"• {translated_srv}{suffix}: {money(price, currency)}"
+            )
+
+        lines.append(
+            f"{t['additional_total']}: "
+            f"{money(additional_services_total, currency)}"
+        )
+
+    if total_amount is None:
+        final_total = accommodation_total + additional_services_total
+    else:
+        final_total = float(total_amount)
 
     lines.append("")
+    lines.append(
+        f"{'Alojamiento' if lang == 'es' else 'Accommodation'}: "
+        f"{money(accommodation_total, currency)}"
+    )
     lines.append(f"{t['total_amount']}: {money(final_total, currency)}")
     lines.append("")
-    
     lines.append(f"{t['deposit_policy']}:")
     lines.append(deposit_policy)
     lines.append("")
@@ -3213,7 +3435,8 @@ def build_confirmation_plain_text(
     lines.append("Av. del Pescador s/n, Cabo San Lucas, B.C.S.")
     lines.append("US: 1-866-448-0151")
 
-    return "\n".join(lines)
+    return "\\n".join(lines)
+
 # ============================================================
 # GMAIL MESSAGE
 # ============================================================
@@ -4748,10 +4971,12 @@ elif app_mode == "Confirm Quotation":
                 room["rate_per_night"] for room in confirmation_rooms
             )
 
-            room_type_str = " + ".join(
-                room["room_type"]
-                for room in confirmation_rooms
-                if room.get("room_type")
+            # Legacy room_type field: keep the first room only.
+            # The complete multi-room detail is stored in `rooms`.
+            legacy_room_type = (
+                confirmation_rooms[0]["room_type"]
+                if confirmation_rooms
+                else ""
             )
 
             # Combinar inclusiones y servicios sin duplicados.
@@ -4897,7 +5122,7 @@ elif app_mode == "Confirm Quotation":
                     "nights": selected_quote["nights"],
                     "adults": selected_opt_adults,
                     "children": selected_opt_children,
-                    "room_type": room_type_str,
+                    "room_type": legacy_room_type,
                     "rate_per_night": rate_per_night,
                     "stay_total": stay_total,
                     "first_night_amount": deposit,
@@ -4922,7 +5147,7 @@ elif app_mode == "Confirm Quotation":
                         selected_opt_adults,
                         selected_opt_children,
                         selected_quote["nights"],
-                        room_type_str,
+                        legacy_room_type,
                         rate_per_night,
                         stay_total,
                         deposit,
@@ -4935,6 +5160,8 @@ elif app_mode == "Confirm Quotation":
                         comb_services,
                         lang_code,
                         curr_code,
+                        rooms=confirmation_rooms,
+                        total_amount=grand_total,
                     ),
                     "plain_text_email": build_confirmation_plain_text(
                         conf_number,
@@ -4944,7 +5171,7 @@ elif app_mode == "Confirm Quotation":
                         selected_opt_adults,
                         selected_opt_children,
                         selected_quote["nights"],
-                        room_type_str,
+                        legacy_room_type,
                         rate_per_night,
                         stay_total,
                         deposit,
@@ -4957,6 +5184,8 @@ elif app_mode == "Confirm Quotation":
                         comb_services,
                         lang_code,
                         curr_code,
+                        rooms=confirmation_rooms,
+                        total_amount=grand_total,
                     ),
                 }
 
@@ -5278,6 +5507,16 @@ elif app_mode == "Manual Confirmation":
             "rate_per_night": m_nightly_rate,
             "stay_total": m_stay_total,
             "first_night_amount": m_deposit,
+            "rooms": [{
+                "room_type": m_room_type,
+                "adults": int(m_adults),
+                "children": int(m_children),
+                "nights": int(m_nights),
+                "rate_per_night": float(m_nightly_rate),
+                "stay_total": float(m_stay_total),
+                "selected_inclusions": m_selected_inclusions,
+                "selected_services": m_selected_services,
+            }],
             "balance_due": m_balance,
             "payment_status": payment_status_trans,
             "comments": m_comments,
