@@ -1118,6 +1118,99 @@ def save_quotation_to_supabase(
         return None
 
 
+# ============================================================
+# UPDATE EXISTING QUOTATION
+# ============================================================
+
+def update_quotation_in_supabase(
+    quotation_number,
+    guest_name,
+    guest_email,
+    arrival,
+    departure,
+    nights,
+    options,
+    status,
+):
+
+    config = get_supabase_config()
+
+    if not config:
+        return None
+
+    endpoint = f"{config['url']}/rest/v1/quotations"
+
+    headers = get_supabase_headers(
+        "return=representation"
+    )
+
+    database_options = prepare_options_for_database(
+        options,
+        nights,
+    )
+
+    first_option = options[0] if options else {}
+
+    payload = {
+        "guest_name": guest_name,
+        "guest_email": guest_email,
+        "arrival": str(arrival),
+        "departure": str(departure),
+        "nights": int(nights),
+        "adults": int(first_option.get("adults", 2)),
+        "children": int(first_option.get("children", 0)),
+        "options": database_options,
+        "status": status,
+    }
+
+    params = {
+        "quotation_number": f"eq.{quotation_number}"
+    }
+
+    try:
+
+        response = requests.patch(
+            endpoint,
+            headers=headers,
+            params=params,
+            json=payload,
+            timeout=20,
+        )
+
+        if response.status_code not in [200, 204]:
+
+            st.session_state[
+                "quotation_database_error"
+            ] = (
+                f"HTTP {response.status_code}: "
+                f"{response.text}"
+            )
+
+            return None
+
+        if response.status_code == 204:
+            return {
+                "quotation_number": quotation_number
+            }
+
+        data = response.json()
+
+        if not data:
+            return {
+                "quotation_number": quotation_number
+            }
+
+        return data[0]
+
+    except Exception as e:
+
+        st.session_state[
+            "quotation_database_error"
+        ] = str(e)
+
+        return None
+
+
 def search_quotations_in_supabase(search_term):
     
     config = get_supabase_config()
@@ -1666,6 +1759,71 @@ def execute_pending_quote():
         return False
 
 
+# ============================================================
+# EXECUTE PENDING MODIFIED QUOTATION
+# ============================================================
+
+def execute_pending_modified_quote():
+
+    pending_quote = st.session_state.get(
+        "pending_modified_quote"
+    )
+    pending_action = st.session_state.get(
+        "pending_action"
+    )
+
+    if not pending_quote or pending_action != "modify_draft":
+        return False
+
+    try:
+
+        save_gmail_draft(
+            to_email=pending_quote["guest_email"],
+            subject=pending_quote["subject"],
+            html_body=pending_quote["email_html"],
+            plain_text_body=pending_quote["plain_text_email"],
+        )
+
+        quotation = update_quotation_in_supabase(
+            quotation_number=pending_quote["quotation_number"],
+            guest_name=pending_quote["guest_name"],
+            guest_email=pending_quote["guest_email"],
+            arrival=pending_quote["arrival"],
+            departure=pending_quote["departure"],
+            nights=pending_quote["nights"],
+            options=pending_quote["options"],
+            status=pending_quote["status"],
+        )
+
+        if not quotation:
+            raise Exception(
+                "The Gmail draft was created, but the quotation "
+                "could not be updated in Supabase."
+            )
+
+        quotation_number = pending_quote[
+            "quotation_number"
+        ]
+
+        st.session_state.pending_modified_quote = None
+        st.session_state.pending_action = None
+        st.session_state.modify_selected_quote = None
+        st.session_state.modify_search_results = []
+        st.session_state.modify_success = (
+            f"Quotation #{quotation_number} was updated and "
+            "saved as a new Gmail draft."
+        )
+
+        return True
+
+    except Exception as e:
+
+        st.session_state.pending_action_error = str(e)
+        st.session_state.pending_modified_quote = None
+        st.session_state.pending_action = None
+        return False
+
+
 def execute_pending_confirmation():
 
     pending_confirmation = st.session_state.get("pending_confirmation")
@@ -2003,6 +2161,10 @@ def process_google_callback():
         if st.session_state.get("pending_quote"):
 
             execute_pending_quote()
+
+        elif st.session_state.get("pending_modified_quote"):
+
+            execute_pending_modified_quote()
 
         elif st.session_state.get("pending_confirmation"):
 
@@ -3589,6 +3751,9 @@ SESSION_DEFAULTS = {
     "pending_quote":
         None,
 
+    "pending_modified_quote":
+        None,
+
     "pending_confirmation":
         None,
 
@@ -3615,6 +3780,15 @@ SESSION_DEFAULTS = {
 
     "selected_quote":
         None,
+
+    "modify_search_results":
+        [],
+
+    "modify_selected_quote":
+        None,
+
+    "modify_success":
+        False,
 
     "app_lang": 
         "English",
@@ -3791,6 +3965,7 @@ with st.sidebar:
         "Select View", 
         [
             "Create Quotation", 
+            "Modify Quotation",
             "Confirm Quotation", 
             "Manual Confirmation"
         ]
@@ -4798,6 +4973,907 @@ if app_mode == "Create Quotation":
                             "After authorization, the email "
                             "will be sent automatically."
                         )
+
+
+# ============================================================
+# WORKFLOW: MODIFY QUOTATION
+# ============================================================
+
+elif app_mode == "Modify Quotation":
+
+    st.title(
+        "Modify Quotation"
+    )
+
+    st.caption(
+        "Search for an existing quotation, edit it, and save "
+        "the updated version without creating a new quotation number."
+    )
+
+    if st.session_state.get("modify_success"):
+
+        st.success(
+            st.session_state.modify_success
+        )
+
+        st.session_state.modify_success = False
+
+    st.markdown(
+        "## Search Quotation"
+    )
+
+    modify_search_term = st.text_input(
+        "Enter Quotation Number, Guest Name, or Guest Email",
+        placeholder="e.g. CD240101-1234 or guest@email.com",
+        key="modify_search_term",
+    )
+
+    if st.button(
+        "Search",
+        use_container_width=True,
+        key="modify_search_button",
+    ):
+
+        if modify_search_term:
+
+            results = search_quotations_in_supabase(
+                modify_search_term
+            )
+
+            st.session_state.modify_search_results = results
+            st.session_state.modify_selected_quote = None
+
+        else:
+
+            st.warning(
+                "Please enter a search term."
+            )
+
+    modify_results = (
+        st.session_state.modify_search_results
+    )
+
+    if modify_results:
+
+        st.markdown(
+            "### Search Results"
+        )
+
+        for q in modify_results:
+
+            with st.container():
+
+                col1, col2, col3, col4, col5 = (
+                    st.columns([2, 3, 2, 2, 1])
+                )
+
+                col1.write(
+                    f"**{q['quotation_number']}**"
+                )
+
+                col2.write(
+                    f"{q['guest_name']} ({q['guest_email']})"
+                )
+
+                col3.write(
+                    f"{q['arrival']} to {q['departure']}"
+                )
+
+                col4.write(
+                    f"Status: **{q['status']}**"
+                )
+
+                if col5.button(
+                    "Select",
+                    key=(
+                        "modify_sel_"
+                        f"{q['quotation_number']}"
+                    ),
+                ):
+
+                    if q.get("status") in [
+                        "CONFIRMED",
+                        "CANCELLED",
+                    ]:
+
+                        st.error(
+                            "This quotation cannot be modified because "
+                            f"its current status is {q.get('status')}."
+                        )
+
+                        st.session_state.modify_selected_quote = None
+
+                    else:
+
+                        st.session_state.modify_selected_quote = q
+                        st.rerun()
+
+                st.divider()
+
+    modify_quote = (
+        st.session_state.modify_selected_quote
+    )
+
+    if modify_quote:
+
+        quotation_number = modify_quote[
+            "quotation_number"
+        ]
+
+        st.markdown(
+            f"## Editing: {quotation_number}"
+        )
+
+        st.caption(
+            "The quotation number will remain unchanged."
+        )
+
+        try:
+            default_arrival = date.fromisoformat(
+                str(modify_quote.get("arrival"))
+            )
+        except Exception:
+            default_arrival = date.today()
+
+        try:
+            default_departure = date.fromisoformat(
+                str(modify_quote.get("departure"))
+            )
+        except Exception:
+            default_departure = date.today()
+
+        edit_col1, edit_col2 = st.columns(2)
+
+        with edit_col1:
+
+            m_guest_name = st.text_input(
+                "Guest name",
+                value=modify_quote.get(
+                    "guest_name",
+                    "",
+                ),
+                key=(
+                    "modify_guest_name_"
+                    f"{quotation_number}"
+                ),
+            )
+
+        with edit_col2:
+
+            m_guest_email = st.text_input(
+                "Guest email",
+                value=modify_quote.get(
+                    "guest_email",
+                    "",
+                ),
+                key=(
+                    "modify_guest_email_"
+                    f"{quotation_number}"
+                ),
+            )
+
+        edit_col3, edit_col4, edit_col5 = (
+            st.columns(3)
+        )
+
+        with edit_col3:
+
+            m_arrival = st.date_input(
+                "Arrival",
+                value=default_arrival,
+                key=(
+                    "modify_arrival_"
+                    f"{quotation_number}"
+                ),
+            )
+
+        with edit_col4:
+
+            m_departure = st.date_input(
+                "Departure",
+                value=default_departure,
+                key=(
+                    "modify_departure_"
+                    f"{quotation_number}"
+                ),
+            )
+
+        m_calculated_nights = max(
+            1,
+            (m_departure - m_arrival).days,
+        )
+
+        with edit_col5:
+
+            m_nights = st.number_input(
+                "Nights",
+                min_value=1,
+                max_value=365,
+                value=m_calculated_nights,
+                step=1,
+                key=(
+                    "modify_nights_"
+                    f"{quotation_number}"
+                ),
+            )
+
+        original_options = modify_quote.get(
+            "options",
+            [],
+        ) or []
+
+        original_count = max(
+            1,
+            min(5, len(original_options)),
+        )
+
+        m_number_options = st.selectbox(
+            "Number of quotation options",
+            [1, 2, 3, 4, 5],
+            index=original_count - 1,
+            key=(
+                "modify_number_options_"
+                f"{quotation_number}"
+            ),
+        )
+
+        st.divider()
+
+        modified_options = []
+
+        for option_index in range(
+            m_number_options
+        ):
+
+            option_number = option_index + 1
+
+            if option_index < len(original_options):
+                existing_option = original_options[
+                    option_index
+                ] or {}
+            else:
+                existing_option = {}
+
+            st.markdown(
+                f"## Quotation Option {option_number}"
+            )
+
+            existing_room = existing_option.get(
+                "room_type",
+                list(ROOM_TYPES.keys())[0],
+            )
+
+            room_choices = list(
+                ROOM_TYPES.keys()
+            )
+
+            if existing_room not in room_choices:
+                room_choices.insert(
+                    0,
+                    existing_room,
+                )
+
+            room_index = room_choices.index(
+                existing_room
+            )
+
+            m_room_type = st.selectbox(
+                "Room type",
+                room_choices,
+                index=room_index,
+                key=(
+                    "modify_room_type_"
+                    f"{quotation_number}_"
+                    f"{option_number}"
+                ),
+            )
+
+            st.markdown(
+                "### Guests"
+            )
+
+            opt_g1, opt_g2 = st.columns(2)
+
+            with opt_g1:
+
+                m_opt_adults = st.number_input(
+                    "Adults",
+                    min_value=1,
+                    max_value=20,
+                    value=int(
+                        existing_option.get(
+                            "adults",
+                            modify_quote.get(
+                                "adults",
+                                2,
+                            ),
+                        )
+                    ),
+                    step=1,
+                    key=(
+                        "modify_adults_"
+                        f"{quotation_number}_"
+                        f"{option_number}"
+                    ),
+                )
+
+            with opt_g2:
+
+                m_opt_children = st.number_input(
+                    "Children",
+                    min_value=0,
+                    max_value=20,
+                    value=int(
+                        existing_option.get(
+                            "children",
+                            modify_quote.get(
+                                "children",
+                                0,
+                            ),
+                        )
+                    ),
+                    step=1,
+                    key=(
+                        "modify_children_"
+                        f"{quotation_number}_"
+                        f"{option_number}"
+                    ),
+                )
+
+            st.markdown(
+                "### Rate"
+            )
+
+            rate_col1, rate_col2 = st.columns(2)
+
+            current_total = float(
+                existing_option.get(
+                    "stay_total_tax_included",
+                    0.0,
+                ) or 0.0
+            )
+
+            with rate_col1:
+
+                m_stay_total = st.number_input(
+                    f"Stay Total Taxes Included ({curr_code})",
+                    min_value=0.00,
+                    value=current_total,
+                    step=100.00,
+                    format="%.2f",
+                    key=(
+                        "modify_total_"
+                        f"{quotation_number}_"
+                        f"{option_number}"
+                    ),
+                )
+
+            current_valid_until = (
+                existing_option.get(
+                    "valid_until"
+                )
+            )
+
+            try:
+                current_valid_until = (
+                    date.fromisoformat(
+                        str(current_valid_until)
+                    )
+                )
+            except Exception:
+                current_valid_until = date.today()
+
+            with rate_col2:
+
+                m_valid_until = st.date_input(
+                    "Quote valid until",
+                    value=current_valid_until,
+                    key=(
+                        "modify_valid_until_"
+                        f"{quotation_number}_"
+                        f"{option_number}"
+                    ),
+                )
+
+            calculations = calculate_rate_values(
+                m_stay_total,
+                m_nights,
+            )
+
+            metric_col1, metric_col2, metric_col3 = (
+                st.columns(3)
+            )
+
+            metric_col1.metric(
+                "Rate per night before taxes",
+                money(
+                    calculations[
+                        "nightly_before_tax"
+                    ],
+                    curr_code,
+                ),
+            )
+
+            metric_col2.metric(
+                "Rate per night taxes included",
+                money(
+                    calculations[
+                        "nightly_with_tax"
+                    ],
+                    curr_code,
+                ),
+            )
+
+            metric_col3.metric(
+                "Stay total taxes included",
+                money(
+                    calculations[
+                        "total_with_tax"
+                    ],
+                    curr_code,
+                ),
+            )
+
+            st.markdown(
+                "### Included Benefits"
+            )
+
+            current_inclusions = set(
+                existing_option.get(
+                    "selected_inclusions",
+                    [],
+                ) or []
+            )
+
+            m_selected_inclusions = []
+
+            for inc_index, inclusion in enumerate(
+                AVAILABLE_INCLUSIONS
+            ):
+
+                if st.checkbox(
+                    inclusion,
+                    value=(
+                        inclusion in current_inclusions
+                    ),
+                    key=(
+                        "modify_inc_"
+                        f"{quotation_number}_"
+                        f"{option_number}_"
+                        f"{inc_index}"
+                    ),
+                ):
+
+                    m_selected_inclusions.append(
+                        inclusion
+                    )
+
+            st.markdown(
+                "### Additional Services"
+            )
+
+            current_services = set(
+                existing_option.get(
+                    "selected_services",
+                    [],
+                ) or []
+            )
+
+            m_selected_services = []
+
+            for service_index, service in enumerate(
+                ADDITIONAL_SERVICES.keys()
+            ):
+
+                service_label = (
+                    f"{service} - "
+                    f"{money(get_service_price(service, curr_code), curr_code)}"
+                )
+
+                if st.checkbox(
+                    service_label,
+                    value=(
+                        service in current_services
+                    ),
+                    key=(
+                        "modify_service_"
+                        f"{quotation_number}_"
+                        f"{option_number}_"
+                        f"{service_index}"
+                    ),
+                ):
+
+                    m_selected_services.append(
+                        service
+                    )
+
+            services_total = sum(
+                get_service_price(
+                    service,
+                    curr_code,
+                )
+                for service in m_selected_services
+            )
+
+            st.metric(
+                "Total Amount",
+                money(
+                    calculations[
+                        "total_with_tax"
+                    ] + services_total,
+                    curr_code,
+                ),
+            )
+
+            st.markdown(
+                "### Deposit Policy"
+            )
+
+            if lang_code == "es":
+
+                modify_deposit_policies = [
+                    "Se requiere el pago total de la estadía con impuestos incluidos al momento de reservar.",
+                    "Se requiere el depósito de la primera noche con impuestos incluidos al momento de reservar.",
+                ]
+
+            else:
+
+                modify_deposit_policies = [
+                    "The deposit for the whole stay with taxes included is required upon booking.",
+                    "The deposit for the first night with taxes included is required upon booking.",
+                ]
+
+            current_deposit = existing_option.get(
+                "deposit_policy",
+                modify_deposit_policies[0],
+            )
+
+            if current_deposit not in modify_deposit_policies:
+                modify_deposit_policies.insert(
+                    0,
+                    current_deposit,
+                )
+
+            m_deposit_policy = st.selectbox(
+                "Select deposit policy",
+                modify_deposit_policies,
+                index=modify_deposit_policies.index(
+                    current_deposit
+                ),
+                key=(
+                    "modify_deposit_"
+                    f"{quotation_number}_"
+                    f"{option_number}"
+                ),
+            )
+
+            st.markdown(
+                "### Cancellation Policy"
+            )
+
+            current_cancellation = existing_option.get(
+                "cancellation_policy",
+                CANCELLATION_POLICIES[0],
+            )
+
+            cancellation_choices = list(
+                CANCELLATION_POLICIES
+            )
+
+            if current_cancellation not in cancellation_choices:
+                cancellation_choices.insert(
+                    0,
+                    current_cancellation,
+                )
+
+            m_cancellation_policy = st.selectbox(
+                "Select cancellation policy",
+                cancellation_choices,
+                index=cancellation_choices.index(
+                    current_cancellation
+                ),
+                key=(
+                    "modify_cancel_"
+                    f"{quotation_number}_"
+                    f"{option_number}"
+                ),
+            )
+
+            st.markdown(
+                "### Optional Links"
+            )
+
+            link_col1, link_col2 = st.columns(2)
+
+            m_room_360_url = ROOM_TYPES.get(
+                m_room_type,
+                {},
+            ).get(
+                "360_url",
+                existing_option.get(
+                    "room_360_url",
+                    "",
+                ),
+            )
+
+            with link_col1:
+
+                st.text_input(
+                    "360° Room View Link",
+                    value=m_room_360_url,
+                    key=(
+                        "modify_360_"
+                        f"{quotation_number}_"
+                        f"{option_number}_"
+                        f"{m_room_type}"
+                    ),
+                    disabled=True,
+                )
+
+            with link_col2:
+
+                m_payment_url = st.text_input(
+                    "Payment Link",
+                    value=existing_option.get(
+                        "payment_url",
+                        "",
+                    ) or "",
+                    placeholder="https://...",
+                    key=(
+                        "modify_payment_"
+                        f"{quotation_number}_"
+                        f"{option_number}"
+                    ),
+                )
+
+            modified_options.append({
+                "room_type": m_room_type,
+                "adults": m_opt_adults,
+                "children": m_opt_children,
+                "valid_until": m_valid_until,
+                "stay_total_tax_included": m_stay_total,
+                "selected_inclusions": m_selected_inclusions,
+                "selected_services": m_selected_services,
+                "deposit_policy": m_deposit_policy,
+                "cancellation_policy": m_cancellation_policy,
+                "payment_url": m_payment_url,
+                "room_360_url": m_room_360_url,
+            })
+
+            st.divider()
+
+        modified_email_html = build_email_html(
+            guest_name=(
+                m_guest_name or "Guest"
+            ),
+            arrival=m_arrival,
+            departure=m_departure,
+            nights=m_nights,
+            options=modified_options,
+            lang=lang_code,
+            currency=curr_code,
+        )
+
+        modified_plain_text = build_plain_text(
+            guest_name=(
+                m_guest_name or "Guest"
+            ),
+            arrival=m_arrival,
+            departure=m_departure,
+            nights=m_nights,
+            options=modified_options,
+            lang=lang_code,
+            currency=curr_code,
+        )
+
+        st.markdown(
+            "## Updated Email Preview"
+        )
+
+        st.caption(
+            "This is the updated quotation that will be saved "
+            "to Gmail Drafts."
+        )
+
+        b64_modified_email = base64.b64encode(
+            modified_email_html.encode(
+                "utf-8"
+            )
+        ).decode(
+            "utf-8"
+        )
+
+        modify_iframe_height = (
+            850 + m_number_options * 750
+        )
+
+        modify_iframe_html = (
+            '<iframe '
+            f'src="data:text/html;base64,{b64_modified_email}" '
+            'width="100%" '
+            f'height="{modify_iframe_height}" '
+            'style="border:none; border-radius:8px; background:#fff;">'
+            '</iframe>'
+        )
+
+        st.markdown(
+            modify_iframe_html,
+            unsafe_allow_html=True,
+        )
+
+        st.markdown(
+            "## Actions"
+        )
+
+        modify_action_col1, modify_action_col2 = (
+            st.columns(2)
+        )
+
+        modified_subject = (
+            f"{TRANSLATIONS[lang_code]['custom_quotation']} | "
+            "Casa Dorada Los Cabos"
+        )
+
+        with modify_action_col1:
+
+            if st.button(
+                "Save Changes",
+                use_container_width=True,
+                key=(
+                    "modify_save_"
+                    f"{quotation_number}"
+                ),
+            ):
+
+                if not m_guest_name:
+
+                    st.error(
+                        "Please enter the guest name."
+                    )
+
+                elif not m_guest_email:
+
+                    st.error(
+                        "Please enter the guest email."
+                    )
+
+                else:
+
+                    updated_quote = update_quotation_in_supabase(
+                        quotation_number=quotation_number,
+                        guest_name=m_guest_name,
+                        guest_email=m_guest_email,
+                        arrival=m_arrival,
+                        departure=m_departure,
+                        nights=m_nights,
+                        options=modified_options,
+                        status=modify_quote.get(
+                            "status",
+                            "QUOTED",
+                        ),
+                    )
+
+                    if updated_quote:
+
+                        st.success(
+                            f"Quotation #{quotation_number} updated successfully."
+                        )
+
+                    else:
+
+                        st.error(
+                            "The quotation could not be updated."
+                        )
+
+        with modify_action_col2:
+
+            if st.button(
+                "Save Changes & Create Gmail Draft",
+                use_container_width=True,
+                key=(
+                    "modify_draft_"
+                    f"{quotation_number}"
+                ),
+            ):
+
+                if not m_guest_name:
+
+                    st.error(
+                        "Please enter the guest name."
+                    )
+
+                elif not m_guest_email:
+
+                    st.error(
+                        "Please enter the guest email."
+                    )
+
+                else:
+
+                    st.session_state.pending_modified_quote = {
+                        "quotation_number": quotation_number,
+                        "guest_name": m_guest_name,
+                        "guest_email": m_guest_email,
+                        "arrival": m_arrival,
+                        "departure": m_departure,
+                        "nights": m_nights,
+                        "options": modified_options,
+                        "status": modify_quote.get(
+                            "status",
+                            "QUOTED",
+                        ),
+                        "subject": modified_subject,
+                        "email_html": modified_email_html,
+                        "plain_text_email": modified_plain_text,
+                    }
+
+                    st.session_state.pending_action = (
+                        "modify_draft"
+                    )
+
+                    gmail_service = get_gmail_service()
+
+                    if gmail_service:
+
+                        execute_pending_modified_quote()
+                        st.rerun()
+
+                    else:
+
+                        try:
+
+                            user_logged_in = (
+                                st.user.is_logged_in
+                            )
+
+                        except Exception:
+
+                            user_logged_in = False
+
+                        if not user_logged_in:
+
+                            st.info(
+                                "Your changes have been saved temporarily. "
+                                "Sign in with your @casadorada.com account "
+                                "to continue."
+                            )
+
+                            st.login()
+
+                        else:
+
+                            login_url = get_google_login_url()
+
+                            st.warning(
+                                "Your changes are saved temporarily. "
+                                "Connect Gmail to create the updated draft."
+                            )
+
+                            st.markdown(
+                                f"""
+                                <a href="{login_url}"
+                                   rel="noopener noreferrer"
+                                   style="
+                                       display:inline-block;
+                                       background:#2563eb;
+                                       color:#ffffff;
+                                       padding:13px 22px;
+                                       border-radius:9px;
+                                       text-decoration:none;
+                                       font-weight:600;
+                                       margin-top:8px;
+                                   ">
+                                   Continue with Google
+                                </a>
+                                """,
+                                unsafe_allow_html=True,
+                            )
+
+                            st.caption(
+                                "After authorization, the quotation will be "
+                                "updated and the new Gmail draft will be "
+                                "created automatically."
+                            )
 
 
 # ============================================================
