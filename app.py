@@ -333,7 +333,7 @@ TRANSLATIONS = {
         "no_inclusions": "No inclusions selected",
         "no_services": "No additional services",
         "view_room": "VIEW ROOM",
-        "secure_booking": "SECURE YOUR BOOKING",
+        "Complete_Payment": "Complete Payment",
         "fully_paid": "Fully Paid",
         "first_night_deposit": "First Night Deposit",
         "fully_paid_policy": "Reservation is fully paid.",
@@ -413,7 +413,7 @@ TRANSLATIONS = {
         "no_inclusions": "Sin inclusiones seleccionadas",
         "no_services": "Sin servicios adicionales",
         "view_room": "VER HABITACIÓN",
-        "secure_booking": "Completar Pago de Su Reserva",
+        "Complete_Payment": "Completar Pago de Su Reserva",
         "fully_paid": "Pagado en su totalidad",
         "first_night_deposit": "Depósito de la primera noche",
         "fully_paid_policy": "La reservación está totalmente pagada.",
@@ -2698,7 +2698,7 @@ def build_option_html(
         buttons_html += f"""
         <a href="{html_escape(payment_url)}" target="_blank"
            style="display:inline-block; background:#c9a227; color:#ffffff; text-decoration:none; padding:12px 18px; border-radius:5px; font-size:13px; font-weight:bold;">
-           {t["secure_booking"]}
+           {t["Complete_Payment"]}
         </a>
         """
 
