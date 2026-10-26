@@ -6,6 +6,8 @@ import json
 import secrets
 import requests
 import math
+import re
+import unicodedata
 import pandas as pd
 from zoneinfo import ZoneInfo
 
@@ -4105,6 +4107,93 @@ def admin_download_csv(label, rows, file_name, key):
 # Nunca se suman dichas opciones como revenue confirmado.
 # ============================================================
 
+
+def admin_quotation_datetime(value):
+    """Fecha/hora original de la cotización, UTC, sin perder precisión."""
+    if not value:
+        return None
+    try:
+        timestamp = datetime.fromisoformat(str(value).replace('Z', '+00:00'))
+        if timestamp.tzinfo is None:
+            timestamp = timestamp.replace(tzinfo=ZoneInfo('America/Mazatlan'))
+        return timestamp.astimezone(timezone.utc)
+    except (ValueError, TypeError, OverflowError):
+        return None
+
+
+def admin_normalize_guest_name(value):
+    """Compara nombres ignorando mayúsculas, acentos y espacios repetidos."""
+    if not value or not str(value).strip():
+        return ''
+    normalized = unicodedata.normalize('NFKD', str(value).casefold())
+    normalized = ''.join(ch for ch in normalized if not unicodedata.combining(ch))
+    return ' '.join(re.sub(r'[^\w]+', ' ', normalized).split())
+
+
+def admin_deduplicate_quotations(quotations, days=5):
+    """Mantiene la más reciente de cada huésped en una ventana real de 5 días.
+
+    Se compara cada versión antigua contra una versión CONSERVADA más reciente,
+    evitando agrupar cotizaciones separadas por más de 5 días mediante cadenas.
+    Las conversiones de versiones anteriores se preservan al agrupar, sin tocar
+    ninguna fila de Supabase ni el revenue de las confirmaciones.
+    """
+    window = timedelta(days=days)
+    earliest = datetime.min.replace(tzinfo=timezone.utc)
+    by_guest = {}
+    kept = []
+    omitted = []
+    sorted_quotes = sorted(
+        quotations,
+        key=lambda q: (q.get('created_timestamp') or earliest, q['quotation_number']),
+        reverse=True,
+    )
+    for quotation in sorted_quotes:
+        name = admin_normalize_guest_name(quotation['guest_name'])
+        timestamp = quotation.get('created_timestamp')
+        newer = None
+        if name and timestamp:
+            for representative in by_guest.get(name, []):
+                difference = representative['created_timestamp'] - timestamp
+                if timedelta(0) <= difference <= window:
+                    newer = representative
+                    break
+
+        if newer is None:
+            representative = dict(quotation)
+            representative['versions_grouped'] = 1
+            representative['omitted_numbers'] = []
+            kept.append(representative)
+            if name and timestamp:
+                by_guest.setdefault(name, []).append(representative)
+            continue
+
+        newer['versions_grouped'] += 1
+        newer['omitted_numbers'].append(quotation['quotation_number'])
+        omitted.append({
+            'Cotización omitida': quotation['quotation_number'],
+            'Fecha omitida': str(quotation['created_at'] or ''),
+            'Huésped': quotation['guest_name'],
+            'Estado original': quotation['status'],
+            'Cotización conservada': newer['quotation_number'],
+            'Fecha conservada': str(newer['created_at'] or ''),
+        })
+        # Si la cotización antigua generó una reserva, la operación comercial
+        # sigue siendo una conversión del grupo, aunque la última versión no
+        # tenga enlace directo. No se alteran números ni ingresos reales.
+        if quotation['confirmed']:
+            if not newer['confirmed']:
+                newer['status'] = 'Confirmada (otra versión en 5 días)'
+            newer['confirmed'] = True
+            newer['excluded'] = False
+            ids = set(filter(None, (s.strip() for s in
+                      newer['confirmation_numbers'].split(','))))
+            ids.update(filter(None, (s.strip() for s in
+                       quotation['confirmation_numbers'].split(','))))
+            newer['confirmation_numbers'] = ', '.join(sorted(ids))
+    return kept, omitted
+
+
 def admin_normalize_quotations(raw_rows, confirmed_bookings):
     """Una fila por número de cotización, enlazada por confirmaciones reales."""
     linked = {}
@@ -4174,6 +4263,7 @@ def admin_normalize_quotations(raw_rows, confirmed_bookings):
             'guest_name': rec.get('guest_name') or '',
             'guest_email': rec.get('guest_email') or '',
             'created_at': created,
+            'created_timestamp': admin_quotation_datetime(rec.get('created_at')),
             'month': created.strftime('%Y-%m') if created else 'Sin fecha',
             'created_by': str(rec.get('created_by') or 'Sin asignar'),
             'arrival': arrival,
@@ -4189,7 +4279,9 @@ def admin_normalize_quotations(raw_rows, confirmed_bookings):
             'reference_option_1': first_total,
             'confirmation_numbers': ', '.join(sorted(linked.get(qn, set()))),
         })
-    return sorted(quotations, key=lambda q: str(q['created_at'] or ''), reverse=True)
+    earliest = datetime.min.replace(tzinfo=timezone.utc)
+    return sorted(quotations, key=lambda q: (q['created_timestamp'] or earliest,
+                                            q['quotation_number']), reverse=True)
 
 
 def admin_quote_summary(rows, group_by):
@@ -4244,6 +4336,8 @@ def admin_quote_details(rows):
     """Datos específicos de cada cotización, incluida la no confirmada."""
     return [{
         'Cotización': q['quotation_number'],
+        'Versiones agrupadas (5 días)': q.get('versions_grouped', 1),
+        'Cotizaciones anteriores omitidas': ', '.join(q.get('omitted_numbers', [])),
         'Fecha cotización': str(q['created_at'] or ''),
         'Estado': q['status'],
         'Huésped': q['guest_name'],
@@ -4284,8 +4378,25 @@ def admin_show_quotation_dashboard():
         st.info('Todavía no hay cotizaciones guardadas en Supabase.')
         return
 
+    remove_duplicates = st.checkbox(
+        'Excluir cotizaciones duplicadas del reporte (mismo huésped en 5 días)',
+        value=True,
+        key='aq_dedup_five_days',
+        help='Se conserva la cotización más reciente por nombre de huésped en cada '
+             'ventana de 5 días (120 horas). Ignora mayúsculas, acentos y '
+             'espacios. No se elimina ningún registro de Supabase. '
+             'Una confirmación de una versión anterior cuenta como conversión del grupo.',
+    )
+    if remove_duplicates:
+        report_quotes, duplicates_omitted = admin_deduplicate_quotations(quotes)
+        st.caption(f'{len(duplicates_omitted):,} cotización(es) anterior(es) excluida(s) '
+                   'del conteo. Se conserva la versión más reciente por huésped '
+                   'en cada intervalo de 5 días.')
+    else:
+        report_quotes, duplicates_omitted = quotes, []
+
     # Los filtros se derivan de COTIZACIONES, no de confirmaciones.
-    available_years = sorted({str(q['created_at'].year) for q in quotes if q['created_at']}, reverse=True)
+    available_years = sorted({str(q['created_at'].year) for q in report_quotes if q['created_at']}, reverse=True)
     col1, col2, col3 = st.columns(3)
     with col1:
         qyear = st.selectbox('Año de cotización', ['Todos'] + available_years,
@@ -4295,22 +4406,22 @@ def admin_show_quotation_dashboard():
                               format_func=admin_month_option, key='aq_month')
     with col3:
         qcurrency = st.selectbox('Moneda de cotizaciones (sin conversión)',
-                                 ['Todas'] + sorted({q['currency'] for q in quotes}),
+                                 ['Todas'] + sorted({q['currency'] for q in report_quotes}),
                                  key='aq_currency',
                                  help='Todas muestra el volumen, pero no suma importes de monedas distintas.')
 
     col4, col5, col6 = st.columns(3)
     with col4:
-        qagent = st.selectbox('Agente de cotización', ['Todos'] + sorted({q['created_by'] for q in quotes}),
+        qagent = st.selectbox('Agente de cotización', ['Todos'] + sorted({q['created_by'] for q in report_quotes}),
                               key='aq_agent')
     with col5:
-        qstatuses = ['Todos'] + sorted({q['status'] for q in quotes})
+        qstatuses = ['Todos'] + sorted({q['status'] for q in report_quotes})
         qstatus = st.selectbox('Estado de cotización', qstatuses, key='aq_status')
     with col6:
         qsearch = st.text_input('Buscar cotización o huésped',
                                 placeholder='Número, nombre o correo', key='aq_search').strip().casefold()
 
-    filtered = [q for q in quotes
+    filtered = [q for q in report_quotes
                 if (qyear == 'Todos' or (q['created_at'] and str(q['created_at'].year) == qyear))
                 and (qmonth == 'Todos' or (q['created_at'] and f'{q["created_at"].month:02d}' == qmonth))
                 and (qcurrency == 'Todas' or q['currency'] == qcurrency)
@@ -4367,6 +4478,18 @@ def admin_show_quotation_dashboard():
     st.dataframe(pd.DataFrame(details), hide_index=True, use_container_width=True)
     admin_download_csv('Descargar detalle de cotizaciones', details,
                        'casa_dorada_cotizaciones_detalle.csv', 'aq_details_csv')
+
+    if remove_duplicates and duplicates_omitted:
+        with st.expander(f'Ver cotizaciones duplicadas omitidas ({len(duplicates_omitted)})'):
+            st.caption('Información para auditoría: estas versiones siguen guardadas '
+                       'en Supabase y no participan en los indicadores ni los CSV principales.')
+            st.dataframe(pd.DataFrame(duplicates_omitted), hide_index=True,
+                         use_container_width=True)
+            admin_download_csv('Descargar cotizaciones omitidas CSV',
+                               duplicates_omitted,
+                               'casa_dorada_cotizaciones_duplicadas.csv',
+                               'aq_duplicates_csv')
+
     if any(q['currency'] == 'SIN DEFINIR' for q in filtered):
         st.caption('Las cotizaciones históricas sin moneda guardada se identifican como '
                    'SIN DEFINIR. No se atribuyen automáticamente a USD ni MXN.')
