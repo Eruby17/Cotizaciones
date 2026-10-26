@@ -4228,8 +4228,6 @@ def admin_show_dashboard():
     incomplete_service_rooms = {a['room_key'] for a in allocations if a['services_unquantified']}
 
     st.divider()
-    st.caption('Indicadores de reservaciones confirmadas (no equivalen a dinero cobrado). '
-               'ADR y revenue neto de habitaciones excluyen el 30% de impuestos configurado en la app.')
     metrics = st.columns(4)
     metrics[0].metric('Revenue habitaciones (neto)', money(revenue_net, currency))
     metrics[1].metric('Revenue habitaciones (con impuestos)', money(revenue_gross, currency))
@@ -4247,10 +4245,6 @@ def admin_show_dashboard():
         f"{money((revenue_gross + ancillary) / len(unique_confs), currency)}."
     )
 
-    if incomplete_service_rooms:
-        st.warning(f'{len(incomplete_service_rooms)} habitación(es) antiguas contienen servicios '
-                   'cuyo precio histórico no fue almacenado; los ingresos de esos servicios '
-                   'NO se estiman con las tarifas actuales. El valor total podría ser mayor.')
     if currency in ('SIN DEFINIR', 'MIXTA'):
         st.warning('Los importes de este reporte NO tienen moneda verificada; revisa '
                    'los registros históricos antes de utilizarlos en un reporte financiero.')
