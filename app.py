@@ -5,8 +5,11 @@ import hmac
 import json
 import secrets
 import requests
+import math
+import pandas as pd
+from zoneinfo import ZoneInfo
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timezone, timedelta
 from email.message import EmailMessage
 from urllib.parse import urlencode
 
@@ -897,6 +900,9 @@ def prepare_options_for_database(
                 option[
                     "room_type"
                 ],
+
+            # Campo nuevo dentro del JSON options; no requiere cambio SQL.
+            "currency": option.get("currency"),
 
             "adults":
                 int(option.get(
@@ -3722,6 +3728,583 @@ def send_gmail_message(
 
 
 # ============================================================
+# ADMIN - REPORTES DE REVENUE / RESERVACIONES CONFIRMADAS
+# Los datos se leen de las tablas existentes de Supabase.
+# ============================================================
+
+def admin_number(value):
+    try:
+        number = float(value or 0)
+        return number if math.isfinite(number) else 0.0
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def admin_json(value, default):
+    if value is None:
+        return default
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except (ValueError, TypeError):
+            return default
+    return value if isinstance(value, type(default)) else default
+
+
+def admin_date(value):
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    try:
+        return date.fromisoformat(str(value)[:10])
+    except (ValueError, TypeError):
+        return None
+
+
+def admin_created_date(value):
+    """Usar fecha LOCAL de Los Cabos para el mes de confirmación."""
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(value).replace('Z', '+00:00'))
+        if parsed.tzinfo:
+            return parsed.astimezone(ZoneInfo('America/Mazatlan')).date()
+        return parsed.date()
+    except (ValueError, TypeError):
+        return admin_date(value)
+
+
+@st.cache_data(ttl=120, show_spinner=False)
+def admin_get_supabase_rows(table, select='*'):
+    """Paginación: PostgREST normalmente devuelve un máximo de 1000 filas."""
+    config = get_supabase_config()
+    if not config:
+        raise RuntimeError('No está configurada la conexión con Supabase.')
+    endpoint = f"{config['url']}/rest/v1/{table}"
+    rows = []
+    size = 1000
+    for offset in range(0, 200000, size):
+        params = {
+            'select': select,
+            'limit': str(size),
+            'offset': str(offset),
+            'order': 'created_at.asc',
+        }
+        response = requests.get(
+            endpoint, headers=get_supabase_headers(),
+            params=params, timeout=30,
+        )
+        response.raise_for_status()
+        batch = response.json()
+        if not isinstance(batch, list):
+            raise RuntimeError(f'Respuesta inesperada al consultar {table}.')
+        rows.extend(batch)
+        if len(batch) < size:
+            return rows
+    raise RuntimeError('Se alcanzó el límite de 200,000 filas. ' 
+                       'Configure un reporte de Supabase para este volumen.')
+
+
+def admin_normalize_confirmations(raw_rows, legacy_currency='SIN DEFINIR'):
+    """Una confirmación -> N habitaciones, sin sumar dos veces su total."""
+    # Si se vuelve a guardar el mismo número, conservar solo el último registro.
+    deduplicated = {}
+    for row in raw_rows:
+        if str(row.get('status') or 'CONFIRMED').upper() != 'CONFIRMED':
+            continue
+        conf_number = str(row.get('confirmation_number') or row.get('id') or '')
+        if not conf_number:
+            continue
+        deduplicated[conf_number] = row
+
+    bookings = []
+    for conf_number, rec in deduplicated.items():
+        arrival = admin_date(rec.get('arrival'))
+        departure = admin_date(rec.get('departure'))
+        booking_date = admin_created_date(rec.get('created_at'))
+        fallback_nights = int(admin_number(rec.get('nights')))
+        if arrival and departure and departure > arrival:
+            fallback_nights = (departure - arrival).days
+        if fallback_nights <= 0:
+            fallback_nights = 1
+
+        saved_rooms = admin_json(rec.get('rooms'), [])
+        if not saved_rooms:
+            saved_rooms = [{
+                'room_type': rec.get('room_type') or 'Sin categoría',
+                'nights': fallback_nights,
+                'stay_total': rec.get('stay_total'),
+                'rate_per_night': rec.get('rate_per_night'),
+                'selected_services': [],
+            }]
+        saved_rooms = [r for r in saved_rooms if isinstance(r, dict)]
+        if not saved_rooms:
+            continue
+
+        identified = {str(r.get('currency')).upper() for r in saved_rooms
+                      if r.get('currency') in ('USD', 'MXN')}
+        currency = ('MIXTA' if len(identified) > 1 else
+                    next(iter(identified)) if identified else legacy_currency)
+        rooms = []
+        for index, room in enumerate(saved_rooms, start=1):
+            nights = int(admin_number(room.get('nights'))) or fallback_nights
+            gross = admin_number(room.get('stay_total'))
+            services = room.get('selected_services') or []
+            # Usar solo importes históricos guardados, NO precios actuales.
+            saved_services_total = room.get('additional_services_total')
+            unknown_services = saved_services_total is None and bool(services)
+            ancillary = admin_number(saved_services_total)
+            rooms.append({
+                'room_key': f'{conf_number}|{index}',
+                'room_type': str(room.get('room_type') or 'Sin categoría'),
+                'nights': nights,
+                'room_gross': gross,
+                'room_net': gross / (1 + TAX_RATE),
+                'services': ancillary,
+                'services_unquantified': unknown_services,
+            })
+
+        # Solo usar el total guardado a nivel de confirmación si es diferente
+        # al detalle; distribuir la diferencia proporcionalmente entre cuartos.
+        total_header = admin_number(rec.get('stay_total'))
+        details_sum = sum(r['room_gross'] for r in rooms)
+        if total_header > 0 and abs(total_header - details_sum) > 0.02:
+            if details_sum > 0:
+                ratio = total_header / details_sum
+                for room in rooms:
+                    room['room_gross'] *= ratio
+                    room['room_net'] = room['room_gross'] / (1 + TAX_RATE)
+            else:
+                # Recuperar el total global cuando un registro antiguo carece
+                # de desglose; la distribución por categoría será estimada.
+                for room in rooms:
+                    room['room_gross'] = total_header / len(rooms)
+                    room['room_net'] = room['room_gross'] / (1 + TAX_RATE)
+
+        bookings.append({
+            'confirmation_number': conf_number,
+            'quotation_number': rec.get('quotation_number'),
+            'guest_name': rec.get('guest_name') or '',
+            'arrival': arrival,
+            'departure': departure,
+            'booking_date': booking_date,
+            'created_by': str(rec.get('confirmed_by') or rec.get('created_by') or 'Sin asignar'),
+            'payment_status': str(rec.get('payment_status') or 'Sin dato'),
+            'deposit': admin_number(rec.get('first_night_amount')),
+            'balance_due': admin_number(rec.get('balance_due')),
+            'source': 'Cotización' if rec.get('quotation_number') else 'Manual',
+            'currency': currency,
+            'rooms': rooms,
+        })
+    return bookings, len(raw_rows) - len(deduplicated)
+
+
+def admin_allocate(bookings, period_mode):
+    """Registro por cuarto y mes. Mes de estancia reparte según noches ocupadas."""
+    allocations = []
+    for book in bookings:
+        if period_mode == 'Mes de llegada':
+            month_day = book['arrival']
+        else:
+            month_day = book['booking_date']
+        for room in book['rooms']:
+            base = {
+                'confirmation_number': book['confirmation_number'],
+                'quotation_number': book['quotation_number'],
+                'guest_name': book['guest_name'],
+                'arrival': book['arrival'],
+                'departure': book['departure'],
+                'booking_date': book['booking_date'],
+                'created_by': book['created_by'],
+                'payment_status': book['payment_status'],
+                'deposit': book['deposit'],
+                'balance_due': book['balance_due'],
+                'source': book['source'],
+                'currency': book['currency'],
+                'room_key': room['room_key'],
+                'room_type': room['room_type'],
+                'services_unquantified': room['services_unquantified'],
+            }
+            if period_mode != 'Mes de estancia':
+                allocations.append({
+                    **base,
+                    'month': month_day.strftime('%Y-%m') if month_day else 'Sin fecha',
+                    'room_nights': room['nights'],
+                    'room_gross': room['room_gross'],
+                    'room_net': room['room_net'],
+                    'services': room['services'],
+                })
+            elif book['arrival'] and book['departure'] and book['departure'] > book['arrival']:
+                # Prorrateo de alojamiento por cada noche ocupada.
+                duration = (book['departure'] - book['arrival']).days
+                for n in range(duration):
+                    night_date = book['arrival'] + timedelta(days=n)
+                    allocations.append({
+                        **base,
+                        'month': night_date.strftime('%Y-%m'),
+                        'room_nights': 1,
+                        'room_gross': room['room_gross'] / duration,
+                        'room_net': room['room_net'] / duration,
+                        # Servicios asociados al mes de llegada, una sola vez.
+                        'services': room['services'] if n == 0 else 0.0,
+                    })
+            else:
+                allocations.append({
+                    **base,
+                    'month': 'Sin fecha',
+                    'room_nights': room['nights'],
+                    'room_gross': room['room_gross'],
+                    'room_net': room['room_net'],
+                    'services': room['services'],
+                })
+    return allocations
+
+
+def admin_monthly_summary(allocations):
+    monthly = {}
+    for a in allocations:
+        key = a['month']
+        target = monthly.setdefault(key, {
+            'Mes': key, 'Confirmaciones': set(), 'Habitaciones': set(),
+            'Noches habitación': 0, 'Revenue habitaciones neto': 0.0,
+            'Impuestos alojamiento': 0.0, 'Revenue habitaciones con impuestos': 0.0,
+            'Servicios registrados': 0.0, 'Revenue total registrado': 0.0,
+            'ADR neto': 0.0,
+        })
+        target['Confirmaciones'].add(a['confirmation_number'])
+        target['Habitaciones'].add(a['room_key'])
+        target['Noches habitación'] += a['room_nights']
+        target['Revenue habitaciones neto'] += a['room_net']
+        target['Revenue habitaciones con impuestos'] += a['room_gross']
+        target['Impuestos alojamiento'] += a['room_gross'] - a['room_net']
+        target['Servicios registrados'] += a['services']
+        target['Revenue total registrado'] += a['room_gross'] + a['services']
+    result = []
+    for m in sorted(monthly):
+        row = dict(monthly[m])
+        row['Confirmaciones'] = len(row['Confirmaciones'])
+        row['Habitaciones'] = len(row['Habitaciones'])
+        nights = row['Noches habitación']
+        row['ADR neto'] = row['Revenue habitaciones neto'] / nights if nights else 0
+        result.append(row)
+    return result
+
+
+def admin_table(allocations, group_field, label):
+    groups = {}
+    for row in allocations:
+        key = row[group_field]
+        agg = groups.setdefault(key, {
+            label: key, 'Confirmaciones': set(), 'Habitaciones': set(),
+            'Noches habitación': 0, 'Revenue neto': 0.0,
+            'Revenue con impuestos': 0.0, 'Servicios registrados': 0.0,
+        })
+        agg['Confirmaciones'].add(row['confirmation_number'])
+        agg['Habitaciones'].add(row['room_key'])
+        agg['Noches habitación'] += row['room_nights']
+        agg['Revenue neto'] += row['room_net']
+        agg['Revenue con impuestos'] += row['room_gross']
+        agg['Servicios registrados'] += row['services']
+    values = []
+    for group in groups.values():
+        group['Confirmaciones'] = len(group['Confirmaciones'])
+        group['Habitaciones'] = len(group['Habitaciones'])
+        nights = group['Noches habitación']
+        group['ADR neto'] = group['Revenue neto'] / nights if nights else 0.0
+        values.append(group)
+    return sorted(values, key=lambda r: r['Revenue neto'], reverse=True)
+
+
+def admin_confirmation_detail(allocations):
+    result = {}
+    for a in allocations:
+        key = a['confirmation_number']
+        v = result.setdefault(key, {
+            'Confirmación': key,
+            'Cotización': a['quotation_number'] or '',
+            'Huésped': a['guest_name'],
+            'Fecha confirmación': str(a['booking_date'] or ''),
+            'Llegada': str(a['arrival'] or ''),
+            'Salida': str(a['departure'] or ''),
+            'Agente': a['created_by'],
+            'Origen': a['source'],
+            'Estado de pago': a['payment_status'],
+            'Depósito indicado (reserva completa)': a['deposit'],
+            'Saldo indicado (reserva completa)': a['balance_due'],
+            'Habitaciones': set(), 'Categorías': set(),
+            'Noches habitación': 0, 'Revenue habitaciones neto': 0.0,
+            'Revenue habitaciones con impuestos': 0.0,
+            'Servicios registrados': 0.0, 'Total registrado': 0.0,
+        })
+        v['Habitaciones'].add(a['room_key'])
+        v['Categorías'].add(a['room_type'])
+        v['Noches habitación'] += a['room_nights']
+        v['Revenue habitaciones neto'] += a['room_net']
+        v['Revenue habitaciones con impuestos'] += a['room_gross']
+        v['Servicios registrados'] += a['services']
+        v['Total registrado'] += a['room_gross'] + a['services']
+    rows = []
+    for v in result.values():
+        v['Habitaciones'] = len(v['Habitaciones'])
+        v['Categorías'] = ', '.join(sorted(v['Categorías']))
+        rows.append(v)
+    return sorted(rows, key=lambda row: row['Fecha confirmación'], reverse=True)
+
+
+def admin_download_csv(label, rows, file_name, key):
+    if not rows:
+        return
+    df = pd.DataFrame(rows)
+    # Impedir fórmulas maliciosas al abrir información de huéspedes en Excel.
+    for col in df.select_dtypes(include=['object']).columns:
+        df[col] = df[col].apply(
+            lambda value: "'" + value if isinstance(value, str)
+            and value.lstrip().startswith(('=', '+', '-', '@', '\t', '\r'))
+            else value
+        )
+    st.download_button(
+        label, data=df.to_csv(index=False).encode('utf-8-sig'),
+        file_name=file_name, mime='text/csv', key=key,
+        use_container_width=True,
+    )
+
+
+def admin_show_dashboard():
+    st.title('Admin | Revenue & Confirmaciones')
+    email = get_logged_in_email()
+    if not email:
+        st.warning('Inicia sesión con tu cuenta @casadorada.com para acceder a Admin.')
+        return
+
+    if st.session_state.get('admin_authorized_email') != email:
+        st.session_state['admin_authorized_email'] = None
+
+    if st.session_state.get('admin_authorized_email') != email:
+        if st.session_state.get('admin_bad_attempts', 0) >= 5:
+            st.error('Demasiados intentos fallidos en esta sesión. Cierra la sesión y contacta al administrador.')
+            return
+        with st.form('admin_login'):
+            pin = st.text_input('Contraseña de Admin', type='password')
+            submit = st.form_submit_button('Entrar a Admin', use_container_width=True)
+        if submit:
+            try:
+                configured_password = str(st.secrets.get('admin_password', '1234'))
+            except Exception:
+                configured_password = '1234'
+            if hmac.compare_digest(str(pin).encode('utf-8'), configured_password.encode('utf-8')):
+                st.session_state['admin_authorized_email'] = email
+                st.session_state['admin_bad_attempts'] = 0
+                st.rerun()
+            else:
+                st.session_state['admin_bad_attempts'] = st.session_state.get('admin_bad_attempts', 0) + 1
+                st.error('Contraseña incorrecta.')
+        return
+
+    left, right = st.columns([5, 1])
+    with left:
+        st.caption(f'Sesión administrativa: {email}')
+    with right:
+        if st.button('Cerrar Admin', use_container_width=True):
+            st.session_state['admin_authorized_email'] = None
+            st.rerun()
+
+    if st.button('Actualizar datos de Supabase', key='admin_refresh'):
+        admin_get_supabase_rows.clear()
+        st.rerun()
+
+    try:
+        confirmations = admin_get_supabase_rows('confirmations')
+    except Exception as exc:
+        st.error('No fue posible consultar las confirmaciones en Supabase.')
+        st.code(str(exc))
+        return
+
+    if not confirmations:
+        st.info('Todavía no se encuentran confirmaciones guardadas en Supabase.')
+        return
+
+    st.markdown('### Configuración del reporte')
+    legacy_choice = st.selectbox(
+        'Moneda de confirmaciones antiguas sin moneda guardada',
+        ['SIN DEFINIR', 'USD', 'MXN'], index=0,
+        help='Las confirmaciones anteriores a este módulo no guardaban su moneda. '
+             'Selecciona USD o MXN únicamente si puedes corroborarlo.',
+    )
+    bookings, removed_count = admin_normalize_confirmations(confirmations, legacy_choice)
+    if not bookings:
+        st.info('No hay confirmaciones vigentes para analizar.')
+        return
+    if any(b['currency'] == 'SIN DEFINIR' for b in bookings):
+        st.warning('Hay registros históricos sin identificación de moneda. '
+                   'Se muestran separados; no se suman como USD o MXN sin tu autorización.')
+    if any(b['currency'] == 'MIXTA' for b in bookings):
+        st.error('Hay confirmaciones con habitaciones en diferentes monedas; '
+                 'están separadas en MIXTA y requieren revisión manual.')
+    if removed_count:
+        st.caption(f'{removed_count} registros repetidos o no confirmados no se contabilizaron.')
+
+    filter1, filter2, filter3 = st.columns(3)
+    with filter1:
+        period_mode = st.selectbox(
+            'Agrupar por', ['Mes de confirmación', 'Mes de llegada', 'Mes de estancia'],
+            help='Mes de estancia prorratea el importe de alojamiento entre las noches de cada mes. '
+                 'Los servicios se asignan al mes de llegada.',
+        )
+    with filter2:
+        currencies = sorted({b['currency'] for b in bookings})
+        currency = st.selectbox('Moneda del reporte (sin conversión)', currencies,
+            index=currencies.index('USD') if 'USD' in currencies else 0)
+    with filter3:
+        source = st.selectbox('Origen', ['Todos', 'Cotización', 'Manual'])
+
+    currency_bookings = [b for b in bookings if b['currency'] == currency and
+                         (source == 'Todos' or b['source'] == source)]
+    all_allocations = admin_allocate(currency_bookings, period_mode)
+    if not all_allocations:
+        st.info('No hay datos en esta combinación de filtros.')
+        return
+
+    month_values = sorted({row['month'] for row in all_allocations if row['month'] != 'Sin fecha'})
+    years = sorted({m[:4] for m in month_values}, reverse=True)
+    filter4, filter5, filter6 = st.columns(3)
+    with filter4:
+        year = st.selectbox('Año', ['Todos'] + years,
+            index=1 if years else 0)
+    with filter5:
+        month = st.selectbox('Mes', ['Todos'] + [f'{i:02d}' for i in range(1, 13)])
+    with filter6:
+        agents = sorted({b['created_by'] for b in currency_bookings})
+        agent = st.selectbox('Agente', ['Todos'] + agents)
+
+    room_types = sorted({r['room_type'] for b in currency_bookings for r in b['rooms']})
+    room_type = st.selectbox('Categoría de habitación', ['Todas'] + room_types)
+
+    allocations = [a for a in all_allocations
+                   if (year == 'Todos' or a['month'][:4] == year)
+                   and (month == 'Todos' or a['month'][5:7] == month)
+                   and (agent == 'Todos' or a['created_by'] == agent)
+                   and (room_type == 'Todas' or a['room_type'] == room_type)]
+    if not allocations:
+        st.info('No hay confirmaciones para estos filtros.')
+        return
+
+    revenue_net = sum(a['room_net'] for a in allocations)
+    revenue_gross = sum(a['room_gross'] for a in allocations)
+    ancillary = sum(a['services'] for a in allocations)
+    room_nights = sum(a['room_nights'] for a in allocations)
+    unique_confs = {a['confirmation_number'] for a in allocations}
+    unique_rooms = {a['room_key'] for a in allocations}
+    incomplete_service_rooms = {a['room_key'] for a in allocations if a['services_unquantified']}
+
+    st.divider()
+    st.caption('Indicadores de reservaciones confirmadas (no equivalen a dinero cobrado). '
+               'ADR y revenue neto de habitaciones excluyen el 30% de impuestos configurado en la app.')
+    metrics = st.columns(4)
+    metrics[0].metric('Revenue habitaciones (neto)', money(revenue_net, currency))
+    metrics[1].metric('Revenue habitaciones (con impuestos)', money(revenue_gross, currency))
+    metrics[2].metric('Noches habitación', f'{room_nights:,}')
+    metrics[3].metric('ADR neto', money(revenue_net / room_nights if room_nights else 0, currency))
+    metrics2 = st.columns(4)
+    metrics2[0].metric('Confirmaciones', f'{len(unique_confs):,}')
+    metrics2[1].metric('Habitaciones', f'{len(unique_rooms):,}')
+    metrics2[2].metric('Servicios con precio registrado', money(ancillary, currency))
+    metrics2[3].metric('Valor total registrado', money(revenue_gross + ancillary, currency))
+    st.caption(
+        f"Noches promedio por habitación en el periodo: "
+        f"{room_nights / len(unique_rooms):.1f} noches. "
+        f"Ingreso promedio por confirmación en el periodo: "
+        f"{money((revenue_gross + ancillary) / len(unique_confs), currency)}."
+    )
+
+    if incomplete_service_rooms:
+        st.warning(f'{len(incomplete_service_rooms)} habitación(es) antiguas contienen servicios '
+                   'cuyo precio histórico no fue almacenado; los ingresos de esos servicios '
+                   'NO se estiman con las tarifas actuales. El valor total podría ser mayor.')
+    if currency in ('SIN DEFINIR', 'MIXTA'):
+        st.warning('Los importes de este reporte NO tienen moneda verificada; revisa '
+                   'los registros históricos antes de utilizarlos en un reporte financiero.')
+
+    monthly_rows = admin_monthly_summary(allocations)
+    category_rows = admin_table(allocations, 'room_type', 'Categoría')
+    agent_rows = admin_table(allocations, 'created_by', 'Agente')
+    detail_rows = admin_confirmation_detail(allocations)
+
+    st.divider()
+    tab_months, tab_rooms, tab_agents, tab_detail, tab_conversion = st.tabs([
+        'Mensual', 'Categorías', 'Agentes', 'Reservaciones', 'Conversión',
+    ])
+
+    with tab_months:
+        st.subheader('Evolución mensual')
+        st.bar_chart(pd.DataFrame(monthly_rows).set_index('Mes')[
+            ['Revenue habitaciones neto', 'Revenue habitaciones con impuestos']
+        ])
+        st.dataframe(pd.DataFrame(monthly_rows), hide_index=True, use_container_width=True)
+        admin_download_csv('Descargar reporte mensual CSV', monthly_rows,
+            'casa_dorada_revenue_mensual.csv', 'admin_monthly_csv')
+    with tab_rooms:
+        st.subheader('Producción por categoría')
+        st.dataframe(pd.DataFrame(category_rows), hide_index=True, use_container_width=True)
+        admin_download_csv('Descargar reporte por categoría CSV', category_rows,
+            'casa_dorada_categorias.csv', 'admin_rooms_csv')
+    with tab_agents:
+        st.subheader('Producción por agente')
+        st.dataframe(pd.DataFrame(agent_rows), hide_index=True, use_container_width=True)
+        admin_download_csv('Descargar reporte por agente CSV', agent_rows,
+            'casa_dorada_agentes.csv', 'admin_agents_csv')
+    with tab_detail:
+        st.subheader('Confirmaciones incluidas en el reporte')
+        st.caption('Depósito y saldo son importes indicados en cada reserva, NO cobros verificados. '
+                   'En filtros de categorías corresponden a la reserva completa. '
+                   'En el modo Mes de estancia, los montos mostrados se limitan '
+                   'a las noches correspondientes al periodo seleccionado.')
+        st.dataframe(pd.DataFrame(detail_rows), hide_index=True, use_container_width=True)
+        admin_download_csv('Descargar detalle de reservaciones CSV', detail_rows,
+            'casa_dorada_confirmaciones.csv', 'admin_detail_csv')
+    with tab_conversion:
+        st.subheader('Seguimiento de cotizaciones')
+        st.caption('Conversión por cohorte: cotizaciones creadas en el periodo '
+                   'y que cuentan con al menos una confirmación guardada. '
+                   'Las confirmaciones manuales quedan fuera de esta tasa.')
+        try:
+            quotes = admin_get_supabase_rows(
+                'quotations', 'quotation_number,created_at,created_by,status'
+            )
+        except Exception as exc:
+            st.error('No se pudo consultar la tabla quotations.')
+            st.code(str(exc))
+        else:
+            # El filtro de cotizaciones usa la fecha de creación, NO la llegada/estancia.
+            cohort = []
+            seen = set()
+            for q in quotes:
+                qn = q.get('quotation_number')
+                qdate = admin_created_date(q.get('created_at'))
+                if not qn or qn in seen or not qdate:
+                    continue
+                if year != 'Todos' and str(qdate.year) != year:
+                    continue
+                if month != 'Todos' and f'{qdate.month:02d}' != month:
+                    continue
+                if agent != 'Todos' and (q.get('created_by') or '') != agent:
+                    continue
+                seen.add(qn)
+                cohort.append(qn)
+            confirmed_quote_numbers = {b['quotation_number'] for b in bookings
+                                       if b['quotation_number']}
+            converted = sum(qn in confirmed_quote_numbers for qn in cohort)
+            c1, c2, c3 = st.columns(3)
+            c1.metric('Cotizaciones creadas', f'{len(cohort):,}')
+            c2.metric('Cotizaciones convertidas', f'{converted:,}')
+            c3.metric('Conversión', f'{100 * converted / len(cohort):.1f}%'
+                if cohort else 'N/D')
+            st.caption('Las cotizaciones pueden confirmarse en meses posteriores. '
+                       'Este porcentaje no depende del filtro de tipo de habitación ni moneda.')
+
+
+
+# ============================================================
 # SESSION STATE
 # ============================================================
 
@@ -3967,7 +4550,8 @@ with st.sidebar:
             "Create Quotation", 
             "Modify Quotation",
             "Confirm Quotation", 
-            "Manual Confirmation"
+            "Manual Confirmation",
+            "Admin"
         ]
     )
 
@@ -4678,6 +5262,8 @@ if app_mode == "Create Quotation":
 
             "room_360_url":
                 room_360_url,
+
+            "currency": curr_code,
         }
 
         all_options.append(
@@ -5638,6 +6224,7 @@ elif app_mode == "Modify Quotation":
                 "cancellation_policy": m_cancellation_policy,
                 "payment_url": m_payment_url,
                 "room_360_url": m_room_360_url,
+                "currency": curr_code,
             })
 
             st.divider()
@@ -6011,6 +6598,17 @@ elif app_mode == "Confirm Quotation":
                         )
                     ),
                     "nights": int(selected_quote.get("nights", 1)),
+                    # Metadata guardada en JSONB rooms para reportes.
+                    # Las cotizaciones antiguas no traían moneda;
+                    # no inventar esa información al confirmar.
+                    "currency": opt.get("currency"),
+                    "additional_services_total": (
+                        round(sum(
+                            get_service_price(service, opt["currency"])
+                            for service in (opt.get("selected_services") or [])
+                        ), 2) if opt.get("currency") in ("USD", "MXN")
+                        else None
+                    ),
                     "rate_per_night": float(
                         opt.get("nightly_taxes_included", 0)
                     ),
@@ -6588,6 +7186,11 @@ elif app_mode == "Manual Confirmation":
                 "adults": int(m_adults),
                 "children": int(m_children),
                 "nights": int(m_nights),
+                "currency": curr_code,
+                "additional_services_total": round(sum(
+                    get_service_price(service, curr_code)
+                    for service in m_selected_services
+                ), 2),
                 "rate_per_night": float(m_nightly_rate),
                 "stay_total": float(m_stay_total),
                 "selected_inclusions": m_selected_inclusions,
@@ -6671,3 +7274,10 @@ elif app_mode == "Manual Confirmation":
                 st.success(f"✅ Reservation Confirmed! Email sent successfully. Confirmation #{result}")
                 st.balloons()
             st.session_state.conf_auto_send_success = False
+
+# ============================================================
+# WORKFLOW: ADMIN
+# ============================================================
+
+elif app_mode == "Admin":
+    admin_show_dashboard()
