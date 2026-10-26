@@ -3961,12 +3961,41 @@ def admin_allocate(bookings, period_mode):
     return allocations
 
 
+# Nombres visibles de los meses; las claves YYYY-MM se conservan para filtrar,
+# ordenar y calcular sin cambiar los importes ni las fechas de la base de datos.
+ADMIN_MONTH_NAMES = (
+    'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
+)
+
+
+def admin_month_label(value):
+    """Convertir '2026-01' en 'Enero 2026' solo para visualización."""
+    try:
+        year, month = str(value).split('-')
+        if len(year) == 4 and 1 <= int(month) <= 12:
+            return f'{ADMIN_MONTH_NAMES[int(month) - 1]} {year}'
+    except (ValueError, TypeError):
+        pass
+    return value
+
+
+def admin_month_option(value):
+    """Mostrar el nombre en el selector conservando el valor 01-12."""
+    if value == 'Todos':
+        return value
+    try:
+        return ADMIN_MONTH_NAMES[int(value) - 1]
+    except (ValueError, TypeError, IndexError):
+        return value
+
+
 def admin_monthly_summary(allocations):
     monthly = {}
     for a in allocations:
         key = a['month']
         target = monthly.setdefault(key, {
-            'Mes': key, 'Confirmaciones': set(), 'Habitaciones': set(),
+            'Mes': admin_month_label(key), 'Confirmaciones': set(), 'Habitaciones': set(),
             'Noches habitación': 0, 'Revenue habitaciones neto': 0.0,
             'Impuestos alojamiento': 0.0, 'Revenue habitaciones con impuestos': 0.0,
             'Servicios registrados': 0.0, 'Revenue total registrado': 0.0,
@@ -4172,7 +4201,8 @@ def admin_show_dashboard():
         year = st.selectbox('Año', ['Todos'] + years,
             index=1 if years else 0)
     with filter5:
-        month = st.selectbox('Mes', ['Todos'] + [f'{i:02d}' for i in range(1, 13)])
+        month = st.selectbox('Mes', ['Todos'] + [f'{i:02d}' for i in range(1, 13)],
+            format_func=admin_month_option)
     with filter6:
         agents = sorted({b['created_by'] for b in currency_bookings})
         agent = st.selectbox('Agente', ['Todos'] + agents)
