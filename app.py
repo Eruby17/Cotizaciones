@@ -4099,49 +4099,280 @@ def admin_download_csv(label, rows, file_name, key):
     )
 
 
-def admin_show_dashboard():
-    st.title('Admin | Revenue & Confirmaciones')
-    email = get_logged_in_email()
-    if not email:
-        st.warning('Inicia sesión con tu cuenta @casadorada.com para acceder a Admin.')
-        return
+# ============================================================
+# ADMIN - SEGUIMIENTO COMERCIAL DE TODAS LAS COTIZACIONES
+# Una cotización puede tener varias opciones ALTERNATIVAS.
+# Nunca se suman dichas opciones como revenue confirmado.
+# ============================================================
 
-    if st.session_state.get('admin_authorized_email') != email:
-        st.session_state['admin_authorized_email'] = None
+def admin_normalize_quotations(raw_rows, confirmed_bookings):
+    """Una fila por número de cotización, enlazada por confirmaciones reales."""
+    linked = {}
+    for b in confirmed_bookings:
+        qn = str(b.get('quotation_number') or '').strip()
+        if qn:
+            linked.setdefault(qn, set()).add(b['confirmation_number'])
 
-    if st.session_state.get('admin_authorized_email') != email:
-        if st.session_state.get('admin_bad_attempts', 0) >= 5:
-            st.error('Demasiados intentos fallidos en esta sesión. Cierra la sesión y contacta al administrador.')
-            return
-        with st.form('admin_login'):
-            pin = st.text_input('Contraseña de Admin', type='password')
-            submit = st.form_submit_button('Entrar a Admin', use_container_width=True)
-        if submit:
-            try:
-                configured_password = str(st.secrets.get('admin_password', '1234'))
-            except Exception:
-                configured_password = '1234'
-            if hmac.compare_digest(str(pin).encode('utf-8'), configured_password.encode('utf-8')):
-                st.session_state['admin_authorized_email'] = email
-                st.session_state['admin_bad_attempts'] = 0
-                st.rerun()
+    # En el improbable caso de duplicados, conservar la última versión.
+    unique = {}
+    for record in sorted(raw_rows, key=lambda r: str(r.get('updated_at') or r.get('created_at') or '')):
+        qn = str(record.get('quotation_number') or '').strip()
+        if qn:
+            unique[qn] = record
+
+    quotations = []
+    for qn, rec in unique.items():
+        options = [op for op in admin_json(rec.get('options'), []) if isinstance(op, dict)]
+        seen_currency = {
+            str(op.get('currency')).upper()
+            for op in options
+            if str(op.get('currency')).upper() in ('USD', 'MXN')
+        }
+        # No asignar moneda a cotizaciones anteriores que no la guardaron.
+        currency = ('MIXTA' if len(seen_currency) > 1 else
+                    next(iter(seen_currency)) if seen_currency else 'SIN DEFINIR')
+        currency_unmarked = any(str(op.get('currency')).upper() not in ('USD', 'MXN')
+                                for op in options)
+        if currency_unmarked and seen_currency:
+            currency = 'MIXTA / SIN DEFINIR'
+
+        original_status = str(rec.get('status') or 'QUOTED').upper().strip()
+        confirmed = bool(linked.get(qn))
+        is_test = original_status in ('TEST', 'PRUEBA')
+        is_cancelled = original_status in ('CANCELED', 'CANCELLED', 'ANULADA', 'CANCELADA')
+        if confirmed:
+            display_status = 'Confirmada'
+        elif is_test:
+            display_status = 'Prueba'
+        elif is_cancelled:
+            display_status = 'Cancelada'
+        elif original_status == 'SENT':
+            display_status = 'Enviada sin confirmar'
+        elif original_status in ('QUOTED', 'DRAFT'):
+            display_status = 'Cotizada / borrador'
+        elif original_status == 'CONFIRMED':
+            display_status = 'Marcada confirmada (sin reserva vinculada)'
+        else:
+            display_status = f'{original_status} (sin confirmar)'
+
+        # SOLO la primera opción como referencia individual de la propuesta.
+        # Las demás opciones son alternativas, no se suman entre sí.
+        first = options[0] if options else {}
+        # Valor de ALOJAMIENTO: los servicios legacy se registraban en USD,
+        # incluso en cotizaciones MXN; nunca sumarlos o convertirlos aquí.
+        first_total = first.get('stay_total_tax_included')
+        first_total = admin_number(first_total) if first_total is not None else None
+        created = admin_created_date(rec.get('created_at'))
+        arrival = admin_date(rec.get('arrival'))
+        departure = admin_date(rec.get('departure'))
+        nights = int(admin_number(rec.get('nights')))
+        if nights <= 0 and arrival and departure and departure > arrival:
+            nights = (departure - arrival).days
+
+        quotations.append({
+            'quotation_number': qn,
+            'guest_name': rec.get('guest_name') or '',
+            'guest_email': rec.get('guest_email') or '',
+            'created_at': created,
+            'month': created.strftime('%Y-%m') if created else 'Sin fecha',
+            'created_by': str(rec.get('created_by') or 'Sin asignar'),
+            'arrival': arrival,
+            'departure': departure,
+            'nights': nights,
+            'currency': currency,
+            'status': display_status,
+            'original_status': original_status,
+            'confirmed': confirmed,
+            'excluded': (is_test or is_cancelled) and not confirmed,
+            'option_count': len(options),
+            'room_types': ', '.join(dict.fromkeys(str(o.get('room_type') or 'Sin categoría') for o in options)),
+            'reference_option_1': first_total,
+            'confirmation_numbers': ', '.join(sorted(linked.get(qn, set()))),
+        })
+    return sorted(quotations, key=lambda q: str(q['created_at'] or ''), reverse=True)
+
+
+def admin_quote_summary(rows, group_by):
+    """Reportes de volumen; NO convierten valores de cotización a ventas."""
+    aggregated = {}
+    for q in rows:
+        key = q[group_by]
+        result = aggregated.setdefault(key, {
+            '_key': key,
+            'Cotizaciones': 0,
+            'Confirmadas': 0,
+            'Sin confirmar': 0,
+            'Enviadas sin confirmar': 0,
+            'Cotizadas / borrador': 0,
+            'Pruebas': 0,
+            'Canceladas': 0,
+            'Elegibles': 0,
+        })
+        result['Cotizaciones'] += 1
+        if q['confirmed']:
+            result['Confirmadas'] += 1
+        elif q['excluded']:
+            if q['status'] == 'Prueba':
+                result['Pruebas'] += 1
             else:
-                st.session_state['admin_bad_attempts'] = st.session_state.get('admin_bad_attempts', 0) + 1
-                st.error('Contraseña incorrecta.')
+                result['Canceladas'] += 1
+        else:
+            result['Sin confirmar'] += 1
+            if q['original_status'] == 'SENT':
+                result['Enviadas sin confirmar'] += 1
+            elif q['original_status'] in ('QUOTED', 'DRAFT'):
+                result['Cotizadas / borrador'] += 1
+        if not q['excluded']:
+            result['Elegibles'] += 1
+
+    output = []
+    for key in sorted(aggregated):
+        row = aggregated[key]
+        denominator = row['Elegibles']
+        result = {
+            'Mes' if group_by == 'month' else 'Agente':
+                admin_month_label(key) if group_by == 'month' else key,
+            **{k: v for k, v in row.items() if k not in ('_key', 'Elegibles')},
+            'Conversión (%)': round(100 * row['Confirmadas'] / denominator, 1)
+            if denominator else 0.0,
+        }
+        output.append(result)
+    return output
+
+
+def admin_quote_details(rows):
+    """Datos específicos de cada cotización, incluida la no confirmada."""
+    return [{
+        'Cotización': q['quotation_number'],
+        'Fecha cotización': str(q['created_at'] or ''),
+        'Estado': q['status'],
+        'Huésped': q['guest_name'],
+        'Correo': q['guest_email'],
+        'Agente': q['created_by'],
+        'Llegada': str(q['arrival'] or ''),
+        'Salida': str(q['departure'] or ''),
+        'Noches estancia': q['nights'],
+        'Opciones ofrecidas': q['option_count'],
+        'Categorías cotizadas': q['room_types'],
+        'Moneda': q['currency'],
+        'Alojamiento opción 1 con impuestos (no vendido)': q['reference_option_1'],
+        'Confirmación(es)': q['confirmation_numbers'],
+    } for q in rows]
+
+
+def admin_show_quotation_dashboard():
+    """Seguimiento de cotizaciones independientemente del revenue confirmado."""
+    st.subheader('Cotizaciones | Seguimiento comercial')
+    st.caption('Se muestran las cotizaciones confirmadas y las no confirmadas. '
+               'Su valor ofrecido NO se contabiliza como revenue. '
+               'Cada número de cotización cuenta una sola vez, incluso con varias opciones.')
+    try:
+        quotes_raw = admin_get_supabase_rows('quotations')
+    except Exception as exc:
+        st.error('No fue posible consultar las cotizaciones en Supabase.')
+        st.code(str(exc))
+        return
+    try:
+        confirmed_raw = admin_get_supabase_rows('confirmations')
+        confirmed_bookings, _ = admin_normalize_confirmations(confirmed_raw)
+    except Exception as exc:
+        st.error('No se pudieron comprobar las confirmaciones; la conversión no puede calcularse.')
+        st.code(str(exc))
+        return
+    quotes = admin_normalize_quotations(quotes_raw, confirmed_bookings)
+    if not quotes:
+        st.info('Todavía no hay cotizaciones guardadas en Supabase.')
         return
 
-    left, right = st.columns([5, 1])
-    with left:
-        st.caption(f'Sesión administrativa: {email}')
-    with right:
-        if st.button('Cerrar Admin', use_container_width=True):
-            st.session_state['admin_authorized_email'] = None
-            st.rerun()
+    # Los filtros se derivan de COTIZACIONES, no de confirmaciones.
+    available_years = sorted({str(q['created_at'].year) for q in quotes if q['created_at']}, reverse=True)
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        qyear = st.selectbox('Año de cotización', ['Todos'] + available_years,
+                             index=1 if available_years else 0, key='aq_year')
+    with col2:
+        qmonth = st.selectbox('Mes de cotización', ['Todos'] + [f'{x:02d}' for x in range(1,13)],
+                              format_func=admin_month_option, key='aq_month')
+    with col3:
+        qcurrency = st.selectbox('Moneda de cotizaciones (sin conversión)',
+                                 ['Todas'] + sorted({q['currency'] for q in quotes}),
+                                 key='aq_currency',
+                                 help='Todas muestra el volumen, pero no suma importes de monedas distintas.')
 
-    if st.button('Actualizar datos de Supabase', key='admin_refresh'):
-        admin_get_supabase_rows.clear()
-        st.rerun()
+    col4, col5, col6 = st.columns(3)
+    with col4:
+        qagent = st.selectbox('Agente de cotización', ['Todos'] + sorted({q['created_by'] for q in quotes}),
+                              key='aq_agent')
+    with col5:
+        qstatuses = ['Todos'] + sorted({q['status'] for q in quotes})
+        qstatus = st.selectbox('Estado de cotización', qstatuses, key='aq_status')
+    with col6:
+        qsearch = st.text_input('Buscar cotización o huésped',
+                                placeholder='Número, nombre o correo', key='aq_search').strip().casefold()
 
+    filtered = [q for q in quotes
+                if (qyear == 'Todos' or (q['created_at'] and str(q['created_at'].year) == qyear))
+                and (qmonth == 'Todos' or (q['created_at'] and f'{q["created_at"].month:02d}' == qmonth))
+                and (qcurrency == 'Todas' or q['currency'] == qcurrency)
+                and (qagent == 'Todos' or q['created_by'] == qagent)
+                and (qstatus == 'Todos' or q['status'] == qstatus)
+                and (not qsearch or qsearch in ' '.join([
+                    q['quotation_number'], q['guest_name'], q['guest_email']]).casefold())]
+
+    confirmed = sum(q['confirmed'] for q in filtered)
+    not_confirmed = sum(not q['confirmed'] and not q['excluded'] for q in filtered)
+    valid = sum(not q['excluded'] for q in filtered)
+    st.divider()
+    kpis = st.columns(4)
+    kpis[0].metric('Cotizaciones registradas', f'{len(filtered):,}')
+    kpis[1].metric('Confirmadas', f'{confirmed:,}')
+    kpis[2].metric('Sin confirmar', f'{not_confirmed:,}')
+    kpis[3].metric('Tasa de conversión', f'{confirmed / valid * 100:.1f}%' if valid else 'N/D')
+    st.caption('Conversión = cotizaciones vinculadas a una confirmación real / cotizaciones '
+               'elegibles creadas en el periodo. Se excluyen las marcadas TEST o canceladas '
+               'del denominador, pero permanecen disponibles en el detalle. '
+               'La confirmación puede haberse realizado en otro mes.')
+
+    if not filtered:
+        st.info('No hay cotizaciones con los filtros seleccionados.')
+        return
+
+    # No sumar propuestas de monedas mezcladas ni opciones alternativas.
+    if qcurrency in ('USD', 'MXN'):
+        suggested = [q['reference_option_1'] for q in filtered
+                     if not q['confirmed'] and not q['excluded']
+                     and q['reference_option_1'] is not None]
+        if suggested:
+            st.metric('Valor referencial de alojamiento pendiente (opción 1)',
+                      money(sum(suggested), qcurrency))
+            st.caption('No es revenue ni un forecast de cierre: se utiliza únicamente '
+                       'la primera alternativa de alojamiento de cada cotización pendiente, con impuestos.')
+
+    monthly = admin_quote_summary(filtered, 'month')
+    by_agent = admin_quote_summary(filtered, 'created_by')
+    details = admin_quote_details(filtered)
+
+    st.markdown('### Cotizaciones por mes de creación')
+    st.bar_chart(pd.DataFrame(monthly).set_index('Mes')[['Cotizaciones', 'Confirmadas', 'Sin confirmar']])
+    st.dataframe(pd.DataFrame(monthly), use_container_width=True, hide_index=True)
+    admin_download_csv('Descargar reporte mensual de cotizaciones', monthly,
+                       'casa_dorada_cotizaciones_mensual.csv', 'aq_month_csv')
+
+    st.markdown('### Cotizaciones por agente')
+    st.dataframe(pd.DataFrame(by_agent), use_container_width=True, hide_index=True)
+    admin_download_csv('Descargar reporte de cotizaciones por agente', by_agent,
+                       'casa_dorada_cotizaciones_agentes.csv', 'aq_agent_csv')
+
+    st.markdown('### Detalle de todas las cotizaciones')
+    st.dataframe(pd.DataFrame(details), hide_index=True, use_container_width=True)
+    admin_download_csv('Descargar detalle de cotizaciones', details,
+                       'casa_dorada_cotizaciones_detalle.csv', 'aq_details_csv')
+    if any(q['currency'] == 'SIN DEFINIR' for q in filtered):
+        st.caption('Las cotizaciones históricas sin moneda guardada se identifican como '
+                   'SIN DEFINIR. No se atribuyen automáticamente a USD ni MXN.')
+
+
+def admin_show_revenue_dashboard():
     try:
         confirmations = admin_get_supabase_rows('confirmations')
     except Exception as exc:
@@ -4255,8 +4486,8 @@ def admin_show_dashboard():
     detail_rows = admin_confirmation_detail(allocations)
 
     st.divider()
-    tab_months, tab_rooms, tab_agents, tab_detail, tab_conversion = st.tabs([
-        'Mensual', 'Categorías', 'Agentes', 'Reservaciones', 'Conversión',
+    tab_months, tab_rooms, tab_agents, tab_detail = st.tabs([
+        'Mensual', 'Categorías', 'Agentes', 'Reservaciones',
     ])
 
     with tab_months:
@@ -4286,47 +4517,58 @@ def admin_show_dashboard():
         st.dataframe(pd.DataFrame(detail_rows), hide_index=True, use_container_width=True)
         admin_download_csv('Descargar detalle de reservaciones CSV', detail_rows,
             'casa_dorada_confirmaciones.csv', 'admin_detail_csv')
-    with tab_conversion:
-        st.subheader('Seguimiento de cotizaciones')
-        st.caption('Conversión por cohorte: cotizaciones creadas en el periodo '
-                   'y que cuentan con al menos una confirmación guardada. '
-                   'Las confirmaciones manuales quedan fuera de esta tasa.')
-        try:
-            quotes = admin_get_supabase_rows(
-                'quotations', 'quotation_number,created_at,created_by,status'
-            )
-        except Exception as exc:
-            st.error('No se pudo consultar la tabla quotations.')
-            st.code(str(exc))
-        else:
-            # El filtro de cotizaciones usa la fecha de creación, NO la llegada/estancia.
-            cohort = []
-            seen = set()
-            for q in quotes:
-                qn = q.get('quotation_number')
-                qdate = admin_created_date(q.get('created_at'))
-                if not qn or qn in seen or not qdate:
-                    continue
-                if year != 'Todos' and str(qdate.year) != year:
-                    continue
-                if month != 'Todos' and f'{qdate.month:02d}' != month:
-                    continue
-                if agent != 'Todos' and (q.get('created_by') or '') != agent:
-                    continue
-                seen.add(qn)
-                cohort.append(qn)
-            confirmed_quote_numbers = {b['quotation_number'] for b in bookings
-                                       if b['quotation_number']}
-            converted = sum(qn in confirmed_quote_numbers for qn in cohort)
-            c1, c2, c3 = st.columns(3)
-            c1.metric('Cotizaciones creadas', f'{len(cohort):,}')
-            c2.metric('Cotizaciones convertidas', f'{converted:,}')
-            c3.metric('Conversión', f'{100 * converted / len(cohort):.1f}%'
-                if cohort else 'N/D')
-            st.caption('Las cotizaciones pueden confirmarse en meses posteriores. '
-                       'Este porcentaje no depende del filtro de tipo de habitación ni moneda.')
 
 
+def admin_show_dashboard():
+    st.title('Admin | Cotizaciones y Revenue')
+    email = get_logged_in_email()
+    if not email:
+        st.warning('Inicia sesión con tu cuenta @casadorada.com para acceder a Admin.')
+        return
+
+    if st.session_state.get('admin_authorized_email') != email:
+        st.session_state['admin_authorized_email'] = None
+
+    if st.session_state.get('admin_authorized_email') != email:
+        if st.session_state.get('admin_bad_attempts', 0) >= 5:
+            st.error('Demasiados intentos fallidos en esta sesión. Cierra la sesión y contacta al administrador.')
+            return
+        with st.form('admin_login'):
+            pin = st.text_input('Contraseña de Admin', type='password')
+            submit = st.form_submit_button('Entrar a Admin', use_container_width=True)
+        if submit:
+            try:
+                configured_password = str(st.secrets.get('admin_password', '1234'))
+            except Exception:
+                configured_password = '1234'
+            if hmac.compare_digest(str(pin).encode('utf-8'), configured_password.encode('utf-8')):
+                st.session_state['admin_authorized_email'] = email
+                st.session_state['admin_bad_attempts'] = 0
+                st.rerun()
+            else:
+                st.session_state['admin_bad_attempts'] = st.session_state.get('admin_bad_attempts', 0) + 1
+                st.error('Contraseña incorrecta.')
+        return
+
+    left, right = st.columns([5, 1])
+    with left:
+        st.caption(f'Sesión administrativa: {email}')
+    with right:
+        if st.button('Cerrar Admin', use_container_width=True):
+            st.session_state['admin_authorized_email'] = None
+            st.rerun()
+
+    if st.button('Actualizar datos de Supabase', key='admin_refresh'):
+        admin_get_supabase_rows.clear()
+        st.rerun()
+
+    st.caption('El reporte de cotizaciones incluye las propuestas no confirmadas. '
+               'El reporte de revenue incluye únicamente reservaciones confirmadas.')
+    quotes_tab, revenue_tab = st.tabs(['Cotizaciones y conversión', 'Revenue confirmado'])
+    with quotes_tab:
+        admin_show_quotation_dashboard()
+    with revenue_tab:
+        admin_show_revenue_dashboard()
 
 # ============================================================
 # SESSION STATE
